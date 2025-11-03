@@ -30,12 +30,14 @@ import photoRoutes from './routes/photoRoutes';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+
 const httpServer = http.createServer(app);
 
 // SOCKET.IO setup
 const io = new Server(httpServer, {
   cors: {
-    origin: 'http://localhost:5173',
+    origin: CLIENT_URL, // 🎯 Use the environment variable
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -45,9 +47,8 @@ initializeSocketIO(io);
 // 🔑 CORS & Middleware
 app.use(
   cors({
-    origin: 'http://localhost:5173',
+    origin: CLIENT_URL, // 🎯 Use the environment variable
     credentials: true,
-    // CRITICAL: Authorization header must be allowed
     allowedHeaders: ['Content-Type', 'Authorization'], 
   })
 );
