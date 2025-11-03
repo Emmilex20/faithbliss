@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 
 // Define the shape of the user info we'll store
 interface UserInfo {
-  _id: string;
+  id: string;
   firstName: string;
   lastName: string;
   email: string;
