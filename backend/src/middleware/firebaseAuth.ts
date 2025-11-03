@@ -21,7 +21,7 @@ if (!admin.apps.length) {
             // Example using environment variable for service account:
             // credential: admin.credential.applicationDefault(), 
             // OR if using a file:
-            // credential: admin.credential.cert(process.env.FIREBASE_SERVICE_ACCOUNT_PATH!),
+            // credential: admin.credential.cert(process.env.FIREBASE_ADMIN_SDK!),
         });
         console.log('✅ Firebase Admin SDK initialized successfully.');
     } catch (error) {

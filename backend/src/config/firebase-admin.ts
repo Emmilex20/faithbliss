@@ -5,10 +5,10 @@ import { ServiceAccount } from 'firebase-admin';
 import * as path from 'path';
 
 // Assumed environment variable path is set
-const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+const serviceAccountPath = process.env.FIREBASE_ADMIN_SDK;
 
 if (!serviceAccountPath) {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT_PATH environment variable not set.');
+    throw new Error('FIREBASE_ADMIN_SDK environment variable not set.');
 }
 
 const absolutePath = path.resolve(process.cwd(), serviceAccountPath);

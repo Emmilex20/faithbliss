@@ -5,10 +5,10 @@ import { ServiceAccount } from 'firebase-admin';
 import * as path from 'path'; // 💡 CRITICAL FIX: Import path module
 
 // 1. Get the path from the environment variable
-const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+const serviceAccountPath = process.env.FIREBASE_ADMIN_SDK;
 
 if (!serviceAccountPath) {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT_PATH environment variable not set.');
+    throw new Error('FIREBASE_ADMIN_SDK environment variable not set.');
 }
 
 // 2. Resolve the path absolutely from the process's working directory (project root)
