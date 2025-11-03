@@ -1,28 +1,34 @@
-// src/config/firebase-admin.ts (FIXED)
+// src/config/firebase-admin.ts (FINAL DEPLOYMENT FIX)
 
 import * as admin from 'firebase-admin';
 import { ServiceAccount } from 'firebase-admin';
-import * as path from 'path';
+import { Buffer } from 'buffer'; // Import Buffer for decoding
+// import * as path from 'path'; // Removed path dependency
 
-// Assumed environment variable path is set
-const serviceAccountPath = process.env.FIREBASE_ADMIN_SDK;
+const base64Credentials = process.env.FIREBASE_CREDENTIALS_BASE64;
 
-if (!serviceAccountPath) {
-    throw new Error('FIREBASE_ADMIN_SDK environment variable not set.');
+if (!base64Credentials) {
+    // Crucial: Throwing an error if the new variable is missing
+    throw new Error('FIREBASE_CREDENTIALS_BASE64 environment variable not set.');
 }
 
-const absolutePath = path.resolve(process.cwd(), serviceAccountPath);
-
 if (!admin.apps.length) {
-    try {
-        const serviceAccount = require(absolutePath) as ServiceAccount; 
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount),
-        });
-    } catch (error) {
-        console.error(`❌ FATAL ERROR: Could not initialize Firebase Admin SDK. Check path: ${serviceAccountPath}`);
-        throw error;
-    }
+    try {
+        // 1. Decode the Base64 string into a JSON string
+        const credentialsJsonString = Buffer.from(base64Credentials, 'base64').toString('utf-8');
+
+        // 2. Parse the JSON string into the ServiceAccount object
+        const serviceAccount = JSON.parse(credentialsJsonString) as ServiceAccount; 
+        
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+        });
+        console.log("Firebase Admin SDK initialized successfully."); // Added log for verification
+
+    } catch (error) {
+        console.error('❌ FATAL ERROR: Could not initialize Firebase Admin SDK. Check Base64 format.');
+        throw error;
+    }
 }
 
 // FIX: Export 'db' here.
