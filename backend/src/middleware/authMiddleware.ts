@@ -1,7 +1,7 @@
 // src/middleware/authMiddleware.ts (FINAL, FIXED, AND ROBUST VERSION)
 
 import { Request, Response, NextFunction } from 'express';
-import admin from '../firebase/admin'; 
+import { admin } from '../config/firebase-admin'; // ✅ Correct: This matches the named export 
 import { Socket } from 'socket.io';
 import { DecodedIdToken } from 'firebase-admin/auth'; 
 
