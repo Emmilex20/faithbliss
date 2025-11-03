@@ -1,34 +1,35 @@
-// server/firebase/admin.ts (Final Corrected Version)
+// server/firebase/admin.ts (Updated for Base64 Decoding)
 
 import * as admin from 'firebase-admin'; 
 import { ServiceAccount } from 'firebase-admin';
-import * as path from 'path'; // 💡 CRITICAL FIX: Import path module
+import { Buffer } from 'buffer'; // Import Buffer for decoding
 
-// 1. Get the path from the environment variable
-const serviceAccountPath = process.env.FIREBASE_ADMIN_SDK;
+const base64Credentials = process.env.FIREBASE_CREDENTIALS_BASE64;
 
-if (!serviceAccountPath) {
-    throw new Error('FIREBASE_ADMIN_SDK environment variable not set.');
+if (!base64Credentials) {
+    throw new Error('FIREBASE_CREDENTIALS_BASE64 environment variable not set. Please set this value in your deployment environment.');
 }
-
-// 2. Resolve the path absolutely from the process's working directory (project root)
-// This ensures that "./config/firebase-admin-key.json" is correctly found 
-// relative to where you run your server command (i.e., the backend folder).
-const absolutePath = path.resolve(process.cwd(), serviceAccountPath);
 
 try {
-    // 3. Use the absolute path for require
-    const serviceAccount = require(absolutePath) as ServiceAccount; 
+    // 1. Decode the Base64 string into a JSON string
+    // The Buffer class is used in Node.js for binary data operations
+    const credentialsJsonString = Buffer.from(base64Credentials, 'base64').toString('utf-8');
 
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-    });
+    // 2. Parse the JSON string into the ServiceAccount object
+    const serviceAccount = JSON.parse(credentialsJsonString) as ServiceAccount; 
+
+    // 3. Initialize Firebase Admin SDK
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+    });
+
+    console.log("Firebase Admin SDK initialized successfully.");
+
 } catch (error) {
-    console.error(`❌ FATAL ERROR: Could not initialize Firebase Admin SDK. Check path: ${serviceAccountPath}`);
-    console.error(`❌ Attempted absolute path: ${absolutePath}`);
-    // Re-throw the error to crash the server, as authentication cannot proceed
-    throw error;
+    console.error(`❌ FATAL ERROR: Could not initialize Firebase Admin SDK.`);
+    console.error(`Check if FIREBASE_CREDENTIALS_BASE64 is a valid Base64 encoded JSON string.`);
+    // Re-throw the error to crash the server, as authentication cannot proceed
+    throw error;
 }
-
 
 export default admin;
