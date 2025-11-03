@@ -1,0 +1,42 @@
+# ---------------------------------------------------------------- #
+# 1. DEPENDENCIES & BUILD ARTIFACTS
+# ---------------------------------------------------------------- #
+/node_modules
+.pnpm-store/
+/dist
+/build
+/out
+/coverage
+/log
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.eslintcache
+.stylelintcache
+
+# ---------------------------------------------------------------- #
+# 2. ENVIRONMENT AND SECRETS (Crucial for your project!)
+# ---------------------------------------------------------------- #
+# Hide all .env files
+.env
+.env.*
+!.env.example # Keep the example file if you have one
+
+# 🔑 HIDE FIREBASE ADMIN SERVICE ACCOUNT KEY (Most critical!)
+# Ensure this file/path exactly matches what you set in FIREBASE_SERVICE_ACCOUNT_PATH
+# Assuming the file is named "firebase-admin-key.json" inside a "config" folder:
+**/config/firebase-admin-key.json 
+**/firebase-admin-key.json
+*.pem
+*.key
+*.p12
+
+# ---------------------------------------------------------------- #
+# 3. IDE AND OS FILES
+# ---------------------------------------------------------------- #
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

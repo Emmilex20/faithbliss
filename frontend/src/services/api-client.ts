@@ -1,0 +1,166 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+import type { ConversationMessagesResponse } from '@/hooks/useAPI';
+import type { GetUsersResponse, UpdateProfileDto, User } from '@/services/api';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+// Generic API request function for the client
+const apiClientRequest = async <T>(
+  endpoint: string,
+  options: RequestInit = {},
+  token?: string | null
+): Promise<T> => {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const headers: Record<string, string> = {};
+
+  if (options.headers) {
+    if (options.headers instanceof Headers) {
+      options.headers.forEach((value, key) => (headers[key] = value));
+    } else if (Array.isArray(options.headers)) {
+      options.headers.forEach(([key, value]) => (headers[key] = value));
+    } else {
+      Object.assign(headers, options.headers);
+    }
+  }
+
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const response = await fetch(url, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
+
+  if (response.status === 401 && token) {
+    throw new Error('Unauthorized');
+  }
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+  }
+
+  if (response.status === 204) return {} as T;
+
+  return await response.json();
+};
+
+// Factory for API client
+export const getApiClient = (accessToken: string | null) => ({
+  Match: {
+    getMatches: () =>
+      apiClientRequest<any[]>('/api/matches', { method: 'GET' }, accessToken),
+
+    getMutualMatches: () =>
+      apiClientRequest<any[]>('/api/matches/mutual', { method: 'GET' }, accessToken),
+
+    getSentMatches: () =>
+      apiClientRequest<any[]>('/api/matches/sent', { method: 'GET' }, accessToken),
+
+    getReceivedMatches: () =>
+      apiClientRequest<any[]>('/api/matches/received', { method: 'GET' }, accessToken),
+
+    getPotentialMatches: () =>
+      apiClientRequest<any[]>('/api/matches/potential', { method: 'GET' }, accessToken),
+
+    likeUser: (userId: string) =>
+      apiClientRequest<any>(`/api/matches/like/${userId}`, { method: 'POST' }, accessToken),
+
+    passUser: (userId: string) =>
+      apiClientRequest<void>(`/api/matches/pass/${userId}`, { method: 'POST' }, accessToken),
+  },
+
+  User: {
+    getMe: () => apiClientRequest<User>('/api/users/me', { method: 'GET' }, accessToken),
+    getUserById: (userId: string) =>
+      apiClientRequest<User>(`/api/users/${userId}`, { method: 'GET' }, accessToken),
+
+    getAllUsers: (filters?: { page?: number; limit?: number; search?: string }) => {
+      const queryParams: Record<string, string> = {};
+      if (filters?.page) queryParams.page = filters.page.toString();
+      if (filters?.limit) queryParams.limit = filters.limit.toString();
+      if (filters?.search) queryParams.search = filters.search;
+      const query =
+        Object.keys(queryParams).length > 0
+          ? `?${new URLSearchParams(queryParams).toString()}`
+          : '';
+      return apiClientRequest<GetUsersResponse>(
+        `/api/users${query}`,
+        { method: 'GET' },
+        accessToken
+      );
+    },
+  },
+
+  Message: {
+    sendMessage: (matchId: string, content: string) =>
+      apiClientRequest<any>(
+        '/api/messages',
+        { method: 'POST', body: JSON.stringify({ matchId, content }) },
+        accessToken
+      ),
+    getCreateMatchMessages: (matchId: string, otherUserId?: string, page = 1, limit = 50) =>
+      apiClientRequest<ConversationMessagesResponse>(
+        `/api/messages/match/${matchId}?page=${page}&limit=${limit}${
+          otherUserId ? `&otherUserId=${otherUserId}` : ''
+        }`,
+        { method: 'GET' },
+        accessToken
+      ),
+    markMessageAsRead: (messageId: string) =>
+      apiClientRequest<void>(`/api/messages/${messageId}/read`, { method: 'PATCH' }, accessToken),
+    getUnreadCount: () =>
+      apiClientRequest<{ count: number }>(
+        '/api/messages/unread-count',
+        { method: 'GET' },
+        accessToken
+      ),
+    getMatchConversations: () =>
+      apiClientRequest<any[]>('/api/messages/conversations', { method: 'GET' }, accessToken),
+  },
+});
+
+export async function updateProfileClient(
+  userData: UpdateProfileDto,
+  accessToken: string
+): Promise<User> {
+  const url = `${API_BASE_URL}/api/users/me`;
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(userData),
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.message || `HTTP ${response.status}: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function uploadSpecificPhotoClient(
+  photoNumber: number,
+  photo: FormData,
+  accessToken: string
+) {
+  const url = `${API_BASE_URL}/api/users/me/photo/${photoNumber}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: photo,
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`HTTP ${response.status}: ${errorText}`);
+  }
+  return response.json();
+}

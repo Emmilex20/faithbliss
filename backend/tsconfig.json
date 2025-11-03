@@ -1,0 +1,29 @@
+{
+    "compilerOptions": {
+        "jsx": "react",
+        "target": "ES2020",
+        "module": "CommonJS",
+        "rootDir": "./src",
+        "outDir": "./dist",
+        "esModuleInterop": true,
+        "forceConsistentCasingInFileNames": true,
+        "strict": true,
+        "skipLibCheck": true,
+        "resolveJsonModule": true, 
+        
+        // 🌟 CRITICAL FIX: Ensures module resolution works correctly with pnpm's symlinks
+        "moduleResolution": "node", 
+        
+        "typeRoots": [
+            "./node_modules/@types",
+            "./src/types" 
+        ]
+    },
+    "include": [
+        "src/**/*", 
+        "src/types/express.d.ts" 
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}

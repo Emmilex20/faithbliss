@@ -1,0 +1,239 @@
+/* Import fonts with fallbacks - must come first */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;500;600;700&display=swap');
+
+/* Import Tailwind */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+/* Custom CSS for font fallbacks */
+html {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+/* Custom animations for onboarding */
+@keyframes slide-in-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-in-from-top {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation-fill-mode: both;
+}
+
+.slide-in-from-right {
+  animation-name: slide-in-from-right;
+}
+
+.slide-in-from-top {
+  animation-name: slide-in-from-top;
+}
+
+.duration-500 {
+  animation-duration: 500ms;
+}
+
+.duration-300 {
+  animation-duration: 300ms;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Prevent horizontal scroll on mobile except for inner scroll areas */
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+@media (max-width: 768px) {
+  .no-horizontal-scroll {
+    max-width: 100vw;
+    overflow-x: hidden !important;
+  }
+  .dashboard-main {
+    max-width: 100vw;
+    overflow-x: hidden !important;
+  }
+}
+
+
+@keyframes mini-heartbeat {
+  0%, 70%, 100% { 
+    transform: scale(1);
+  }
+  20%, 50% { 
+    transform: scale(1.2);
+  }
+}
+
+/* Keyframes for the heartbeat animation */
+@keyframes heartbeat {
+  0% { 
+    transform: scale(1); 
+    filter: drop-shadow(0 0 10px rgba(236, 72, 153, 0.3));
+  }
+  14% { 
+    transform: scale(1.3); 
+    filter: drop-shadow(0 0 20px rgba(236, 72, 153, 0.6));
+  }
+  28% { 
+    transform: scale(1); 
+    filter: drop-shadow(0 0 10px rgba(236, 72, 153, 0.3));
+  }
+  42% { 
+    transform: scale(1.3); 
+    filter: drop-shadow(0 0 20px rgba(236, 72, 153, 0.6));
+  }
+  70% { 
+    transform: scale(1); 
+    filter: drop-shadow(0 0 10px rgba(236, 72, 153, 0.3));
+  }
+  100% { 
+    transform: scale(1); 
+    filter: drop-shadow(0 0 10px rgba(236, 72, 153, 0.3));
+  }
+}
+
+/* Keyframes for the pulsing glow ring animation */
+@keyframes pulse-glow {
+  0%, 100% { 
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.8;
+    transform: scale(1.1);
+  }
+}
+
+/* Classes to apply the animations */
+.heartbeat-animation {
+  animation: heartbeat 1.5s ease-in-out infinite;
+}
+.pulse-ring {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.mini-heartbeat {
+  /* Use the animation-timing-function value from the original component */
+  animation: mini-heartbeat 1.5s ease-in-out infinite;
+}
+
+/* For inner scroll areas, use .inner-scroll class */
+.inner-scroll {
+  overflow-x: auto !important;
+}
+
+/* Global Custom Scrollbar Styles */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(236, 72, 153, 0.6) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.6), rgba(147, 51, 234, 0.6));
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.8), rgba(147, 51, 234, 0.8));
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Dark scrollbar for specific elements */
+.custom-scrollbar-dark::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, rgba(107, 114, 128, 0.6), rgba(75, 85, 99, 0.6));
+}
+
+.custom-scrollbar-dark::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, rgba(107, 114, 128, 0.8), rgba(75, 85, 99, 0.8));
+}
+
+/* Side Panel Custom Scrollbar */
+.side-panel-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.side-panel-scroll::-webkit-scrollbar-track {
+  background: rgba(17, 24, 39, 0.3);
+  border-radius: 8px;
+  margin: 8px 0;
+}
+
+.side-panel-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.4), rgba(168, 85, 247, 0.4));
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: all 0.3s ease;
+}
+
+.side-panel-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.7), rgba(168, 85, 247, 0.7));
+  transform: scaleY(1.1);
+}
+
+.side-panel-scroll::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.9), rgba(168, 85, 247, 0.9));
+}
+
+/* Side panel specific Firefox scrollbar */
+.side-panel-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(236, 72, 153, 0.5) rgba(17, 24, 39, 0.3);
+}
+
+/* Glass morphism effects */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
