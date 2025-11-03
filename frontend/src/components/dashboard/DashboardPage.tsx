@@ -57,7 +57,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const activeProfiles = useMemo(() => {
         // Function to check for valid ID
         // Note: Filters out any null/undefined entries AND entries missing 'id'/'_id'
-        const hasValidId = (p: User) => p && (p.id || p._id);
+        const hasValidId = (p: User) => p && (p.id || p.id);
 
         if (filteredProfiles && filteredProfiles.length > 0) {
             // Filter filtered results for valid IDs

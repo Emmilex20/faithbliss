@@ -22,7 +22,7 @@ export const ProfileDisplay = ({
 }: ProfileDisplayProps) => {
     
     // Check if profile is null, undefined, or missing a critical ID
-    if (!currentProfile || (!currentProfile.id && !currentProfile._id)) {
+    if (!currentProfile || (!currentProfile.id && !currentProfile.id)) {
         // Log an error if the object exists but is malformed
         if (currentProfile) {
             console.error("ProfileDisplay: Profile object exists but is missing 'id' or '_id'. Skipping card render.");
