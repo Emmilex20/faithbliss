@@ -70,7 +70,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    // NOTE: Type cast updated to reflect the union types in the 'types.ts' file
+    // NOTE: Type cast updated to reflect the union types in the 'types.ts' file
     if (name === 'denomination') {
       setOnboardingData(prev => ({ ...prev, [name]: value as string }));
     } else {
@@ -132,7 +132,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
             />
           ))}
         </div>
-      </div>
+        </div>
 
       {/* Church Attendance */}
       <div className="space-y-4">
@@ -362,12 +362,12 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
   );
 };
 
-// 2. STYLES: This block is kept for direct conversion but should be externalized in a real Vite app.
+// 2. STYLES: This block has been modified to fix the dropdown text visibility.
 const styles = `
   .input-style {
     background-color: #374151;
     border: 1px solid #4B5563;
-    color: white;
+    color: white !important; /* IMPORTANT: Ensures text is white */
     border-radius: 0.5rem;
     padding: 0.75rem 1rem;
     font-size: 1rem;
@@ -382,6 +382,17 @@ const styles = `
   .input-style::placeholder {
     color: #9CA3AF;
   }
+  
+  /* FIX: Ensure dropdown text is visible on all platforms */
+  select.input-style {
+      color: white !important;
+  }
+  select.input-style option {
+      /* This helps ensure the options text is readable on dark mode systems */
+      background-color: #374151 !important;
+      color: white !important;
+  }
+
   input[type="date"]::-webkit-calendar-picker-indicator {
     filter: invert(1);
   }
