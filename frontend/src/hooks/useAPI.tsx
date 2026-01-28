@@ -41,7 +41,7 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 // Types for messaging
 import type { Message } from '@/services/api'; 
 import { useWebSocket } from './useWebSocket';
-import type { NotificationPayload } from '../services/notification-websocket'; 
+import type { NotificationPayload } from '../services/WebSocketService'; 
 
 interface ConversationSummary {
   id: string; // matchId
@@ -537,11 +537,20 @@ export function useConversationMessages(
 }
 
 // Hook for notifications (No change needed other than imports)
+export type NotificationItem = {
+  id: string;
+  type?: 'NEW_MESSAGE' | 'PROFILE_LIKED' | 'NEW_MATCH' | string;
+  message?: string;
+  data?: Record<string, any>;
+  isRead?: boolean;
+  createdAt?: string;
+};
+
 export function useNotifications() {
   const { accessToken, isAuthenticated } = useRequireAuth();
   const webSocketService = useWebSocket();
   const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
-  const [notifications, setNotifications] = useState<NotificationPayload[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -550,7 +559,7 @@ export function useNotifications() {
     let mounted = true;
     apiClient.Notification.getNotifications()
       .then((items) => {
-        if (mounted) setNotifications(items as NotificationPayload[]);
+        if (mounted) setNotifications(items as NotificationItem[]);
       })
       .catch((err) => {
         if (mounted) setError(err?.message || 'Failed to load notifications');
@@ -566,7 +575,21 @@ export function useNotifications() {
   useEffect(() => {
     if (!isAuthenticated || !webSocketService) return;
     const handleNotification = (payload: NotificationPayload) => {
-      setNotifications(prev => [payload, ...prev]);
+      const newItem: NotificationItem = {
+        id: `ws-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        type: payload.type,
+        message: payload.message,
+        data: {
+          senderId: payload.senderId,
+          senderName: payload.senderName,
+          matchId: payload.matchId,
+          otherUserId: payload.otherUser?.id,
+          otherUserName: payload.otherUser?.name,
+        },
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      };
+      setNotifications(prev => [newItem, ...prev]);
     };
     webSocketService.onNotification(handleNotification);
     return () => {

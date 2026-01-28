@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   Heart,
   MessageCircle,
@@ -23,7 +23,6 @@ const MatchesPage = () => {
   const [activeTab, setActiveTab] = useState<"mutual" | "sent" | "received">(
     "mutual"
   );
-  const navigate = useNavigate();
   const { user } = useAuthContext();
   const [showSidePanel, setShowSidePanel] = useState(false);
 

@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { HeartBeatLoader } from "@/components/HeartBeatLoader";
 import {
-  ArrowLeft,
   Heart,
   X,
   MessageCircle,

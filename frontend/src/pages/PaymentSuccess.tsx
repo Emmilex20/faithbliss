@@ -1,7 +1,7 @@
 // src/pages/PaymentSuccess.tsx
 
 import { useEffect, useState } from 'react';
-import { CheckCircle, RefreshCw } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { TopBar } from '@/components/dashboard/TopBar';

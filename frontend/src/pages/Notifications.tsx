@@ -12,7 +12,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
-import { useNotifications, useClearApiCache } from '@/hooks/useAPI';
+import { useNotifications, useClearApiCache, type NotificationItem } from '@/hooks/useAPI';
 import { API } from '@/services/api';
 import { HeartBeatLoader } from '@/components/HeartBeatLoader';
 import { useToast } from '@/contexts/ToastContext';
@@ -20,14 +20,7 @@ import { TopBar } from '@/components/dashboard/TopBar';
 import { SidePanel } from '@/components/dashboard/SidePanel';
 import { useAuthContext } from '@/contexts/AuthContext';
 
-type NotificationItem = {
-  id: string;
-  type?: 'NEW_MESSAGE' | 'PROFILE_LIKED' | 'NEW_MATCH' | string;
-  message?: string;
-  data?: Record<string, any>;
-  isRead?: boolean;
-  createdAt?: string;
-};
+ 
 
 const typeMeta = (type?: string) => {
   switch (type) {

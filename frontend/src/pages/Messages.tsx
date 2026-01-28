@@ -19,7 +19,7 @@ import { SidePanel } from '@/components/dashboard/SidePanel';
 import { useAuthContext } from '@/contexts/AuthContext';
 import {
   MessageCircle, ArrowLeft, Search, Send, Phone, Video,
-  Smile, Paperclip, Info, Check, CheckCheck, Users, Heart
+  Smile, Paperclip, Info, Check, CheckCheck
 } from 'lucide-react';
 
 // Assuming these imports are correct for your Vite project structure
