@@ -41,7 +41,7 @@ class WebSocketService {
 
       this.socket = io(this.WEBSOCKET_URL, {
         auth: token ? { token } : undefined,
-        transports: ['websocket'],
+        transports: ['websocket', 'polling'],
         withCredentials: true,
       });
 

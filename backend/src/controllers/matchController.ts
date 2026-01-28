@@ -95,11 +95,27 @@ const getPotentialMatches = async (req: Request, res: Response) => {
   try {
     console.log(`🧩 [getPotentialMatches] Fetching potential matches for ${currentUser.id}`);
 
-    const excludedUids = [
+    const excludedUids = new Set<string>([
       currentUser.id,
       ...(currentUser.likes || []),
       ...(currentUser.passes || []),
-    ];
+    ].map(String));
+
+    const matchIds = Array.isArray(currentUser.matches) ? currentUser.matches : [];
+    if (matchIds.length > 0) {
+      const matchDocs = await Promise.all(
+        matchIds.map((matchId) => matchesCollection.doc(String(matchId)).get())
+      );
+      matchDocs.forEach((doc) => {
+        const data = doc.data() as IMatch | undefined;
+        const users = data?.users || [];
+        users.forEach((uid) => {
+          if (uid && uid !== currentUser.id) {
+            excludedUids.add(String(uid));
+          }
+        });
+      });
+    }
 
     const snapshot = await usersCollection
       .where('onboardingCompleted', '==', true)
@@ -111,7 +127,7 @@ const getPotentialMatches = async (req: Request, res: Response) => {
     const potentialMatches: IUserProfile[] = [];
     snapshot.forEach((doc) => {
       const match = { id: doc.id, ...doc.data() } as IUserProfile;
-      if (!excludedUids.includes(match.id)) {
+      if (!excludedUids.has(match.id)) {
         potentialMatches.push(match);
       }
     });

@@ -50,8 +50,10 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const userImage = currentUserData.profilePhoto1 || undefined; // Uses profilePhoto1 from the User interface
 
     useEffect(() => {
-        const stored = localStorage.getItem("likedUserIds");
-        const storedIds = stored ? JSON.parse(stored) as string[] : [];
+        const currentUserId = currentUserData?.id ? String(currentUserData.id) : 'anon';
+        const storageKey = `likedUserIds_${currentUserId}`;
+        const stored = localStorage.getItem(storageKey);
+        const storedIds = stored ? (JSON.parse(stored) as string[]) : [];
         const profileLikes = (currentUserData as any)?.likes || [];
         const profileMatches = (currentUserData as any)?.matches || [];
         const merged = new Set<string>(
@@ -61,10 +63,12 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     }, [currentUserData]);
 
     const updateLikedIds = (userId: string) => {
+        const currentUserId = currentUserData?.id ? String(currentUserData.id) : 'anon';
+        const storageKey = `likedUserIds_${currentUserId}`;
         setLikedIds(prev => {
             const next = new Set(prev);
             next.add(userId);
-            localStorage.setItem("likedUserIds", JSON.stringify(Array.from(next)));
+            localStorage.setItem(storageKey, JSON.stringify(Array.from(next)));
             return next;
         });
     };
