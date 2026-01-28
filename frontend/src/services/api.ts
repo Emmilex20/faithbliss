@@ -496,6 +496,14 @@ export const UserAPI = {
     });
   },
 
+  // Update user settings
+  updateSettings: async (settings: Record<string, any>): Promise<{ message: string }> => {
+    return apiRequest('/api/users/me/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(settings),
+    });
+  },
+
   // Get user preferences
   getPreferences: async (): Promise<UserPreferences> => {
     // FIX: Added /api prefix
@@ -639,13 +647,6 @@ export const MessageAPI = {
     return apiRequest('/api/matches/conversations');
   },
 
-  // Update user settings
-  updateSettings: async (settings: Record<string, any>): Promise<{ message: string }> => {
-    return apiRequest('/api/users/me/settings', {
-      method: 'PATCH',
-      body: JSON.stringify(settings),
-    });
-  },
 
   // Get unread message count
   getUnreadCount: async (): Promise<{ count: number }> => {
