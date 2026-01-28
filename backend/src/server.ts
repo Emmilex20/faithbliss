@@ -21,39 +21,54 @@ import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
 import matchRoutes from './routes/matchRoutes';
 import messageRoutes from './routes/messageRoutes';
+import discoverRoutes from './routes/discoverRoutes';
+import notificationRoutes from './routes/notificationRoutes';
+import paymentRoutes from './routes/paymentRoutes';
 // 💡 NEW: Import the custom Firebase authentication middleware
 import { protect } from './middleware/authMiddleware'; 
 import uploadRoutes from './routes/uploadRoutes';
 import photoRoutes from './routes/photoRoutes';
+import supportRoutes from './routes/supportRoutes';
 
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+// 👇 CHANGE 1: Define multiple allowed origins (Vite default + fallback)
+const allowedOrigins = [
+  'http://localhost:5173', 
+  'http://localhost:5174', 
+  process.env.CLIENT_URL
+].filter((origin): origin is string => !!origin); // Cleanup undefined values
 
 const httpServer = http.createServer(app);
 
 // SOCKET.IO setup
 const io = new Server(httpServer, {
-  cors: {
-    origin: CLIENT_URL, // 🎯 Use the environment variable
-    methods: ['GET', 'POST'],
-    credentials: true,
-  },
+  cors: {
+    origin: allowedOrigins, // 🎯 Pass the array here
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
 });
 initializeSocketIO(io);
 
 // 🔑 CORS & Middleware
 app.use(
-  cors({
-    origin: CLIENT_URL, // 🎯 Use the environment variable
-    credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization'], 
-  })
+  cors({
+    origin: allowedOrigins, // 🎯 Pass the array here too
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization'], 
+  })
 );
 
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      (req as any).rawBody = buf;
+    },
+  })
+);
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
@@ -94,6 +109,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', protect, userRoutes);
 app.use('/api/matches', protect, matchRoutes);
 app.use('/api/messages', protect, messageRoutes);
+app.use('/api/discover', protect, discoverRoutes);
+app.use('/api/notifications', protect, notificationRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/support', protect, supportRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/users', photoRoutes);
 

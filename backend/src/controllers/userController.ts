@@ -73,19 +73,12 @@ const getMe = async (req: CustomRequest, res: Response) => {
     const user = await fetchUserProfile(firebaseUid, res);
     if (!user) return; // Response handled by helper
 
-    // 3. Return the necessary data
+    // 3. Return full profile data so edits persist on reload
+    const { firebaseUid: uid, ...userData } = user as any;
     return res.status(200).json({
-        id: user.firebaseUid, // Using the UID as the ID
-        name: user.name,
-        email: user.email,
-        profilePhoto1: user.profilePhoto1,
-        onboardingCompleted: user.onboardingCompleted,
-        age: user.age,
-        gender: user.gender,
-        location: user.location,
-        bio: user.bio,
-        denomination: user.denomination,
-        firebaseUid: user.firebaseUid,
+        id: uid,
+        firebaseUid: uid,
+        ...userData,
     });
 };
 
@@ -220,7 +213,73 @@ const updateUserProfile = async (req: Request, res: Response) => {
   }
 };
 
+
+const updateUserSettings = async (req: Request, res: Response) => {
+  try {
+    const uid = (req as any).userId;
+    if (!uid) return res.status(401).json({ message: 'Unauthorized' });
+
+    const settings = req.body || {};
+    const userRef = db.collection('users').doc(uid);
+
+    await userRef.set(
+      {
+        settings,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    return res.status(200).json({ message: 'Settings updated successfully.' });
+  } catch (error: any) {
+    console.error('?? Error updating settings:', error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const deactivateAccount = async (req: Request, res: Response) => {
+  try {
+    const uid = (req as any).userId;
+    if (!uid) return res.status(401).json({ message: 'Unauthorized' });
+
+    const userRef = db.collection('users').doc(uid);
+    await userRef.set(
+      {
+        isActive: false,
+        deactivatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    return res.status(200).json({ message: 'Account deactivated successfully.' });
+  } catch (error: any) {
+    console.error('?? Error deactivating account:', error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const reactivateAccount = async (req: Request, res: Response) => {
+  try {
+    const uid = (req as any).userId;
+    if (!uid) return res.status(401).json({ message: 'Unauthorized' });
+
+    const userRef = db.collection('users').doc(uid);
+    await userRef.set(
+      {
+        isActive: true,
+        reactivatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    return res.status(200).json({ message: 'Account reactivated successfully.' });
+  } catch (error: any) {
+    console.error('?? Error reactivating account:', error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 // ----------------------------------------
 // FINAL EXPORTS 
 // ----------------------------------------
-export { getMe, getUserById, getAllUsers, updateUserProfile };
+export { getMe, getUserById, getAllUsers, updateUserProfile, updateUserSettings, deactivateAccount, reactivateAccount };

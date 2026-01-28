@@ -33,7 +33,7 @@ export const HingeStyleProfileCard = ({ profile, onGoBack, onPass, onLike, onMes
     setCurrentPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length);
     
   // Safely get ID, prioritizing 'id', then '_id', defaulting to 'missing'
-  const profileId = profile.id || profile.id || 'missing';
+  const profileId = profile.id || (profile as any)._id || 'missing';
 
   return (
     <div className="w-full h-full bg-gray-800/50 backdrop-blur-sm rounded-2xl overflow-hidden border border-gray-700/50 shadow-xl">

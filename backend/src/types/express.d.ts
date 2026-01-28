@@ -4,9 +4,11 @@ declare global {
   namespace Express {
     interface Request {
       user?: IUser & {
-        _id: string; // ✅ Force _id to be a string for controllers
+        _id: string;
       };
       isAuthenticated(): boolean;
+      rawBody?: Buffer;
+      userId?: string;
     }
   }
 }

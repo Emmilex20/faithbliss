@@ -40,4 +40,42 @@ router.post('/me/photo/:photoNumber', protect, upload.single('photo'), async (re
   }
 });
 
+/**
+ * @route DELETE /api/users/me/photo/:photoNumber
+ * @desc Remove a specific profile photo (photo 1, 2, etc.)
+ * @access Private
+ */
+router.delete('/me/photo/:photoNumber', protect, async (req, res) => {
+  try {
+    const uid = req.userId;
+    const { photoNumber } = req.params;
+
+    if (!uid) return res.status(401).json({ message: 'Unauthorized: Missing user ID' });
+
+    const photoField = `profilePhoto${photoNumber}`;
+    const userRef = db.collection('users').doc(uid);
+
+    await userRef.update({ [photoField]: null });
+
+    const updatedDoc = await userRef.get();
+    const updatedData = updatedDoc.data() || {};
+
+    return res.status(200).json({
+      message: `Photo ${photoNumber} removed successfully`,
+      photoNumber: Number(photoNumber),
+      photos: {
+        profilePhoto1: updatedData.profilePhoto1 || null,
+        profilePhoto2: updatedData.profilePhoto2 || null,
+        profilePhoto3: updatedData.profilePhoto3 || null,
+        profilePhoto4: updatedData.profilePhoto4 || null,
+        profilePhoto5: updatedData.profilePhoto5 || null,
+        profilePhoto6: updatedData.profilePhoto6 || null,
+      },
+    });
+  } catch (error: any) {
+    console.error('🔥 Error removing photo:', error);
+    res.status(500).json({ message: 'Error removing photo', error: error.message });
+  }
+});
+
 export default router;

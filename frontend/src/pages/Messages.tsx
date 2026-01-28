@@ -14,6 +14,9 @@ import type {
 } from '@/types/chat';
 
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import { TopBar } from '@/components/dashboard/TopBar';
+import { SidePanel } from '@/components/dashboard/SidePanel';
+import { useAuthContext } from '@/contexts/AuthContext';
 import {
   MessageCircle, ArrowLeft, Search, Send, Phone, Video,
   Smile, Paperclip, Info, Check, CheckCheck, Users, Heart
@@ -22,22 +25,9 @@ import {
 // Assuming these imports are correct for your Vite project structure
 import { useConversations, useConversationMessages } from '@/hooks/useAPI';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { useSession } from '@/hooks/useSession';
-import { API } from '@/services/api';
+import { useAuth } from '@/hooks/useAuth';
 import { HeartBeatLoader } from '@/components/HeartBeatLoader';
-
-// Define the Session and Image props interfaces
-interface SessionData {
-  user: {
-    id: string;
-    name: string;
-  };
-}
-
-interface SessionHook {
-  data: SessionData | null;
-  status: 'loading' | 'authenticated' | 'unauthenticated';
-}
+import { API } from '@/services/api';
 
 interface OptimizedImageProps {
   src: string;
@@ -78,25 +68,37 @@ const MessagesContent = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastRefetchedMatchId = useRef<string | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [typingStatus, setTypingStatus] = useState<Record<string, boolean>>({});
 
-  const { data: session } = useSession() as SessionHook;
-  const currentUserId = session?.user?.id;
+  const { user: authUser } = useAuth();
+  const { user: layoutUser } = useAuthContext();
+  const [showSidePanel, setShowSidePanel] = useState(false);
+  const layoutName = layoutUser?.name || authUser?.name || 'User';
+  const layoutImage = layoutUser?.profilePhoto1 || authUser?.profilePhoto1 || undefined;
+  const currentUserId = authUser?.id;
 
   // Use a local state for messages to allow real-time updates without immediate refetch
   const [localMessagesData, setLocalMessagesData] = useState<ConversationMessagesResponse | null>(null);
+  const lastReadMatchId = useRef<string | null>(null);
 
   // Fetch messages for selected conversation, and update local state
+  const effectiveMatchId = selectedChat && selectedChat !== profileIdParam ? selectedChat : '';
   const {
     data: fetchedMessages,
     loading: conversationLoading,
     refetch: refetchMessages
   } = useConversationMessages(
-    selectedChat || '', profileIdParam || ''
+    effectiveMatchId, profileIdParam || ''
   ) as { data: ConversationMessagesResponse | null, loading: boolean, refetch: () => void };
 
   // Sync fetched messages with local state
   useEffect(() => {
     setLocalMessagesData(fetchedMessages);
+    if (fetchedMessages?.match?.id && lastReadMatchId.current !== fetchedMessages.match.id) {
+      lastReadMatchId.current = fetchedMessages.match.id;
+      refetch();
+    }
   }, [fetchedMessages]);
 
   // Fetch raw conversations data from backend
@@ -112,8 +114,35 @@ const MessagesContent = () => {
 
   const realConversations: ConversationSummary[] = Array.isArray(rawConversations) ? rawConversations : [];
 
+  const dedupedConversations = useMemo(() => {
+    const map = new Map<string, ConversationSummary>();
+    for (const conv of realConversations) {
+      const otherId = conv.otherUser?.id;
+      const key = otherId ? String(otherId) : String(conv.id);
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, conv);
+        continue;
+      }
+      const existingTime = existing.lastMessage?.createdAt
+        ? new Date(existing.lastMessage.createdAt).getTime()
+        : 0;
+      const nextTime = conv.lastMessage?.createdAt
+        ? new Date(conv.lastMessage.createdAt).getTime()
+        : 0;
+      map.set(key, nextTime >= existingTime ? conv : existing);
+    }
+    return Array.from(map.values());
+  }, [realConversations]);
+
+  const [localConversations, setLocalConversations] = useState<ConversationSummary[]>([]);
+
+  useEffect(() => {
+    setLocalConversations(dedupedConversations);
+  }, [dedupedConversations]);
+
   const currentConversation: ConversationSummary | null = useMemo(() => {
-    const found = realConversations.find(conv => conv.id === selectedChat);
+    const found = localConversations.find(conv => conv.id === selectedChat);
     if (found) return found;
 
     // Handle virtual conversation case (new chat from profileIdParam)
@@ -132,18 +161,18 @@ const MessagesContent = () => {
     }
 
     return null;
-  }, [selectedChat, realConversations, profileIdParam, profileNameParam]);
+  }, [selectedChat, localConversations, profileIdParam, profileNameParam]);
 
   // 1. Join/Leave WebSocket Room
   useEffect(() => {
-    if (webSocketService && selectedChat) {
-      webSocketService.joinMatch(selectedChat);
+    if (webSocketService && effectiveMatchId) {
+      webSocketService.joinMatch(effectiveMatchId);
 
       return () => {
-        webSocketService.leaveMatch(selectedChat);
+        webSocketService.leaveMatch(effectiveMatchId);
       };
     }
-  }, [selectedChat, webSocketService]);
+  }, [effectiveMatchId, webSocketService]);
 
   // 2. Real-time Message Listener (with optimistic message replacement logic)
   const handleNewMessage = useCallback((message: Message) => {
@@ -183,7 +212,7 @@ const MessagesContent = () => {
       // If this message is for a new chat (virtual match) that just became real...
       if (
         matchId &&
-        !realConversations.find(conv => conv.id === matchId) &&
+        !localConversations.find(conv => conv.id === matchId) &&
         lastRefetchedMatchId.current !== matchId
       ) {
         refetch(); // Refetch conversation list to include the new match
@@ -193,8 +222,29 @@ const MessagesContent = () => {
       return prev;
     });
 
+    setLocalConversations(prev => {
+      const updated = prev.map(conv => {
+        if (conv.id !== matchId) return conv;
+        return {
+          ...conv,
+          lastMessage: {
+            content: message.content,
+            createdAt: message.createdAt,
+          },
+          unreadCount:
+            message.senderId !== currentUserId
+              ? (conv.unreadCount || 0) + 1
+              : conv.unreadCount,
+          updatedAt: message.createdAt,
+        };
+      });
+      return updated.sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+    });
+
     setTimeout(scrollToBottom, 50);
-  }, [realConversations, refetch, selectedChat]);
+  }, [localConversations, refetch, selectedChat, currentUserId]);
 
 
   useEffect(() => {
@@ -206,6 +256,20 @@ const MessagesContent = () => {
       };
     }
   }, [webSocketService, handleNewMessage]);
+
+  useEffect(() => {
+    if (!webSocketService) return;
+    const handleTyping = (payload: { userId: string; isTyping: boolean }) => {
+      setTypingStatus(prev => ({
+        ...prev,
+        [payload.userId]: payload.isTyping
+      }));
+    };
+    webSocketService.onTyping(handleTyping);
+    return () => {
+      webSocketService.off('userTyping', handleTyping);
+    };
+  }, [webSocketService]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -226,23 +290,19 @@ const MessagesContent = () => {
         // --- DEBUGGING END ---
       
       try {
-        let actualMatchId = currentConversation.id;
+        const actualMatchId = currentConversation.id;
         const messageContent = newMessage.trim();
 
-        // If it's a virtual conversation (new chat), create a match first
         if (profileIdParam && currentConversation.id === profileIdParam) {
-          const createMatchResponse = await API.Match.createMatch(profileIdParam);
-          actualMatchId = createMatchResponse.match.id;
-          // Set the local state to the new real match ID
-          setSelectedChat(actualMatchId);
+          console.warn('Cannot send message: no mutual match exists for this user yet.');
+          return;
         }
 
         // --- OPTIMISTIC MESSAGE UPDATE ---
         const tempMessage: Message = {
           id: `temp-${Date.now()}-${Math.random()}`,
           senderId: currentUserId,
-          // FIX: Added receiverId, required by the Message interface
-          receiverId: currentConversation.otherUser.id, 
+          receiverId: currentConversation.otherUser.id,
           content: messageContent,
           createdAt: new Date().toISOString(),
           isRead: false,
@@ -251,7 +311,12 @@ const MessagesContent = () => {
         };
 
         setLocalMessagesData(prev => {
-          if (!prev) return null;
+          if (!prev) {
+            return {
+              match: { id: actualMatchId },
+              messages: [tempMessage],
+            } as ConversationMessagesResponse;
+          }
           return {
             ...prev,
             messages: [...prev.messages, tempMessage],
@@ -259,11 +324,34 @@ const MessagesContent = () => {
         });
         // --- END OPTIMISTIC UPDATE ---
 
-        // 1. Send message via WebSocket using the actualMatchId
-        webSocketService.sendMessage(actualMatchId, messageContent);
+        setLocalConversations(prev => {
+          const updated = prev.map(conv => {
+            if (conv.id !== actualMatchId) return conv;
+            return {
+              ...conv,
+              lastMessage: {
+                content: messageContent,
+                createdAt: tempMessage.createdAt,
+              },
+              updatedAt: tempMessage.createdAt,
+            };
+          });
+          return updated.sort(
+            (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          );
+        });
+
+        // Notify other user in real-time (and persist via server)
+        webSocketService.sendMessage(
+          currentConversation.otherUser.id,
+          messageContent,
+          actualMatchId
+        );
 
         // 2. Cleanup and scroll
         setNewMessage('');
+        // Stop typing indicator after sending
+        webSocketService.sendTyping(currentConversation.otherUser.id, false);
         setTimeout(scrollToBottom, 50);
 
         // 3. Handle conversation list refetch if a new match was created
@@ -286,16 +374,32 @@ const MessagesContent = () => {
     }
   };
 
+  const handleTypingChange = (value: string) => {
+    setNewMessage(value);
+    if (!currentConversation || !webSocketService || !currentConversation.otherUser?.id) return;
+    const receiverId = currentConversation.otherUser.id;
+    webSocketService.sendTyping(receiverId, true);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      webSocketService.sendTyping(receiverId, false);
+    }, 1200);
+  };
+
   const handleSelectChat = (id: string) => {
     setSelectedChat(id);
+    setLocalConversations(prev =>
+      prev.map(conv =>
+        conv.id === id ? { ...conv, unreadCount: 0 } : conv
+      )
+    );
   };
 
   // Auto select logic
   useEffect(() => {
-    if (realConversations.length === 0) return;
+    if (localConversations.length === 0) return;
 
     if (profileIdParam && !didAutoSelect.current) {
-      const found = realConversations.find(
+      const found = localConversations.find(
         conv => conv.otherUser?.id === profileIdParam
       );
       if (found && selectedChat !== found.id) {
@@ -305,10 +409,22 @@ const MessagesContent = () => {
         didAutoSelect.current = true;
       }
     } else if (!selectedChat && !didAutoSelect.current) {
-      setSelectedChat(realConversations[0]?.id);
+      setSelectedChat(localConversations[0]?.id);
       didAutoSelect.current = true;
     }
-  }, [realConversations, profileIdParam, selectedChat]);
+  }, [localConversations, profileIdParam, selectedChat]);
+
+  useEffect(() => {
+    if (!selectedChat || !localMessagesData?.messages?.length) return;
+    if (localMessagesData.match?.id !== selectedChat) return;
+    const unreadIds = localMessagesData.messages
+      .filter(m => !m.isRead && m.senderId !== currentUserId)
+      .map(m => m.id);
+    if (unreadIds.length === 0) return;
+    unreadIds.forEach(id => {
+      API.Message.markMessageAsRead(id).catch(() => null);
+    });
+  }, [selectedChat, localMessagesData, currentUserId]);
 
 
   // Show loading state
@@ -334,7 +450,7 @@ const MessagesContent = () => {
   }
 
   // Show no conversations state
-  if (realConversations.length === 0 && !profileIdParam) {
+  if (localConversations.length === 0 && !profileIdParam) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white flex items-center justify-center">
         <div className="text-center p-8">
@@ -352,7 +468,7 @@ const MessagesContent = () => {
     );
   }
 
-  const filteredConversations = realConversations.filter(conv => {
+  const filteredConversations = localConversations.filter(conv => {
     const matchedUser = conv.otherUser;
     return matchedUser?.name?.toLowerCase().includes(searchQuery.toLowerCase());
   });
@@ -362,61 +478,12 @@ const MessagesContent = () => {
     return <HeartBeatLoader message="Initializing chat..." />;
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white overflow-x-hidden pb-20 no-horizontal-scroll dashboard-main">
-      {/* Header */}
-      <div className="sticky top-0 bg-gray-900/95 backdrop-blur-xl border-b border-gray-700/50 z-30 px-4 py-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-            Messages
-          </h1>
-          <div className="flex gap-3">
-            <button className="p-2 bg-gray-800/50 rounded-xl hover:bg-gray-700/50 transition-colors">
-              <Search className="w-5 h-5 text-gray-300" />
-            </button>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex justify-center mt-4">
-          <div className="bg-gray-800/50 rounded-2xl p-1 flex gap-1">
-            <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-gradient-to-r from-blue-500 to-cyan-500 text-white">
-              <MessageCircle className="w-4 h-4" />
-              Connections
-            </button>
-            <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-700/50">
-              <Heart className="w-4 h-4" />
-              Matches
-            </button>
-            <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-700/50">
-              <Users className="w-4 h-4" />
-              Groups
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="pt-20 h-screen flex flex-col md:flex-row overflow-hidden max-w-full">
+  const mainContent = (
+    <div className="h-[calc(100vh-120px)] flex flex-col md:flex-row overflow-hidden max-w-full">
         {/* Conversations List */}
-        <div className={`${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 flex-shrink-0 bg-gray-900/50 backdrop-blur-xl border-r border-gray-700/50 overflow-hidden min-w-0 flex-col`}>
+        <div className={`${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 flex-shrink-0 bg-gradient-to-b from-gray-900/60 to-gray-900/30 backdrop-blur-xl border-r border-gray-700/50 overflow-hidden min-w-0 flex-col`}>
           {/* Header */}
           <div className="p-4 border-b border-gray-700/50">
-            <div className="flex items-center justify-between mb-4">
-              <Link to="/dashboard">
-                <button className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 hover:border-white/30 rounded-2xl transition-all duration-300 hover:scale-105 group">
-                  <ArrowLeft className="w-5 h-5 text-white group-hover:scale-110 transition-transform duration-300" />
-                </button>
-              </Link>
-
-              <h1 className="text-xl font-bold bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
-                Messages
-              </h1>
-
-              <button className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 hover:border-white/30 rounded-2xl transition-all duration-300 hover:scale-105 group">
-                <Search className="w-5 h-5 text-white group-hover:scale-110 transition-transform duration-300" />
-              </button>
-            </div>
-
             {/* Search Bar */}
             <div className="relative">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -425,7 +492,7 @@ const MessagesContent = () => {
                 placeholder="Search conversations..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl pl-12 pr-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/50 transition-all duration-300"
+                className="w-full bg-white/10 backdrop-blur-xl border border-white/15 rounded-2xl pl-12 pr-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/50 transition-all duration-300"
               />
             </div>
           </div>
@@ -509,7 +576,7 @@ const MessagesContent = () => {
                   <div>
                     <h3>{currentConversation.otherUser.name}</h3>
                     <p className="text-xs text-gray-400">
-                      Active now
+                      {typingStatus[currentConversation.otherUser.id] ? 'Typing…' : 'Active now'}
                     </p>
                   </div>
                 </div>
@@ -584,7 +651,7 @@ const MessagesContent = () => {
                     type="text"
                     placeholder="Type a message..."
                     value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
+                    onChange={(e) => handleTypingChange(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                     className="w-full bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl px-4 py-3 pr-12 text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/50 transition-all duration-300 min-w-0"
                   />
@@ -620,6 +687,61 @@ const MessagesContent = () => {
           </div>
         )}
       </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white overflow-x-hidden pb-20 no-horizontal-scroll dashboard-main">
+      {/* Desktop Layout */}
+      <div className="hidden lg:flex min-h-screen">
+        <div className="w-80 flex-shrink-0">
+          <SidePanel userName={layoutName} userImage={layoutImage} user={layoutUser} onClose={() => setShowSidePanel(false)} />
+        </div>
+        <div className="flex-1 flex flex-col min-h-screen">
+          <TopBar
+            userName={layoutName}
+            userImage={layoutImage}
+            user={layoutUser}
+            showFilters={false}
+            showSidePanel={showSidePanel}
+            onToggleFilters={() => {}}
+            onToggleSidePanel={() => setShowSidePanel(false)}
+            title="Messages"
+          />
+          <div className="flex-1 overflow-y-auto">{mainContent}</div>
+        </div>
+      </div>
+
+      {/* Mobile Layout */}
+      <div className="lg:hidden min-h-screen">
+        <TopBar
+          userName={layoutName}
+          userImage={layoutImage}
+          user={layoutUser}
+          showFilters={false}
+          showSidePanel={showSidePanel}
+          onToggleFilters={() => {}}
+          onToggleSidePanel={() => setShowSidePanel(true)}
+          title="Messages"
+        />
+        <div className="flex-1">{mainContent}</div>
+      </div>
+
+      {showSidePanel && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setShowSidePanel(false)}
+          />
+          <div className="absolute inset-y-0 left-0 w-80 max-w-[85vw]">
+            <SidePanel
+              userName={layoutName}
+              userImage={layoutImage}
+              user={layoutUser}
+              onClose={() => setShowSidePanel(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

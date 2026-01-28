@@ -262,11 +262,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
                 key={option}
                 type="button"
                 onClick={() => handleMultiSelect('personality', option)}
-                className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
-                  onboardingData.personality?.includes(option)
-                    ? 'bg-pink-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
+                className={`chip ${onboardingData.personality?.includes(option) ? 'chip-selected' : ''}`}
               >
                 {option}
               </button>
@@ -283,11 +279,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
                 key={option}
                 type="button"
                 onClick={() => handleMultiSelect('hobbies', option)}
-                className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
-                  onboardingData.hobbies?.includes(option)
-                    ? 'bg-pink-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
+                className={`chip ${onboardingData.hobbies?.includes(option) ? 'chip-selected' : ''}`}
               >
                 {option}
               </button>
@@ -304,11 +296,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
                 key={option}
                 type="button"
                 onClick={() => handleMultiSelect('values', option)}
-                className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
-                  onboardingData.values?.includes(option)
-                    ? 'bg-pink-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
+                className={`chip ${onboardingData.values?.includes(option) ? 'chip-selected' : ''}`}
               >
                 {option}
               </button>
@@ -325,11 +313,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
                 key={option}
                 type="button"
                 onClick={() => handleMultiSelect('spiritualGifts', option)}
-                className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
-                  onboardingData.spiritualGifts?.includes(option)
-                    ? 'bg-pink-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
+                className={`chip ${onboardingData.spiritualGifts?.includes(option) ? 'chip-selected' : ''}`}
               >
                 {option}
               </button>
@@ -346,11 +330,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
                 key={option}
                 type="button"
                 onClick={() => handleMultiSelect('interests', option)}
-                className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
-                  onboardingData.interests?.includes(option)
-                    ? 'bg-pink-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
+                className={`chip ${onboardingData.interests?.includes(option) ? 'chip-selected' : ''}`}
               >
                 {option}
               </button>
@@ -364,41 +344,66 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
 
 // 2. STYLES: This block has been modified to fix the dropdown text visibility.
 const styles = `
-  .input-style {
-    background-color: #374151;
-    border: 1px solid #4B5563;
-    color: white !important; /* IMPORTANT: Ensures text is white */
-    border-radius: 0.5rem;
-    padding: 0.75rem 1rem;
-    font-size: 1rem;
-    transition: border-color 0.2s, box-shadow 0.2s;
-    width: 100%;
-  }
-  .input-style:focus {
-    outline: none;
-    border-color: #EC4899;
-    box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.5);
-  }
-  .input-style::placeholder {
-    color: #9CA3AF;
-  }
-  
-  /* FIX: Ensure dropdown text is visible on all platforms */
-  select.input-style {
-      color: white !important;
+  .input-style {
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    color: #e5e7eb !important;
+    border-radius: 0.85rem;
+    padding: 0.85rem 1rem;
+    font-size: 0.98rem;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    width: 100%;
   }
-  select.input-style option {
-      /* This helps ensure the options text is readable on dark mode systems */
-      background-color: #374151 !important;
-      color: white !important;
+  .input-style:focus {
+    outline: none;
+    border-color: rgba(236, 72, 153, 0.7);
+    box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.25);
+    background: rgba(15, 23, 42, 0.9);
+  }
+  .input-style::placeholder {
+    color: rgba(148, 163, 184, 0.8);
   }
 
-  input[type="date"]::-webkit-calendar-picker-indicator {
-    filter: invert(1);
-  }
-  input[type="date"] {
-    color-scheme: dark;
-  }
+  /* FIX: Ensure dropdown text is visible on all platforms */
+  select.input-style {
+    color: #e5e7eb !important;
+  }
+  select.input-style option {
+    background-color: #0f172a !important;
+    color: #e5e7eb !important;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 1.1rem;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(15, 23, 42, 0.6);
+    color: #d1d5db;
+    transition: transform 0.2s, border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  }
+  .chip:hover {
+    border-color: rgba(236, 72, 153, 0.5);
+    background: rgba(30, 41, 59, 0.7);
+    transform: translateY(-1px);
+  }
+  .chip-selected {
+    background: linear-gradient(135deg, rgba(236, 72, 153, 0.9), rgba(147, 51, 234, 0.85));
+    color: white;
+    border-color: rgba(236, 72, 153, 0.8);
+    box-shadow: 0 10px 30px rgba(236, 72, 153, 0.25);
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+  input[type="date"] {
+    color-scheme: dark;
+  }
 `;
 
 if (typeof window !== 'undefined') {

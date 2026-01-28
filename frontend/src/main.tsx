@@ -14,8 +14,17 @@ import ProfilePage from './pages/UserProfileView.tsx';
 import Profile from './pages/Profile.tsx'
 // 💡 ADDITION: Import the Messages component
 import Messages from './pages/Messages.tsx';
+import Notifications from './pages/Notifications.tsx';
+import Premium from './pages/Premium.tsx';
+import PaymentSuccess from './pages/PaymentSuccess.tsx';
 import OnboardingRouteWrapper from './pages/OnboardingPage.tsx';
 import MatchPage from './pages/MatchesPage.tsx';
+import About from './pages/About.tsx';
+import Privacy from './pages/Privacy.tsx';
+import Settings from './pages/Settings.tsx';
+import Help from './pages/Help.tsx';
+import Report from './pages/Report.tsx';
+import Deactivate from './pages/Deactivate.tsx';
 
 // Import the Contexts and Gates
 import { ToastProvider } from './contexts/ToastContext.tsx';
@@ -31,6 +40,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
             {/* Route 1: The Landing Page (No Auth required) */}
             <Route path="/" element={<Home />} />
+
+            {/* Public Marketing Routes */}
+            <Route element={<App />}>
+              <Route path="about" element={<About />} />
+              <Route path="privacy" element={<Privacy />} />
+            </Route>
 
             {/* Route 2: Public Routes (Login/Signup) */}
             <Route element={<PublicOnlyRoute />}>
@@ -52,6 +67,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
                 {/* 💡 ADDED: Messages Route (Now protected by AuthGate) */}
                 <Route path="messages" element={<Messages />} />
+                <Route path="notifications" element={<Notifications />} />
+                <Route path="premium" element={<Premium />} />
+                <Route path="payment-success" element={<PaymentSuccess />} />
+                <Route path="settings" element={<Settings />} />
+                <Route path="help" element={<Help />} />
+                <Route path="report" element={<Report />} />
+                <Route path="deactivate" element={<Deactivate />} />
 
                 {/* 💡 CORRECTION: Use dynamic route path and the direct component */}
                 <Route path="profile/:id" element={<ProfilePage />} />

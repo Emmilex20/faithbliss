@@ -1,9 +1,9 @@
 // src/socket/socket.ts
 
 import { Server, Socket } from 'socket.io';
-import { protectSocket } from '../middleware/authMiddleware'; 
-import MessageModel from '../models/Message'; // Assuming Message model is defined
-import MatchModel from '../models/Match'; // Assuming Match model is defined
+import { protectSocket } from '../middleware/authMiddleware';
+import { admin, db } from '../config/firebase-admin';
+import { createNotification } from '../services/notificationService';
 
 // Helper interface extending Socket to include the authenticated user ID
 interface AuthenticatedSocket extends Socket {
@@ -17,6 +17,7 @@ const usersSocketMap = new Map<string, string>();
 // This function is called from server.ts to start listening for connections
 export const initializeSocketIO = (io: Server) => {
     console.log('Socket.io server initialized and listening.');
+    ioInstance = io;
 
     // 1. Apply Authentication Middleware
     io.use(protectSocket as any); // Type assertion needed because of the custom interface
@@ -54,61 +55,56 @@ export const initializeSocketIO = (io: Server) => {
         // --------------------------------------------------------
         // 4. Handle 'sendMessage' event (Core Messaging Logic)
         // --------------------------------------------------------
-        socket.on('sendMessage', async (data: { receiverId: string; content: string }) => {
-            const { receiverId, content } = data;
+        socket.on('sendMessage', async (data: { receiverId: string; content: string; matchId?: string }) => {
+            const { receiverId, content, matchId } = data;
 
-            if (!receiverId || !content) {
-                return socket.emit('error', 'Message must have a receiver ID and content.');
+            if (!receiverId || !content || !matchId) {
+                return socket.emit('error', 'Message must have a receiver ID, content, and matchId.');
             }
 
             try {
-                // A. Find the match document involving the sender and receiver
-                const match = await MatchModel.findOne({
-                    $and: [
-                        { users: { $in: [userId] } },
-                        { users: { $in: [receiverId] } }
-                    ]
-                });
-
-                if (!match) {
+                const matchDoc = await db.collection('matches').doc(matchId).get();
+                if (!matchDoc.exists) {
                     return socket.emit('error', 'Cannot send message: Match not found.');
                 }
-                
-                const matchId = match.id;
-                
-                // B. Create and save the new message
-                const newMessage = await MessageModel.create({
-                    sender: userId,
-                    receiver: receiverId,
-                    matchId: matchId,
-                    content: content,
-                    readBy: [userId] // Sender has read it by default
-                });
 
-                // C. Format the message for the client (optional: populate sender/receiver info)
-                const messageToSend = {
-                    ...newMessage.toObject(),
-                    matchId: matchId,
-                    // If your frontend expects populated sender/receiver, populate here 
-                    // or rely on the frontend fetching the user list.
-                };
-
-                // D. Broadcast the message: 
-                //    - To everyone in the match room (sender and receiver, if they're in the room)
-                io.to(matchId).emit('newMessage', messageToSend);
-
-                // E. Emit a notification to the receiver's private room 
-                //    (in case they are not currently viewing the chat)
-                if (userId !== receiverId) {
-                    // You might send an unread count update here or a general notification
-                    io.to(receiverId).emit('notification', { 
-                        type: 'message', 
-                        matchId: matchId,
-                        message: `New message from user ${userId}`
-                    });
+                const matchData = matchDoc.data() as { users?: string[] } | undefined;
+                if (!matchData?.users?.includes(userId)) {
+                    return socket.emit('error', 'Cannot send message: You are not part of this match.');
                 }
 
+                const messageRef = await db.collection('messages').add({
+                    matchId,
+                    senderId: userId,
+                    receiverId,
+                    content,
+                    isRead: false,
+                    unreadBy: [receiverId],
+                    createdAt: admin.firestore.Timestamp.now(),
+                });
 
+                const messageToSend = {
+                    id: messageRef.id,
+                    matchId,
+                    senderId: userId,
+                    receiverId,
+                    content,
+                    isRead: false,
+                    unreadBy: [receiverId],
+                    createdAt: new Date().toISOString(),
+                };
+
+                io.to(matchId).emit('newMessage', messageToSend);
+                io.to(receiverId).emit('newMessage', messageToSend);
+
+                if (userId !== receiverId) {
+                    await createNotification({
+                        userId: receiverId,
+                        type: 'NEW_MESSAGE',
+                        message: 'You have a new message',
+                        data: { matchId, senderId: userId }
+                    });
+                }
             } catch (error) {
                 console.error('Error sending message:', error);
                 socket.emit('error', 'Failed to process message on server.');
@@ -135,4 +131,11 @@ export const initializeSocketIO = (io: Server) => {
             usersSocketMap.delete(userId);
         });
     });
+};
+
+let ioInstance: Server | null = null;
+
+export const emitToUser = (userId: string, payload: any) => {
+    if (!ioInstance) return;
+    ioInstance.to(userId).emit('notification', payload);
 };

@@ -17,6 +17,10 @@ import {
     onAuthStateChanged,
     setPersistence,
     browserLocalPersistence, 
+    GoogleAuthProvider,
+    signInWithPopup,
+    signInWithRedirect,
+    getRedirectResult,
 } from "firebase/auth";
 import type { User as FirebaseAuthUser } from "firebase/auth";
 // 💡 NEW FIREBASE IMPORTS FOR FIRESTORE
@@ -136,6 +140,27 @@ const fetchUserDataFromFirestore = async (fbUser: FirebaseAuthUser): Promise<Use
     };
 };
 
+// Ensure a Firestore profile exists for OAuth users
+const ensureUserProfile = async (fbUser: FirebaseAuthUser) => {
+    const userDocRef = doc(db, "users", fbUser.uid);
+    const docSnap = await getDoc(userDocRef);
+
+    if (!docSnap.exists()) {
+        await setDoc(userDocRef, {
+            email: fbUser.email || "",
+            name: fbUser.displayName || "New User",
+            age: 0,
+            gender: "MALE",
+            denomination: "",
+            location: "",
+            bio: "",
+            onboardingCompleted: false,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+    }
+};
+
 
 export function useAuth() {
     const navigate = useNavigate();
@@ -153,7 +178,69 @@ export function useAuth() {
     
     const [accessToken, setAccessToken] = useState<string | null>(null);
 
+    const clearAppStorage = useCallback(() => {
+        // Avoid nuking Firebase auth storage used for redirect/persistence.
+        localStorage.removeItem("user");
+        localStorage.removeItem("faithbliss-auth");
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("accessToken");
+        sessionStorage.removeItem("authToken");
+    }, []);
+
     const isAuthenticated = !!(accessToken && user);
+
+    const syncUserFromFirebase = useCallback(async (fbUser: FirebaseAuthUser) => {
+        // 1. Get the current, secure ID Token (still needed for any future custom backend calls)
+        const token = await fbUser.getIdToken(true); 
+        setAccessToken(token);
+        localStorage.setItem("accessToken", token);
+        
+        console.log(`✅ Firebase Token Retrieved: ${token.substring(0, 20)}...`);
+
+        const persistUser = (userToPersist: User) => {
+            setUser(userToPersist);
+            localStorage.setItem("user", JSON.stringify(userToPersist));
+        };
+
+        const minimalUser: User = { 
+            id: fbUser.uid, 
+            email: fbUser.email!, 
+            name: fbUser.displayName || 'New User', 
+            onboardingCompleted: false, 
+            age: 0,
+            // Default values for required fields
+            gender: 'MALE', 
+            denomination: '',
+            bio: '',
+            location: '',
+        };
+
+        try {
+            // 2. Fetch/Sync custom user data from FIRESTORE
+            let userToStore = await fetchUserDataFromFirestore(fbUser);
+
+            if (!userToStore) {
+                console.log("⚠️ Firestore profile missing. Creating a profile for OAuth user...");
+                try {
+                    await ensureUserProfile(fbUser);
+                    userToStore = await fetchUserDataFromFirestore(fbUser);
+                } catch (profileError) {
+                    console.error("❌ Failed to create Firestore profile:", profileError);
+                }
+            }
+
+            if (userToStore) {
+                persistUser(userToStore);
+                return;
+            }
+
+            // Fallback to minimal user if Firestore is unavailable
+            persistUser(minimalUser);
+        } catch (error) {
+            console.error("❌ Firestore sync failed, using minimal user:", error);
+            persistUser(minimalUser);
+        }
+    }, []);
 
 // -----------------------------------------------------------
 // 🔄 Firebase Auth State Listener (Now using Firestore Sync)
@@ -163,15 +250,9 @@ export function useAuth() {
         setIsLoading(true);
 
         const unsubscribe = onAuthStateChanged(auth, async (fbUser: FirebaseAuthUser | null) => {
+            console.log("🔐 onAuthStateChanged fired. User:", fbUser ? { uid: fbUser.uid, email: fbUser.email, providerData: fbUser.providerData } : null);
             if (fbUser) {
                 try {
-                    
-                // 1. Get the current, secure ID Token (still needed for any future custom backend calls)
-                const token = await fbUser.getIdToken(true); 
-                setAccessToken(token);
-                
-                console.log(`✅ Firebase Token Retrieved: ${token.substring(0, 20)}...`);
-
                     if (isInitialSignUp) {
                         console.log("⏳ Auth State Listener: Detected initial sign-up, skipping profile sync (POST already ran).");
                         setIsInitialSignUp(false);
@@ -179,29 +260,7 @@ export function useAuth() {
                         return;
                     }
 
-                // 2. Fetch/Sync custom user data from FIRESTORE
-                const userToStore = await fetchUserDataFromFirestore(fbUser);
-                
-                    if (userToStore) {
-                        setUser(userToStore);
-                        localStorage.setItem("user", JSON.stringify(userToStore));
-                    } else {
-                        // Set minimal user data to allow redirection to /onboarding
-                        const minimalUser: User = { 
-                            id: fbUser.uid, 
-                            email: fbUser.email!, 
-                            name: fbUser.displayName || 'New User', 
-                            onboardingCompleted: false, 
-                            age: 0,
-                            // Default values for required fields
-                            gender: 'MALE', 
-                            denomination: '',
-                            bio: '',
-                            location: '',
-                        };
-                        setUser(minimalUser);
-                        localStorage.setItem("user", JSON.stringify(minimalUser));
-                    }
+                    await syncUserFromFirebase(fbUser);
                 } catch (e: any) {
                     // If token fetch or Firestore sync fails, force logout
                     console.error("Firebase/Firestore sync failed:", e);
@@ -213,14 +272,13 @@ export function useAuth() {
                 // Logged out state
                 setAccessToken(null);
                 setUser(null);
-                localStorage.clear();
+                clearAppStorage();
             }
             setIsLoading(false);
         });
 
         return () => unsubscribe(); // Cleanup the listener on unmount
-    }, [isInitialSignUp]); 
-
+    }, [isInitialSignUp, clearAppStorage, syncUserFromFirebase]); 
 // -----------------------------------------------------------
 // 🔒 Direct Login
 // -----------------------------------------------------------
@@ -305,6 +363,7 @@ export function useAuth() {
 
                 setUser(userToStore);
                 setAccessToken(token);
+                localStorage.setItem("accessToken", token);
                 localStorage.setItem("user", JSON.stringify(userToStore));
                  
                 showSuccess("Account created successfully!", "Registration Successful");
@@ -334,6 +393,7 @@ export function useAuth() {
         },
         [showSuccess, showError, user]
     );
+
 
 // -----------------------------------------------------------
 // ✅ NEW: Complete Onboarding (Uses Firestore Profile Update)
@@ -401,8 +461,7 @@ export function useAuth() {
         try {
             await signOut(auth); 
 
-            localStorage.clear();
-            sessionStorage.clear();
+            clearAppStorage();
             // Clear cookies in the browser
             document.cookie.split(";").forEach((c) => {
                 document.cookie = c
@@ -415,7 +474,7 @@ export function useAuth() {
         } finally {
             setIsLoggingOut(false);
         }
-    }, [showSuccess, navigate]);
+    }, [showSuccess, navigate, clearAppStorage]);
 
     // 🚀 5. Refetch User (Now uses Firestore)
     const refetchUser = useCallback(async () => {
@@ -431,11 +490,89 @@ export function useAuth() {
 
             setUser(userToStore);
             setAccessToken(freshToken);
+            localStorage.setItem("accessToken", freshToken);
             localStorage.setItem("user", JSON.stringify(userToStore));
         } catch (err) {
             console.error("Refetch user failed:", err);
         }
     }, []);
+
+
+// -----------------------------------------------------------
+// 🔁 Handle Google redirect result (avoids popup COOP issues)
+// -----------------------------------------------------------
+    useEffect(() => {
+        const handleRedirectResult = async () => {
+            try {
+                console.log("🔁 Checking getRedirectResult... currentUser:", auth.currentUser ? { uid: auth.currentUser.uid, email: auth.currentUser.email } : null);
+                const result = await getRedirectResult(auth);
+                console.log("🔁 getRedirectResult result:", result ? { uid: result.user.uid, email: result.user.email, providerData: result.user.providerData } : null);
+                if (result?.user) {
+                    // In some cases onAuthStateChanged can be late or skipped after redirect.
+                    // Sync user here to ensure auth state is hydrated.
+                    setIsLoading(true);
+                    await ensureUserProfile(result.user);
+                    await syncUserFromFirebase(result.user);
+                    setIsLoading(false);
+                }
+            } catch (error: any) {
+                console.error("Google redirect handling failed:", error);
+                setIsLoading(false);
+            }
+        };
+
+        handleRedirectResult();
+    }, [syncUserFromFirebase]);
+
+
+
+// -----------------------------------------------------------
+// 🔐 Google Sign-In (Firebase Auth + Firestore profile creation)
+// -----------------------------------------------------------
+
+    const googleSignIn = useCallback(
+        async (mode: "login" | "signup") => {
+            if (mode === "signup") {
+                setIsRegistering(true);
+            } else {
+                setIsLoggingIn(true);
+            }
+
+            try {
+                await setPersistence(auth, browserLocalPersistence);
+                const provider = new GoogleAuthProvider();
+                try {
+                    const result = await signInWithPopup(auth, provider);
+                    if (result?.user) {
+                        await ensureUserProfile(result.user);
+                        await syncUserFromFirebase(result.user);
+                    }
+                } catch (popupError: any) {
+                    // Fallback to redirect if popup is blocked or unavailable
+                    if (
+                        popupError?.code === "auth/popup-blocked" ||
+                        popupError?.code === "auth/operation-not-supported-in-this-environment" ||
+                        popupError?.code === "auth/popup-closed-by-user"
+                    ) {
+                        await signInWithRedirect(auth, provider);
+                    } else {
+                        throw popupError;
+                    }
+                }
+            } catch (error: any) {
+                console.error("Google sign-in failed:", error);
+                showError(error.message || "Google sign-in failed", "Authentication Error");
+                throw error;
+            } finally {
+                if (mode === "signup") {
+                    setIsRegistering(false);
+                } else {
+                    setIsLoggingIn(false);
+                }
+            }
+        },
+        [showSuccess, showError, refetchUser]
+    );
 
 
 // -----------------------------------------------------------
@@ -546,7 +683,8 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
         logout,
         refetchUser,
         completeOnboarding,
-        getUserProfileById
+        getUserProfileById,
+        googleSignIn
     };
 }
 

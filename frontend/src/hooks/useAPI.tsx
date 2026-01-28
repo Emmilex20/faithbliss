@@ -20,10 +20,11 @@ interface ApiState<T> {
 }
 
 interface UseApiOptions {
-  immediate?: boolean;
-  showErrorToast?: boolean;
-  showSuccessToast?: boolean;
-  cacheTime?: number;
+  immediate?: boolean;
+  showErrorToast?: boolean;
+  showSuccessToast?: boolean;
+  cacheTime?: number;
+  redirectOnUnauthorized?: boolean;
 }
 
 export interface ConversationMessagesResponse {
@@ -39,7 +40,7 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 // Types for messaging
 import type { Message } from '@/services/api'; 
-import { useNotificationWebSocket } from './useNotificationWebSocket'; 
+import { useWebSocket } from './useWebSocket';
 import type { NotificationPayload } from '../services/notification-websocket'; 
 
 interface ConversationSummary {
@@ -74,7 +75,8 @@ export function useApi<T>(
     immediate = true, 
     showErrorToast = false, 
     showSuccessToast = false,
-    cacheTime = CACHE_DURATION 
+    cacheTime = CACHE_DURATION,
+    redirectOnUnauthorized = true
   } = options;
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -141,7 +143,9 @@ export function useApi<T>(
         // ✅ FIX: Check for 'Unauthorized' message thrown by api-client.ts on 401
         if (error?.message?.includes('Unauthorized')) {
           showError('Your session has expired. Please log in again.', 'Authentication Error');
-          navigate('/login'); // Redirect to login
+          if (redirectOnUnauthorized) {
+            navigate('/login'); // Redirect to login
+          }
           throw error;
         }
 
@@ -230,7 +234,7 @@ export function useUserProfile(currentUserId?: string, currentUserEmail?: string
   const { refetch, execute, ...rest } = useApi(
     isAuthenticated ? apiCall : null,
     [accessToken, isAuthenticated, currentUserId, currentUserEmail],
-    { immediate: isAuthenticated, showErrorToast: false }
+    { immediate: isAuthenticated, showErrorToast: false, redirectOnUnauthorized: false }
   );
 
   return { ...rest, execute, refetch };
@@ -251,7 +255,7 @@ export function usePotentialMatches() {
   return useApi(
     isAuthenticated ? apiCall : null,
     [accessToken, isAuthenticated],
-    { immediate: isAuthenticated, showErrorToast: true, cacheTime: 3 * 60 * 1000 }
+    { immediate: isAuthenticated, showErrorToast: true, cacheTime: 3 * 60 * 1000, redirectOnUnauthorized: false }
   );
 }
 
@@ -534,58 +538,72 @@ export function useConversationMessages(
 
 // Hook for notifications (No change needed other than imports)
 export function useNotifications() {
-  const { isAuthenticated } = useRequireAuth();
-  const notificationWebSocketService = useNotificationWebSocket();
-  const [notifications, setNotifications] = useState<NotificationPayload[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const { accessToken, isAuthenticated } = useRequireAuth();
+  const webSocketService = useWebSocket();
+  const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
+  const [notifications, setNotifications] = useState<NotificationPayload[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Use ref to track handlers for proper cleanup
-  const handlersRef = useRef<{
-    handleNotification?: (payload: NotificationPayload) => void;
-    handleError?: (err: any) => void;
-  }>({});
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let mounted = true;
+    apiClient.Notification.getNotifications()
+      .then((items) => {
+        if (mounted) setNotifications(items as NotificationPayload[]);
+      })
+      .catch((err) => {
+        if (mounted) setError(err?.message || 'Failed to load notifications');
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [apiClient, isAuthenticated]);
 
-  useEffect(() => {
-    if (!isAuthenticated || !notificationWebSocketService) {
-      return;
-    }
+  useEffect(() => {
+    if (!isAuthenticated || !webSocketService) return;
+    const handleNotification = (payload: NotificationPayload) => {
+      setNotifications(prev => [payload, ...prev]);
+    };
+    webSocketService.onNotification(handleNotification);
+    return () => {
+      webSocketService.off('notification', handleNotification);
+    };
+  }, [isAuthenticated, webSocketService]);
 
-    // Subscribe to notifications
-    notificationWebSocketService.subscribeToNotifications();
+  return {
+    data: notifications,
+    loading: loading || !isAuthenticated,
+    error,
+  };
+}
 
-    // Define handlers
-    const handleNotification = (payload: NotificationPayload) => {
-      setNotifications(prev => [...prev, payload]);
-    };
+export function useNotificationUnreadCount() {
+  const { accessToken, isAuthenticated } = useRequireAuth();
+  const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
+  const webSocketService = useWebSocket();
+  const apiCall = useCallback(() => apiClient.Notification.getUnreadCount(), [apiClient]);
+  const hook = useApi<{ count: number }>(
+    isAuthenticated ? apiCall : null,
+    [accessToken, isAuthenticated],
+    { immediate: isAuthenticated, showErrorToast: false, redirectOnUnauthorized: false }
+  );
 
-    const handleError = (err: any) => {
-      setError(err?.message || 'Notification WebSocket error');
-    };
+  useEffect(() => {
+    if (!isAuthenticated || !webSocketService) return;
+    const handleNotification = () => {
+      hook.refetch();
+    };
+    webSocketService.onNotification(handleNotification);
+    return () => {
+      webSocketService.off('notification', handleNotification);
+    };
+  }, [isAuthenticated, webSocketService, hook]);
 
-    // Store handlers in ref for cleanup
-    handlersRef.current = { handleNotification, handleError };
-
-    // Subscribe to events
-    notificationWebSocketService.onNotification(handleNotification);
-    notificationWebSocketService.onError(handleError);
-
-    // Proper cleanup
-    return () => {
-      if (handlersRef.current.handleNotification) {
-        notificationWebSocketService.off('notification', handlersRef.current.handleNotification);
-      }
-      if (handlersRef.current.handleError) {
-        notificationWebSocketService.off('error', handlersRef.current.handleError);
-      }
-      // Don't unsubscribe immediately - let WebSocket manage its own lifecycle
-    };
-  }, [isAuthenticated, notificationWebSocketService]);
-
-  return {
-    data: notifications,
-    loading: !isAuthenticated || !notificationWebSocketService,
-    error,
-  };
+  return hook;
 }
 
 // Hook for fetching all users (No change needed)
@@ -611,11 +629,11 @@ export function useAllUsers(filters?: {
     return apiClient.User.getAllUsers(normalizedFilters);
   }, [apiClient, accessToken, filters?.page, filters?.limit, filters?.search]);
 
-  return useApi<GetUsersResponse>(
-    isAuthenticated ? apiCall : null,
-    [filters?.page, filters?.limit, filters?.search],
-    { immediate: isAuthenticated, showErrorToast: true, cacheTime: 10 * 60 * 1000 }
-  );
+  return useApi<GetUsersResponse>(
+    isAuthenticated ? apiCall : null,
+    [filters?.page, filters?.limit, filters?.search],
+    { immediate: isAuthenticated, showErrorToast: true, cacheTime: 10 * 60 * 1000, redirectOnUnauthorized: false }
+  );
 }
 
 // Hook for unread message count (No change needed)

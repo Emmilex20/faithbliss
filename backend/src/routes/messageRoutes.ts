@@ -5,6 +5,7 @@ import {
     // Importing the real Mongoose implementations from matchController
     getMatchConversations,
     getUnreadCount,
+    markMessageAsRead,
     getMatchMessages as getConversationMessages // Renaming on import for clarity
 } from '../controllers/matchController'; // <-- Pulling real logic from matchController
 
@@ -29,5 +30,9 @@ router.route('/unread-count').get(getUnreadCount);
 // GET /api/messages/:matchId 
 // We use the root path here, as /messages is the base in server.ts
 router.route('/match/:matchId').get(getConversationMessages);
+
+// Mark a message as read
+// PATCH /api/messages/:messageId/read
+router.route('/:messageId/read').patch(markMessageAsRead);
 
 export default router;

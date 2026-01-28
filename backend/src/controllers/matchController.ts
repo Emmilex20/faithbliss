@@ -3,6 +3,7 @@
 import { Request, Response } from 'express';
 import { admin, usersCollection } from '../config/firebase-admin';
 import { DocumentData, CollectionReference, Timestamp } from 'firebase-admin/firestore';
+import { createNotification } from '../services/notificationService';
 
 // --- FIRESTORE DATA STRUCTURES ---
 
@@ -31,7 +32,9 @@ interface IMessage extends DocumentData {
   id: string;
   matchId: string;
   senderId: string;
+  receiverId?: string;
   content: string;
+  unreadBy?: string[];
   createdAt: Timestamp;
 }
 
@@ -190,6 +193,30 @@ const likeUser = async (req: Request, res: Response) => {
     await batch.commit();
     console.log(`✅ Like processed successfully. Match: ${isMatch}`);
 
+    if (isMatch) {
+      await Promise.all([
+        createNotification({
+          userId: currentUid,
+          type: 'NEW_MATCH',
+          message: `You matched with ${targetUser.name || 'a user'}`,
+          data: { otherUserId: targetUid },
+        }),
+        createNotification({
+          userId: targetUid,
+          type: 'NEW_MATCH',
+          message: `You matched with ${currentUser.name || 'a user'}`,
+          data: { otherUserId: currentUid },
+        }),
+      ]);
+    } else {
+      await createNotification({
+        userId: targetUid,
+        type: 'PROFILE_LIKED',
+        message: `${currentUser.name || 'Someone'} liked your profile`,
+        data: { senderId: currentUid },
+      });
+    }
+
     res.status(200).json({
       message: isMatch ? "It's a Match!" : 'Like recorded',
       isMatch,
@@ -278,6 +305,11 @@ const getMatchConversations = async (req: Request, res: Response) => {
           ? ({ id: lastMsgDoc.id, ...lastMsgDoc.data() } as IMessage)
           : null;
 
+        const unreadSnap = await messagesCollection
+          .where('matchId', '==', match.id)
+          .where('unreadBy', 'array-contains', currentUid)
+          .get();
+
         const otherUid = match.users.find((u) => u !== currentUid);
         const otherUser = userMap.get(otherUid || '');
 
@@ -291,7 +323,7 @@ const getMatchConversations = async (req: Request, res: Response) => {
           lastMessage: lastMsg
             ? { content: lastMsg.content, createdAt: lastMsg.createdAt.toDate().toISOString() }
             : null,
-          unreadCount: 0,
+          unreadCount: unreadSnap.size,
           updatedAt,
         };
       })
@@ -349,6 +381,33 @@ const getMatchMessages = async (req: Request, res: Response) => {
 
     const otherUser = { id: otherDoc.id, ...otherDoc.data() } as IUserProfile;
 
+    const batch = db.batch();
+    let hasBatchUpdates = false;
+    const responseMessages = messages.map((m) => {
+      const unreadBy = Array.isArray(m.unreadBy) ? m.unreadBy : [];
+      const isRead = !unreadBy.includes(currentUid);
+      if (!isRead && m.senderId !== currentUid) {
+        const msgRef = messagesCollection.doc(m.id);
+        batch.update(msgRef, {
+          unreadBy: admin.firestore.FieldValue.arrayRemove(currentUid),
+        });
+        hasBatchUpdates = true;
+      }
+      return {
+        id: m.id,
+        matchId: m.matchId,
+        senderId: m.senderId,
+        receiverId: m.receiverId || (m.senderId === currentUid ? otherUser.id : currentUser.id),
+        content: m.content,
+        createdAt: m.createdAt.toDate().toISOString(),
+        isRead,
+      };
+    });
+
+    if (hasBatchUpdates) {
+      await batch.commit();
+    }
+
     res.status(200).json({
       match: {
         id: matchId,
@@ -357,13 +416,7 @@ const getMatchMessages = async (req: Request, res: Response) => {
           { id: otherUser.id, name: otherUser.name, profilePhoto1: otherUser.profilePhoto1 },
         ],
       },
-      messages: messages.map((m) => ({
-        id: m.id,
-        matchId: m.matchId,
-        senderId: m.senderId,
-        content: m.content,
-        createdAt: m.createdAt.toDate().toISOString(),
-      })),
+      messages: responseMessages,
     });
   } catch (error) {
     const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
@@ -380,10 +433,49 @@ const getUnreadCount = async (req: Request, res: Response) => {
   if (!currentUser) return;
 
   try {
-    res.status(200).json({ count: 0 }); // placeholder
+    const currentUid = currentUser.id;
+    const unreadSnap = await messagesCollection
+      .where('unreadBy', 'array-contains', currentUid)
+      .get();
+    res.status(200).json({ count: unreadSnap.size });
   } catch (error) {
     const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
     console.error('Error calculating unread count:', error);
+    res.status(500).json({ message: `Server Error: ${msg}` });
+  }
+};
+
+// =======================================================
+// 7️⃣ PATCH /api/messages/:messageId/read
+// =======================================================
+const markMessageAsRead = async (req: Request, res: Response) => {
+  const currentUser = await fetchCurrentUser(req, res);
+  if (!currentUser) return;
+
+  try {
+    const currentUid = currentUser.id;
+    const { messageId } = req.params;
+
+    const msgRef = messagesCollection.doc(messageId);
+    const msgDoc = await msgRef.get();
+    if (!msgDoc.exists) {
+      return res.status(404).json({ message: 'Message not found.' });
+    }
+
+    const msgData = msgDoc.data() as IMessage;
+    const unreadBy = Array.isArray(msgData.unreadBy) ? msgData.unreadBy : [];
+    if (!unreadBy.includes(currentUid)) {
+      return res.status(200).json({ success: true });
+    }
+
+    await msgRef.update({
+      unreadBy: admin.firestore.FieldValue.arrayRemove(currentUid),
+    });
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
+    console.error('Error marking message as read:', msg);
     res.status(500).json({ message: `Server Error: ${msg}` });
   }
 };
@@ -495,6 +587,7 @@ export {
   getMatchConversations,
   getMatchMessages,
   getUnreadCount,
+  markMessageAsRead,
   getMutualMatches,
   getSentMatches,
   getReceivedMatches,

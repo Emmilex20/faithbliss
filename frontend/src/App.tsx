@@ -2,12 +2,13 @@
 // src/App.tsx
 
 import { Outlet, useLocation } from 'react-router-dom';
+import { NotificationListener } from './components/NotificationListener';
 
 // Define the paths that should use the special "Auth Layout"
 const authPaths = ['/login', '/signup'];
 // Include the Onboarding path in a list that needs a specific full-screen treatment
 // This often needs the same dark, full-page treatment as auth, but is not centered.
-const fullScreenPaths = ['/onboarding']; 
+const fullScreenPaths = ['/onboarding', '/about', '/privacy']; 
 
 function App() {
   const location = useLocation();
@@ -18,6 +19,7 @@ function App() {
   // 🌟 GLOBAL LAYOUT BASE: Apply the dark background to the root container 🌟
   return (
     <div className="min-h-screen bg-gray-900 text-white">
+    <NotificationListener />
       {isAuthRoute ? (
         // 🔐 AUTH LAYOUT: Centered content (Login, Signup)
         <div className="min-h-screen flex items-center justify-center p-4">

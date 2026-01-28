@@ -8,10 +8,11 @@
 import { Link } from 'react-router-dom'; // 🌟 VITE FIX 2: Use Link from react-router-dom
 // Remove: import Image from 'next/image'; // 🌟 VITE FIX 3: Replaced with standard <img>
 import { 
-  X, User, Heart, MessageCircle, Star, Settings, 
-  HelpCircle, LogOut, Home, UserX, AlertTriangle
+  X, User, Heart, MessageCircle, Star, Settings, 
+  HelpCircle, LogOut, Home, UserX, AlertTriangle, Bell
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useNotificationUnreadCount } from '@/hooks/useAPI';
 
 interface SidePanelProps {
   userName: string;
@@ -25,8 +26,10 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
   console.log('SidePanel user:', user);
   console.log('SidePanel userImage:', userImage);
   
-  // Assuming useAuth returns { logout: function, isLoggingOut: boolean }
-  const { logout, isLoggingOut } = useAuth();
+  // Assuming useAuth returns { logout: function, isLoggingOut: boolean }
+  const { logout, isLoggingOut } = useAuth();
+  const { data: unreadData } = useNotificationUnreadCount();
+  const unreadCount = unreadData?.count || 0;
 
   const handleLogout = async () => {
     // Ensure onClose is called after logging out starts or finishes
@@ -71,7 +74,7 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
       </div>
 
       {/* Main Navigation */}
-      <div className="flex-1 min-h-0 p-6 space-y-2 overflow-y-auto side-panel-scroll">
+      <div className="flex-1 min-h-0 p-6 space-y-2 overflow-y-auto side-panel-scroll">
         {/* Primary Navigation */}
         <div className="mb-6">
           <h5 className="text-gray-400 text-xs uppercase tracking-wider font-semibold mb-3 px-4">Navigation</h5>
@@ -88,17 +91,34 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
             </div>
           </Link>
 
-          <Link to="/messages" onClick={onClose}>
-            <div className="flex items-center space-x-4 p-4 hover:bg-gray-800/50 rounded-2xl transition-colors cursor-pointer group">
-              <div className="p-2 bg-blue-500/20 rounded-xl group-hover:bg-blue-500/30 transition-colors">
-                <MessageCircle className="w-5 h-5 text-blue-400" />
-              </div>
-              <div>
-                <h4 className="text-white font-semibold">Messages</h4>
-                <p className="text-gray-400 text-sm">Chat with connections</p>
-              </div>
-            </div>
-          </Link>
+        <Link to="/messages" onClick={onClose}>
+          <div className="flex items-center space-x-4 p-4 hover:bg-gray-800/50 rounded-2xl transition-colors cursor-pointer group">
+            <div className="p-2 bg-blue-500/20 rounded-xl group-hover:bg-blue-500/30 transition-colors">
+              <MessageCircle className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <h4 className="text-white font-semibold">Messages</h4>
+              <p className="text-gray-400 text-sm">Chat with connections</p>
+            </div>
+          </div>
+        </Link>
+        
+        <Link to="/notifications" onClick={onClose}>
+          <div className="flex items-center space-x-4 p-4 hover:bg-gray-800/50 rounded-2xl transition-colors cursor-pointer group">
+            <div className="p-2 bg-amber-500/20 rounded-xl group-hover:bg-amber-500/30 transition-colors relative">
+              <Bell className="w-5 h-5 text-amber-400" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-gradient-to-r from-pink-500 to-red-500 text-white text-xs flex items-center justify-center">
+                  {unreadCount}
+                </span>
+              )}
+            </div>
+            <div>
+              <h4 className="text-white font-semibold">Notifications</h4>
+              <p className="text-gray-400 text-sm">Likes, matches & messages</p>
+            </div>
+          </div>
+        </Link>
         </div>
 
         {/* Secondary Navigation */}

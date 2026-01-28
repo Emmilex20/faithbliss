@@ -4,7 +4,7 @@ import type { ProfileData } from '@/types/profile'; // Assumed to exist
 
 interface PhotosSectionProps {
     profileData: ProfileData;
-    handlePhotoUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+    handlePhotoUpload: (event: React.ChangeEvent<HTMLInputElement>, slotIndex: number) => void;
     removePhoto: (index: number) => void;
 }
 
@@ -14,51 +14,48 @@ const PhotosSection = ({ profileData, handlePhotoUpload, removePhoto }: PhotosSe
             <div className="bg-gray-800/50 rounded-3xl p-8 border border-gray-700/50">
                 <div className="text-center mb-8">
                     <h2 className="text-2xl font-bold text-white mb-2">Your Photos</h2>
-                    <p className="text-gray-400">Add up to 9 photos that show your personality</p>
+                    <p className="text-gray-400">Add up to 6 photos that show your personality</p>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {profileData.photos.map((photo, index) => (
                         <div key={index} className="relative group aspect-[3/4] bg-gray-700 rounded-2xl overflow-hidden">
-                            
-                            {/* 💡 Vite/React Change: Replaced Next.js Image with standard img */}
-                            <img
-                                src={photo}
-                                alt={`Profile ${index + 1}`}
-                                className="w-full h-full object-cover absolute top-0 left-0"
-                                // The Next.js 'fill' and 'sizes' props are handled by the 'absolute w-full h-full object-cover' classes
-                            />
-                            
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                <button
-                                    onClick={() => removePhoto(index)}
-                                    className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-full transition-colors"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
-                            </div>
-                            {index === 0 && (
-                                <div className="absolute top-3 left-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white px-3 py-1 rounded-full text-xs font-bold">
-                                    MAIN
-                                </div>
+                            {photo ? (
+                                <>
+                                    {/* 💡 Vite/React Change: Replaced Next.js Image with standard img */}
+                                    <img
+                                        src={photo}
+                                        alt={`Profile ${index + 1}`}
+                                        className="w-full h-full object-cover absolute top-0 left-0"
+                                    />
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <button
+                                            onClick={() => removePhoto(index)}
+                                            className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-full transition-colors"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                    {index === 0 && (
+                                        <div className="absolute top-3 left-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white px-3 py-1 rounded-full text-xs font-bold">
+                                            MAIN
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <label className="absolute inset-0 bg-gray-700/50 border-2 border-dashed border-gray-600 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-pink-500 hover:bg-gray-700 transition-all group">
+                                    <Upload className="w-8 h-8 text-gray-400 group-hover:text-pink-500 mb-2" />
+                                    <span className="text-sm font-medium text-gray-400 group-hover:text-pink-500">Add Photo</span>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(event) => handlePhotoUpload(event, index)}
+                                        className="hidden"
+                                    />
+                                </label>
                             )}
                         </div>
                     ))}
-                    
-                    {/* Add Photo Upload Slot */}
-                    {/* The original code supports up to 3 photos, but the loop suggests 9. I'll keep the logic up to 9. */}
-                    {profileData.photos.length < 9 && (
-                        <label className="aspect-[3/4] bg-gray-700/50 border-2 border-dashed border-gray-600 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-pink-500 hover:bg-gray-700 transition-all group">
-                            <Upload className="w-8 h-8 text-gray-400 group-hover:text-pink-500 mb-2" />
-                            <span className="text-sm font-medium text-gray-400 group-hover:text-pink-500">Add Photo</span>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handlePhotoUpload}
-                                className="hidden"
-                            />
-                        </label>
-                    )}
                 </div>
 
                 {/* Photo Tips Section */}

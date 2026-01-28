@@ -6,6 +6,9 @@ import { useUserProfile } from '@/hooks/useAPI';
 import { API } from '@/services/api';
 import { useAuth } from '@/hooks/useAuth';
 import ProfileHeader from '@/components/profile/ProfileHeader';
+import { TopBar } from '@/components/dashboard/TopBar';
+import { SidePanel } from '@/components/dashboard/SidePanel';
+import { useAuthContext } from '@/contexts/AuthContext';
 import ProfileTabs from '@/components/profile/ProfileTabs';
 import PhotosSection from '@/components/profile/PhotosSection';
 import BasicInfoSection from '@/components/profile/BasicInfoSection';
@@ -18,6 +21,7 @@ import { updateProfileClient, uploadSpecificPhotoClient } from '@/services/api-c
 
 const ProfilePage: React.FC = () => {
   const { accessToken, user: authUser } = useAuth();
+  const { user: contextUser } = useAuthContext();
 
   // ✅ Use only valid id/email from your User type
   const currentUserId = authUser?.id;
@@ -29,6 +33,7 @@ const ProfilePage: React.FC = () => {
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [showSidePanel, setShowSidePanel] = useState(false);
 
   useEffect(() => {
     console.log('🔥 ProfilePage: raw userData from useUserProfile:', userData);
@@ -50,6 +55,18 @@ const ProfilePage: React.FC = () => {
       return;
     }
 
+    const mergedHobbies = Array.isArray(user.hobbies) && user.hobbies.length > 0
+      ? user.hobbies
+      : Array.isArray(user.interests)
+        ? user.interests
+        : [];
+
+    const mergedLookingFor = Array.isArray(user.lookingFor) && user.lookingFor.length > 0
+      ? user.lookingFor
+      : Array.isArray(user.relationshipGoals)
+        ? user.relationshipGoals
+        : [];
+
     setProfileData({
       id: user.id || '',
       email: user.email || '',
@@ -66,15 +83,25 @@ const ProfilePage: React.FC = () => {
       phoneNumber: user.phoneNumber || '',
       countryCode: user.countryCode || '',
       birthday: user.birthday || '',
-      fieldOfStudy: user.fieldOfStudy || '',
-      profession: user.profession || '',
+      fieldOfStudy: user.fieldOfStudy || user.education || '',
+      profession: user.profession || user.occupation || '',
       faithJourney: user.faithJourney || undefined,
       sundayActivity: user.sundayActivity || undefined,
-      lookingFor: user.lookingFor || [],
-      hobbies: user.hobbies || [],
+      churchAttendance: user.churchAttendance || undefined,
+      baptismStatus: user.baptismStatus || undefined,
+      spiritualGifts: user.spiritualGifts || [],
+      lookingFor: mergedLookingFor,
+      hobbies: mergedHobbies,
       values: user.values || [],
       favoriteVerse: user.favoriteVerse || '',
-      photos: [user.profilePhoto1, user.profilePhoto2, user.profilePhoto3].filter(Boolean) as string[],
+      photos: [
+        user.profilePhoto1 || null,
+        user.profilePhoto2 || null,
+        user.profilePhoto3 || null,
+        user.profilePhoto4 || null,
+        user.profilePhoto5 || null,
+        user.profilePhoto6 || null,
+      ],
       isVerified: user.isVerified || false,
       onboardingCompleted: user.onboardingCompleted || false,
       preferences: user.preferences || undefined,
@@ -88,11 +115,16 @@ const ProfilePage: React.FC = () => {
     try {
       const updatePayload: UpdateProfileDto = {
         name: profileData.name,
+        gender: profileData.gender,
         age: profileData.age,
         bio: profileData.bio,
         denomination: profileData.denomination as any,
         favoriteVerse: profileData.favoriteVerse,
         faithJourney: profileData.faithJourney as any,
+        churchAttendance: profileData.churchAttendance as any,
+        sundayActivity: (profileData.churchAttendance || profileData.sundayActivity) as any,
+        baptismStatus: profileData.baptismStatus as any,
+        spiritualGifts: profileData.spiritualGifts || [],
         lookingFor: profileData.lookingFor,
         hobbies: profileData.hobbies,
         values: profileData.values,
@@ -117,7 +149,7 @@ const ProfilePage: React.FC = () => {
   };
 
   // ✅ Photo upload handler
-  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>, slotIndex: number) => {
     const file = event.target.files?.[0];
     if (!file || !profileData || !accessToken) return;
     setIsSaving(true);
@@ -125,14 +157,13 @@ const ProfilePage: React.FC = () => {
       const formData = new FormData();
       formData.append('photo', file);
 
-      const currentPhotoCount = profileData.photos.length;
-      const photoNumber = currentPhotoCount < 3 ? currentPhotoCount + 1 : 1;
+      const photoNumber = slotIndex + 1;
 
       const response = await uploadSpecificPhotoClient(photoNumber, formData, accessToken);
       const photoUrl = response?.photoUrl || response?.url || response?.data?.photoUrl;
 
       const updatedPhotosArray = [...(profileData.photos || [])];
-      updatedPhotosArray[photoNumber - 1] = photoUrl;
+      updatedPhotosArray[slotIndex] = photoUrl;
       setProfileData(prev => (prev ? { ...prev, photos: updatedPhotosArray } : null));
 
       setSaveMessage('Photo uploaded successfully!');
@@ -153,14 +184,10 @@ const ProfilePage: React.FC = () => {
     setIsSaving(true);
     try {
       const photoNumberToRemove = index + 1;
-      const response = await API.User.deletePhoto(photoNumberToRemove);
+      await API.User.deletePhoto(photoNumberToRemove);
 
-      const updatedPhotosArray = [
-        response.photos.profilePhoto1,
-        response.photos.profilePhoto2,
-        response.photos.profilePhoto3,
-      ].filter(Boolean) as string[];
-
+      const updatedPhotosArray = [...(profileData.photos || [])];
+      updatedPhotosArray[index] = null;
       setProfileData(prev => (prev ? { ...prev, photos: updatedPhotosArray } : null));
       setSaveMessage('Photo removed successfully!');
       if (execute) await execute();
@@ -196,9 +223,24 @@ const ProfilePage: React.FC = () => {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white pb-20 no-horizontal-scroll dashboard-main">
+  const layoutUser = contextUser || authUser;
+  const layoutName = layoutUser?.name || profileData?.name || 'User';
+  const layoutImage = layoutUser?.profilePhoto1 || profileData?.photos?.[0] || undefined;
+  const isPremium = layoutUser?.subscriptionStatus === 'active' && ['premium', 'elite'].includes(layoutUser?.subscriptionTier || '');
+  const activeTier = layoutUser?.subscriptionTier || 'free';
+
+  const content = (
+    <>
       <ProfileHeader />
+      <div className="max-w-4xl mx-auto px-4 pt-4">
+        <div className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] ${
+          isPremium
+            ? 'border-pink-500/40 bg-pink-500/10 text-pink-200'
+            : 'border-white/10 bg-white/5 text-gray-300'
+        }`}>
+          {isPremium ? `${activeTier} subscriber` : 'Free member'}
+        </div>
+      </div>
       <ProfileTabs activeSection={activeSection} setActiveSection={setActiveSection} />
 
       <div className="max-w-4xl mx-auto p-4 pb-20">
@@ -226,6 +268,59 @@ const ProfilePage: React.FC = () => {
       <SaveButton isSaving={isSaving} saveMessage={saveMessage} handleSave={handleSave} />
 
       <div className="h-32" />
+    </>
+  );
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white pb-20 no-horizontal-scroll dashboard-main">
+      {/* Desktop Layout */}
+      <div className="hidden lg:flex min-h-screen">
+        <div className="w-80 flex-shrink-0">
+          <SidePanel userName={layoutName} userImage={layoutImage} user={layoutUser} onClose={() => setShowSidePanel(false)} />
+        </div>
+        <div className="flex-1 flex flex-col min-h-screen">
+          <TopBar
+            userName={layoutName}
+            userImage={layoutImage}
+            user={layoutUser}
+            showFilters={false}
+            showSidePanel={showSidePanel}
+            onToggleFilters={() => {}}
+            onToggleSidePanel={() => setShowSidePanel(false)}
+            title="My Profile"
+          />
+          <div className="flex-1 overflow-y-auto">{content}</div>
+        </div>
+      </div>
+
+      {/* Mobile Layout */}
+      <div className="lg:hidden min-h-screen">
+        <TopBar
+          userName={layoutName}
+          userImage={layoutImage}
+          user={layoutUser}
+          showFilters={false}
+          showSidePanel={showSidePanel}
+          onToggleFilters={() => {}}
+          onToggleSidePanel={() => setShowSidePanel(true)}
+          title="My Profile"
+        />
+        <div className="flex-1">{content}</div>
+      </div>
+
+      {showSidePanel && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowSidePanel(false)} />
+          <div className="absolute inset-y-0 left-0 w-80 max-w-[85vw]">
+            <SidePanel
+              userName={layoutName}
+              userImage={layoutImage}
+              user={layoutUser}
+              onClose={() => setShowSidePanel(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

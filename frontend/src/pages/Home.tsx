@@ -176,6 +176,7 @@ export default function Home() {
             <div className="hidden md:flex space-x-8">
               {/* These are hash links, so <a> is correct */}
               <a href="#features" className="text-white hover:text-pink-400 transition-colors">Why FaithBliss</a>
+              <a href="/about" className="text-white hover:text-pink-400 transition-colors">About</a>
               <a href="#stories" className="text-white hover:text-pink-400 transition-colors">Love Stories</a>
               <a href="#community" className="text-white hover:text-pink-400 transition-colors">Community</a>
             </div>

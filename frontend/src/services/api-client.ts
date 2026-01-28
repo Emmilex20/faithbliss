@@ -123,6 +123,20 @@ export const getApiClient = (accessToken: string | null) => ({
     getMatchConversations: () =>
       apiClientRequest<any[]>('/api/messages/conversations', { method: 'GET' }, accessToken),
   },
+  Notification: {
+    getNotifications: () =>
+      apiClientRequest<any[]>('/api/notifications', { method: 'GET' }, accessToken),
+    getUnreadCount: () =>
+      apiClientRequest<{ count: number }>(
+        '/api/notifications/unread-count',
+        { method: 'GET' },
+        accessToken
+      ),
+    markAsRead: (id: string) =>
+      apiClientRequest<void>(`/api/notifications/${id}/read`, { method: 'PATCH' }, accessToken),
+    markAllAsRead: () =>
+      apiClientRequest<void>('/api/notifications/read-all', { method: 'PATCH' }, accessToken),
+  },
 });
 
 export async function updateProfileClient(

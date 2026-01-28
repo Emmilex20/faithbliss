@@ -13,6 +13,18 @@ const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-3">Gender</label>
+            <select
+              value={profileData.gender || ''}
+              onChange={(e) => setProfileData(prev => prev ? ({...prev, gender: e.target.value as 'MALE' | 'FEMALE'}) : null)}
+              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
+            >
+              <option value="">Select gender</option>
+              <option value="MALE">Male</option>
+              <option value="FEMALE">Female</option>
+            </select>
+          </div>
+          <div>
             <label className="block text-sm font-semibold text-gray-300 mb-3">First Name</label>
             <input
               type="text"

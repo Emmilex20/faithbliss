@@ -104,8 +104,8 @@ class WebSocketService {
    * Emits the message to the server. The server should process the message,
    * save it, and then broadcast the full Message object back via 'newMessage'.
    */
-  public sendMessage(receiverId: string, content: string): void {
-    this.socket?.emit('sendMessage', { receiverId, content });
+  public sendMessage(receiverId: string, content: string, matchId?: string): void {
+    this.socket?.emit('sendMessage', { receiverId, content, matchId });
   }
 
   public emitTyping(receiverId: string, isTyping: boolean): void {

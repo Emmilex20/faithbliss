@@ -177,27 +177,30 @@ interface Comment {
 
 
 export interface UpdateProfileDto {
-  name?: string;
-  gender?: 'MALE' | 'FEMALE';
-  age?: number;
-  denomination?: 'BAPTIST' | 'METHODIST' | 'PRESBYTERIAN' | 'PENTECOSTAL' | 'CATHOLIC' | 'ORTHODOX' | 'ANGLICAN' | 'LUTHERAN' | 'ASSEMBLIES_OF_GOD' | 'SEVENTH_DAY_ADVENTIST' | 'OTHER';
-  bio?: string;
-  location?: string;
-  latitude?: number | null;
-  longitude?: number | null;
-  phoneNumber?: string;
-  countryCode?: string;
-  birthday?: string; // ISO 8601 date string
-  fieldOfStudy?: string;
-  profession?: string;
-  faithJourney?: 'GROWING' | 'ESTABLISHED' | 'SEEKING';
-  sundayActivity?: 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY' | 'RARELY';
-  lookingFor?: string[];
-  hobbies?: string[];
-  values?: string[];
-  favoriteVerse?: string;
-  isVerified?: boolean;
-  onboardingCompleted?: boolean;
+  name?: string;
+  gender?: 'MALE' | 'FEMALE';
+  age?: number;
+  denomination?: 'BAPTIST' | 'METHODIST' | 'PRESBYTERIAN' | 'PENTECOSTAL' | 'CATHOLIC' | 'ORTHODOX' | 'ANGLICAN' | 'LUTHERAN' | 'ASSEMBLIES_OF_GOD' | 'SEVENTH_DAY_ADVENTIST' | 'OTHER';
+  bio?: string;
+  location?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  phoneNumber?: string;
+  countryCode?: string;
+  birthday?: string; // ISO 8601 date string
+  fieldOfStudy?: string;
+  profession?: string;
+  faithJourney?: 'GROWING' | 'ESTABLISHED' | 'SEEKING';
+  sundayActivity?: 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY' | 'RARELY';
+  churchAttendance?: 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY' | 'RARELY';
+  baptismStatus?: 'BAPTIZED' | 'NOT_BAPTIZED' | 'PENDING' | 'PREFER_NOT_TO_SAY';
+  spiritualGifts?: string[];
+  lookingFor?: string[];
+  hobbies?: string[];
+  values?: string[];
+  favoriteVerse?: string;
+  isVerified?: boolean;
+  onboardingCompleted?: boolean;
 }
 
 export interface CompleteOnboardingDto {
@@ -484,8 +487,8 @@ export const UserAPI = {
     return apiRequest('/api/users/me');
   },
 
-  // Update current user profile
-  updateMe: async (userData: UpdateProfileDto): Promise<User> => {
+  // Update current user profile
+  updateMe: async (userData: UpdateProfileDto): Promise<User> => {
     // FIX: Added /api prefix
     return apiRequest('/api/users/me', {
       method: 'PUT',
@@ -579,8 +582,8 @@ export const UserAPI = {
     });
   },
 
-  // Delete specific photo by number
-  deletePhoto: async (photoNumber: number): Promise<DeletePhotoResponse> => {
+  // Delete specific photo by number
+  deletePhoto: async (photoNumber: number): Promise<DeletePhotoResponse> => {
     // FIX: Added /api prefix
     return apiRequest(`/api/users/me/photo/${photoNumber}`, {
       method: 'DELETE',
@@ -631,10 +634,18 @@ export const MatchAPI = {
 // 💬 Messaging API
 export const MessageAPI = {
   // Get user conversations
-  getMatchConversations: async (): Promise<Conversation[]> => {
-    // FIX: Added /api prefix
-    return apiRequest('/api/matches/conversations');
-  },
+  getMatchConversations: async (): Promise<Conversation[]> => {
+    // FIX: Added /api prefix
+    return apiRequest('/api/matches/conversations');
+  },
+
+  // Update user settings
+  updateSettings: async (settings: Record<string, any>): Promise<{ message: string }> => {
+    return apiRequest('/api/users/me/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(settings),
+    });
+  },
 
   // Get unread message count
   getUnreadCount: async (): Promise<{ count: number }> => {
@@ -667,7 +678,55 @@ export const MessageAPI = {
     return apiRequest(`/api/messages/${messageId}/read`, {
       method: 'PATCH',
     });
-  },
+  },
+};
+
+// Payments API
+export const PaymentAPI = {
+  initialize: async (payload: { tier: 'premium' | 'elite'; currency: 'NGN' | 'USD' }): Promise<{
+    authorizationUrl: string;
+    accessCode: string;
+    reference: string;
+    amount: number;
+    currency: 'NGN' | 'USD';
+  }> => {
+    return apiRequest('/api/payments/initialize', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+  verify: async (reference: string) => {
+    return apiRequest('/api/payments/verify', {
+      method: 'POST',
+      body: JSON.stringify({ reference }),
+    });
+  },
+};
+
+// Support API
+export const SupportAPI = {
+  submitTicket: async (payload: { type: 'HELP' | 'REPORT'; subject?: string; message: string }) => {
+    return apiRequest('/api/support', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+};
+
+// 🔔 Notifications API
+export const NotificationAPI = {
+  getNotifications: async (): Promise<any[]> => {
+    return apiRequest('/api/notifications');
+  },
+  getUnreadCount: async (): Promise<{ count: number }> => {
+    return apiRequest('/api/notifications/unread-count');
+  },
+  markAsRead: async (id: string): Promise<void> => {
+    await apiRequest(`/api/notifications/${id}/read`, { method: 'PATCH' });
+  },
+  markAllAsRead: async (): Promise<void> => {
+    await apiRequest('/api/notifications/read-all', { method: 'PATCH' });
+  },
 };
 
 // 🏛️ Community API
@@ -859,13 +918,16 @@ export const DiscoveryAPI = {
 
 // Export all APIs
 export const API = {
-  System: SystemAPI,
-  Auth: AuthAPI,
-  User: UserAPI,
-  Match: MatchAPI,
-  Message: MessageAPI,
-  Community: CommunityAPI,
-  Discovery: DiscoveryAPI,
+  System: SystemAPI,
+  Auth: AuthAPI,
+  User: UserAPI,
+  Payment: PaymentAPI,
+  Support: SupportAPI,
+  Match: MatchAPI,
+  Message: MessageAPI,
+  Notification: NotificationAPI,
+  Community: CommunityAPI,
+  Discovery: DiscoveryAPI,
 };
 
 // Export types

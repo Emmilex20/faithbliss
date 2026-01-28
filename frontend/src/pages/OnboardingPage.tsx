@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
-import { useAuth } from '../hooks/useAuth';
+import { useAuthContext } from '../contexts/AuthContext';
 import {
   OnboardingHeader,
   OnboardingNavigation,
@@ -30,7 +30,7 @@ type OnboardingUpdateData = Partial<Omit<OnboardingData, 'photos' | 'customDenom
 // --- MAIN COMPONENT ---
 const OnboardingPage = () => {
   const navigate = useNavigate();
-  const { completeOnboarding, isCompletingOnboarding, user } = useAuth() as {
+  const { completeOnboarding, isCompletingOnboarding, user } = useAuthContext() as {
     completeOnboarding: (data: any) => Promise<boolean>;
     isCompletingOnboarding: boolean;
     user: { uid?: string | null; id?: string | null } | null;

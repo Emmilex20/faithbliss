@@ -50,6 +50,23 @@ export interface User {
   profilePhoto6?: string;
   isActive?: boolean;
 
+  subscriptionStatus?: 'active' | 'pending' | 'inactive' | string;
+  subscriptionTier?: 'premium' | 'elite' | 'free' | string;
+  subscriptionCurrency?: 'NGN' | 'USD' | string;
+  subscription?: {
+    status?: string;
+    tier?: string;
+    currency?: string;
+    planCode?: string;
+    reference?: string;
+    customerCode?: string;
+    subscriptionCode?: string;
+    authorizationCode?: string;
+    nextPaymentDate?: string;
+    updatedAt?: string;
+  };
+  settings?: Record<string, any>;
+
 }
 
 
