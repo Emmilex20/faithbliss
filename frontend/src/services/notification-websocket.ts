@@ -33,7 +33,7 @@ class NotificationWebSocketService {
 
       this.socket = io(`${this.WEBSOCKET_URL}/notifications`, { // Connect to /notifications endpoint
         auth: token ? { token } : undefined,
-        transports: ['websocket'],
+        transports: ['websocket', 'polling'],
         withCredentials: true,
       });
 
