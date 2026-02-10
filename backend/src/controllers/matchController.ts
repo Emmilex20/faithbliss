@@ -58,27 +58,27 @@ const fetchCurrentUser = async (req: Request, res: Response): Promise<IUserProfi
   const uid = req.userId;
 
   if (!uid) {
-    console.warn('⚠️ fetchCurrentUser: Missing UID from request context.');
+    console.warn('?? fetchCurrentUser: Missing UID from request context.');
     res.status(401).json({ message: 'Unauthorized: Firebase UID missing from request context.' });
     return null;
   }
 
   try {
-    console.log(`🔍 Fetching current user profile for UID: ${uid}`);
+    console.log(`?? Fetching current user profile for UID: ${uid}`);
     const userDoc = await usersCollection.doc(uid).get();
 
     if (!userDoc.exists) {
-      console.warn(`⚠️ No Firestore user profile found for UID: ${uid}`);
+      console.warn(`?? No Firestore user profile found for UID: ${uid}`);
       res.status(404).json({ message: 'User profile not found in database.' });
       return null;
     }
 
     const user = { ...userDoc.data(), id: userDoc.id } as IUserProfile;
-    console.log(`✅ Fetched current user: ${user.name} (${user.id})`);
+    console.log(`? Fetched current user: ${user.name} (${user.id})`);
     return user;
   } catch (error) {
     const errorMessage = isErrorWithMessage(error) ? error.message : 'Unknown error';
-    console.error('🔥 Database fetch error:', errorMessage);
+    console.error('?? Database fetch error:', errorMessage);
     res.status(500).json({ message: `Server Error fetching user profile: ${errorMessage}` });
     return null;
   }
@@ -86,14 +86,14 @@ const fetchCurrentUser = async (req: Request, res: Response): Promise<IUserProfi
 
 
 // =======================================================
-// 1️⃣ GET /api/matches/potential
+// 1?? GET /api/matches/potential
 // =======================================================
 const getPotentialMatches = async (req: Request, res: Response) => {
   const currentUser = await fetchCurrentUser(req, res);
   if (!currentUser) return;
 
   try {
-    console.log(`🧩 [getPotentialMatches] Fetching potential matches for ${currentUser.id}`);
+    console.log(`?? [getPotentialMatches] Fetching potential matches for ${currentUser.id}`);
 
     const excludedUids = new Set<string>([
       currentUser.id,
@@ -117,22 +117,43 @@ const getPotentialMatches = async (req: Request, res: Response) => {
       });
     }
 
-    const snapshot = await usersCollection
-      .where('onboardingCompleted', '==', true)
-      .limit(20)
-      .get();
-
-    console.log(`🧮 Total users found: ${snapshot.size}`);
+    // Serve a Tinder/Hinge-style feed:
+    // - include all registered users
+    // - scan in pages so exclusions do not empty the initial result accidentally
+    const FEED_SIZE = 40;
+    const QUERY_PAGE_SIZE = 120;
+    const MAX_SCAN_PAGES = 10;
 
     const potentialMatches: IUserProfile[] = [];
-    snapshot.forEach((doc) => {
-      const match = { id: doc.id, ...doc.data() } as IUserProfile;
-      if (!excludedUids.has(match.id)) {
-        potentialMatches.push(match);
-      }
-    });
+    let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+    let scannedPages = 0;
 
-    console.log(`✅ Potential matches returned: ${potentialMatches.length}`);
+    while (potentialMatches.length < FEED_SIZE && scannedPages < MAX_SCAN_PAGES) {
+      let query = usersCollection
+        .orderBy(admin.firestore.FieldPath.documentId())
+        .limit(QUERY_PAGE_SIZE);
+
+      if (lastDoc) {
+        query = query.startAfter(lastDoc);
+      }
+
+      const snapshot = await query.get();
+      if (snapshot.empty) {
+        break;
+      }
+
+      snapshot.forEach((doc) => {
+        const candidate = { id: doc.id, ...doc.data() } as IUserProfile;
+        if (!excludedUids.has(candidate.id)) {
+          potentialMatches.push(candidate);
+        }
+      });
+
+      lastDoc = snapshot.docs[snapshot.docs.length - 1];
+      scannedPages += 1;
+    }
+
+    console.log(`? Potential matches returned: ${potentialMatches.length}`);
     res.status(200).json(
       potentialMatches.map((u) => ({
         id: u.id,
@@ -146,14 +167,14 @@ const getPotentialMatches = async (req: Request, res: Response) => {
     );
   } catch (error) {
     const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
-    console.error('🔥 Error fetching potential matches:', msg);
+    console.error('?? Error fetching potential matches:', msg);
     res.status(500).json({ message: `Server Error: ${msg}` });
   }
 };
 
 
 // =======================================================
-// 2️⃣ POST /api/matches/like/:userId
+// 2?? POST /api/matches/like/:userId
 // =======================================================
 const likeUser = async (req: Request, res: Response) => {
   const currentUser = await fetchCurrentUser(req, res);
@@ -161,16 +182,24 @@ const likeUser = async (req: Request, res: Response) => {
 
   const { userId: targetUid } = req.params;
   const currentUid = currentUser.id;
-  console.log(`❤️ Like request from ${currentUid} → ${targetUid}`);
+  console.log(`?? Like request from ${currentUid} ? ${targetUid}`);
 
   if (currentUid === targetUid) {
-    console.warn('⚠️ User tried to like themselves.');
+    console.warn('?? User tried to like themselves.');
     return res.status(400).json({ message: 'Cannot like yourself.' });
   }
 
-  const batch = db.batch();
-
   try {
+    const currentLikes = Array.isArray(currentUser.likes) ? currentUser.likes.map(String) : [];
+    if (currentLikes.includes(String(targetUid))) {
+      return res.status(200).json({
+        message: 'Like already recorded',
+        isMatch: false,
+        alreadyLiked: true,
+      });
+    }
+
+    const batch = db.batch();
     const currentUserRef = usersCollection.doc(currentUid);
     batch.update(currentUserRef, {
       likes: admin.firestore.FieldValue.arrayUnion(targetUid),
@@ -178,7 +207,7 @@ const likeUser = async (req: Request, res: Response) => {
 
     const targetUserDoc = await usersCollection.doc(targetUid).get();
     if (!targetUserDoc.exists) {
-      console.warn(`⚠️ Target user not found: ${targetUid}`);
+      console.warn(`?? Target user not found: ${targetUid}`);
       return res.status(404).json({ message: 'Target user not found.' });
     }
 
@@ -190,7 +219,7 @@ const likeUser = async (req: Request, res: Response) => {
       const newMatchRef = matchesCollection.doc();
       const matchId = newMatchRef.id;
 
-      console.log(`🎉 Mutual match detected! Creating match ${matchId}`);
+      console.log(`?? Mutual match detected! Creating match ${matchId}`);
 
       batch.set(newMatchRef, {
         users: [currentUid, targetUid],
@@ -207,7 +236,7 @@ const likeUser = async (req: Request, res: Response) => {
     }
 
     await batch.commit();
-    console.log(`✅ Like processed successfully. Match: ${isMatch}`);
+    console.log(`? Like processed successfully. Match: ${isMatch}`);
 
     if (isMatch) {
       await Promise.all([
@@ -239,13 +268,13 @@ const likeUser = async (req: Request, res: Response) => {
     });
   } catch (error) {
     const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
-    console.error('🔥 Error liking user:', msg);
+    console.error('?? Error liking user:', msg);
     res.status(500).json({ message: `Server Error: ${msg}` });
   }
 };
 
 // =======================================================
-// 3️⃣ POST /api/matches/pass/:userId
+// 3?? POST /api/matches/pass/:userId
 // =======================================================
 const passUser = async (req: Request, res: Response) => {
   const currentUser = await fetchCurrentUser(req, res);
@@ -262,7 +291,7 @@ const passUser = async (req: Request, res: Response) => {
     await usersCollection.doc(currentUid).update({
       passes: admin.firestore.FieldValue.arrayUnion(targetUid),
     });
-    console.log(`🚫 User ${currentUid} passed on ${targetUid}`);
+    console.log(`?? User ${currentUid} passed on ${targetUid}`);
     res.status(204).send();
   } catch (error) {
     const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
@@ -272,7 +301,7 @@ const passUser = async (req: Request, res: Response) => {
 };
 
 // =======================================================
-// 4️⃣ GET /api/messages/conversations
+// 4?? GET /api/messages/conversations
 // =======================================================
 const getMatchConversations = async (req: Request, res: Response) => {
   const currentUser = await fetchCurrentUser(req, res);
@@ -392,7 +421,7 @@ const getMatchConversations = async (req: Request, res: Response) => {
 };
 
 // =======================================================
-// 5️⃣ GET /api/messages/:matchId
+// 5?? GET /api/messages/:matchId
 // =======================================================
 const getMatchMessages = async (req: Request, res: Response) => {
   const currentUser = await fetchCurrentUser(req, res);
@@ -476,7 +505,7 @@ const getMatchMessages = async (req: Request, res: Response) => {
 };
 
 // =======================================================
-// 6️⃣ GET /api/messages/unread-count
+// 6?? GET /api/messages/unread-count
 // =======================================================
 const getUnreadCount = async (req: Request, res: Response) => {
   const currentUser = await fetchCurrentUser(req, res);
@@ -496,7 +525,7 @@ const getUnreadCount = async (req: Request, res: Response) => {
 };
 
 // =======================================================
-// 7️⃣ PATCH /api/messages/:messageId/read
+// 7?? PATCH /api/messages/:messageId/read
 // =======================================================
 const markMessageAsRead = async (req: Request, res: Response) => {
   const currentUser = await fetchCurrentUser(req, res);
@@ -531,14 +560,14 @@ const markMessageAsRead = async (req: Request, res: Response) => {
 };
 
 // =======================================================
-// 7️⃣ GET /api/matches/mutual
+// 7?? GET /api/matches/mutual
 // =======================================================
 const getMutualMatches = async (req: Request, res: Response) => {
   const currentUser = await fetchCurrentUser(req, res);
   if (!currentUser) return;
 
   try {
-    console.log(`🤝 [getMutualMatches] UID: ${currentUser.id}`);
+    console.log(`?? [getMutualMatches] UID: ${currentUser.id}`);
     const allUsersSnap = await usersCollection.get();
     const mutualMatches: IUserProfile[] = [];
 
@@ -554,29 +583,29 @@ const getMutualMatches = async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`✅ Mutual matches found: ${mutualMatches.length}`);
+    console.log(`? Mutual matches found: ${mutualMatches.length}`);
     res.status(200).json({ matches: mutualMatches });
   } catch (error) {
     const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
-    console.error('🔥 Error fetching mutual matches:', msg);
+    console.error('?? Error fetching mutual matches:', msg);
     res.status(500).json({ message: `Server Error: ${msg}` });
   }
 };
 
 // =======================================================
-// 8️⃣ GET /api/matches/sent
+// 8?? GET /api/matches/sent
 // =======================================================
 const getSentMatches = async (req: Request, res: Response) => {
   const currentUser = await fetchCurrentUser(req, res);
   if (!currentUser) return;
 
   try {
-    console.log(`📤 [getSentMatches] UID: ${currentUser.id}`);
+    console.log(`?? [getSentMatches] UID: ${currentUser.id}`);
     const sentIds = currentUser.likes || [];
-    console.log(`📤 Sent IDs:`, sentIds);
+    console.log(`?? Sent IDs:`, sentIds);
 
     if (sentIds.length === 0) {
-      console.log('📭 No sent matches found.');
+      console.log('?? No sent matches found.');
       return res.status(200).json({ matches: [] });
     }
 
@@ -585,24 +614,24 @@ const getSentMatches = async (req: Request, res: Response) => {
       .filter((doc) => doc.exists)
       .map((doc) => ({ id: doc.id, ...doc.data() } as IUserProfile));
 
-    console.log(`✅ Sent matches found: ${sentMatches.length}`);
+    console.log(`? Sent matches found: ${sentMatches.length}`);
     res.status(200).json({ matches: sentMatches });
   } catch (error) {
     const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
-    console.error('🔥 Error fetching sent matches:', msg);
+    console.error('?? Error fetching sent matches:', msg);
     res.status(500).json({ message: `Server Error: ${msg}` });
   }
 };
 
 // =======================================================
-// 9️⃣ GET /api/matches/received
+// 9?? GET /api/matches/received
 // =======================================================
 const getReceivedMatches = async (req: Request, res: Response) => {
   const currentUser = await fetchCurrentUser(req, res);
   if (!currentUser) return;
 
   try {
-    console.log(`📥 [getReceivedMatches] UID: ${currentUser.id}`);
+    console.log(`?? [getReceivedMatches] UID: ${currentUser.id}`);
     const allUsersSnap = await usersCollection.get();
     const receivedMatches: IUserProfile[] = [];
 
@@ -617,11 +646,11 @@ const getReceivedMatches = async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`✅ Received matches found: ${receivedMatches.length}`);
+    console.log(`? Received matches found: ${receivedMatches.length}`);
     res.status(200).json({ matches: receivedMatches });
   } catch (error) {
     const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
-    console.error('🔥 Error fetching received matches:', msg);
+    console.error('?? Error fetching received matches:', msg);
     res.status(500).json({ message: `Server Error: ${msg}` });
   }
 };

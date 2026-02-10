@@ -27,13 +27,13 @@ export const DesktopLayout = ({
   children
 }: DesktopLayoutProps) => {
   return (
-    <div className="hidden lg:flex min-h-screen">
+    <div className="hidden min-h-screen lg:flex">
       <div className="w-80 flex-shrink-0">
         <SidePanel userName={userName} userImage={userImage} user={user} onClose={() => {}} />
       </div>
       
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="flex min-h-screen flex-1 flex-col bg-[radial-gradient(circle_at_15%_20%,rgba(236,72,153,0.16),transparent_30%),radial-gradient(circle_at_90%_5%,rgba(59,130,246,0.14),transparent_30%)]">
         {/* Top Bar */}
         <TopBar
           userName={userName}
@@ -46,15 +46,11 @@ export const DesktopLayout = ({
           onToggleSidePanel={onToggleSidePanel}
         />
 
-        {topContent && (
-          <div className="px-2">
-            {topContent}
-          </div>
-        )}
+        {topContent && <div className="mx-auto w-full max-w-[1080px] px-4 pt-2">{topContent}</div>}
         
         {/* Main Profile Display */}
-        <div className="flex-1 flex justify-center items-center px-2 py-3 overflow-hidden">
-          <div className="w-full max-w-lg h-full max-h-[calc(100vh-220px)] relative">
+        <div className="flex flex-1 items-center justify-center overflow-hidden px-4 pb-5 pt-4">
+          <div className="relative h-full max-h-[calc(100vh-220px)] w-full max-w-[620px]">
             {children}
           </div>
         </div>

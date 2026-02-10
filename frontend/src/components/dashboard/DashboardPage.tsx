@@ -3,7 +3,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { HeartBeatLoader } from '@/components/HeartBeatLoader';
 import { useToast } from '@/contexts/ToastContext'; 
 import { DesktopLayout } from '@/components/dashboard/DesktopLayout';
@@ -26,10 +26,14 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
   const [showFilters, setShowFilters] = useState(false);
     const [showSidePanel, setShowSidePanel] = useState(false);
     const [currentProfileIndex, setCurrentProfileIndex] = useState(0);
+    const [swipeDirection, setSwipeDirection] = useState<'left' | 'right'>('right');
     const [filteredProfiles, setFilteredProfiles] = useState<User[] | null>(null);
     const [isLoadingFilters, setIsLoadingFilters] = useState(false);
     const [isExhausted, setIsExhausted] = useState(false);
     const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+    const prefetchingRef = useRef(false);
+    const lastPrefetchAtRef = useRef(0);
+    const lastPrefetchIndexRef = useRef<number | null>(null);
 
   // Fetch real potential matches from backend
   const { 
@@ -56,9 +60,10 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
         const stored = localStorage.getItem(storageKey);
         const storedIds = stored ? (JSON.parse(stored) as string[]) : [];
         const profileLikes = (currentUserData as any)?.likes || [];
+        const profilePasses = (currentUserData as any)?.passes || [];
         const profileMatches = (currentUserData as any)?.matches || [];
         const merged = new Set<string>(
-            [...storedIds, ...profileLikes, ...profileMatches].map(String)
+            [...storedIds, ...profileLikes, ...profilePasses, ...profileMatches].map(String)
         );
         setLikedIds(merged);
     }, [currentUserData]);
@@ -110,6 +115,26 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
         setIsExhausted(false);
     }, [filteredProfiles, activeProfiles]);
 
+    useEffect(() => {
+        if (filteredProfiles) return;
+        if (!Array.isArray(activeProfiles) || activeProfiles.length === 0) return;
+
+        const remaining = activeProfiles.length - currentProfileIndex - 1;
+        if (remaining > 2) return;
+        if (prefetchingRef.current) return;
+        if (lastPrefetchIndexRef.current === currentProfileIndex) return;
+        if (Date.now() - lastPrefetchAtRef.current < 5000) return;
+
+        prefetchingRef.current = true;
+        lastPrefetchIndexRef.current = currentProfileIndex;
+        lastPrefetchAtRef.current = Date.now();
+        refetch()
+          .catch(() => null)
+          .finally(() => {
+            prefetchingRef.current = false;
+          });
+    }, [activeProfiles, currentProfileIndex, filteredProfiles, refetch]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -118,7 +143,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
   }, []);
 
   // Show loading state while fetching matches or refreshing the token.
-    if (matchesLoading || userLoading) {
+    if (matchesLoading || userLoading || (profiles === null && !matchesError)) {
         return <HeartBeatLoader message="Preparing your matches..." />;
     }
 
@@ -182,6 +207,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
                 await likeUser(userIdToLike);
                 console.log(`Liked profile ${userIdToLike}`);
                 updateLikedIds(String(userIdToLike));
+                setSwipeDirection('right');
                 goToNextProfile();
             } catch (error) {
                 console.error('Failed to like user:', error);
@@ -201,11 +227,18 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     try {
       await passUser(userIdToPass);
       console.log(`Passed on profile ${userIdToPass}`);
+      updateLikedIds(String(userIdToPass));
+      setSwipeDirection('left');
       goToNextProfile();
     } catch (error) {
       console.error('Failed to pass user:', error);
       goToNextProfile(); // Always move on even if API fails
     }
+  };
+
+  const handleGoBack = () => {
+    setSwipeDirection('left');
+    setCurrentProfileIndex(Math.max(0, currentProfileIndex - 1));
   };
 
 
@@ -253,12 +286,13 @@ const handleApplyFilters = async (filters: any) => {
                     <ProfileDisplay
                         currentProfile={currentProfile}
                         onStartOver={() => setCurrentProfileIndex(0)}
-                        onGoBack={() => setCurrentProfileIndex(Math.max(0, currentProfileIndex - 1))}
+                        onGoBack={handleGoBack}
                         onLike={handleLike}
                         onPass={handlePass}
-                        noProfilesTitle="No more profiles right now"
-                        noProfilesDescription="You have reached the end of your potential matches. Check back later for new people."
-                        noProfilesActionLabel="Check again"
+                        swipeDirection={swipeDirection}
+                        noProfilesTitle="No new matches yet"
+                        noProfilesDescription="You have liked or passed everyone available for now. Tap reload and we will fetch fresh profiles instantly."
+                        noProfilesActionLabel="Reload Profiles"
                         onNoProfilesAction={handleNoProfilesAction}
                     />
                 </DesktopLayout>
@@ -288,12 +322,13 @@ const handleApplyFilters = async (filters: any) => {
                     <ProfileDisplay
                         currentProfile={currentProfile}
                         onStartOver={() => setCurrentProfileIndex(0)}
-                        onGoBack={() => setCurrentProfileIndex(Math.max(0, currentProfileIndex - 1))}
+                        onGoBack={handleGoBack}
                         onLike={handleLike}
                         onPass={handlePass}
-                        noProfilesTitle="No more profiles right now"
-                        noProfilesDescription="You have reached the end of your potential matches. Check back later for new people."
-                        noProfilesActionLabel="Check again"
+                        swipeDirection={swipeDirection}
+                        noProfilesTitle="No new matches yet"
+                        noProfilesDescription="You have liked or passed everyone available for now. Tap reload and we will fetch fresh profiles instantly."
+                        noProfilesActionLabel="Reload Profiles"
                         onNoProfilesAction={handleNoProfilesAction}
                     />
                 </MobileLayout>

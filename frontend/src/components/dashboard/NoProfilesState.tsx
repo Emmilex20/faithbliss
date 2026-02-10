@@ -7,22 +7,24 @@ interface NoProfilesStateProps {
 }
 
 export const NoProfilesState = ({
-  title = "No more profiles!",
-  description = "Check back later for new matches",
-  actionLabel = "Start Over",
+  title = "No new profiles right now",
+  description = "You are all caught up for the moment. New people will appear here as soon as they join or become available.",
+  actionLabel = "Reload Profiles",
   onAction,
   onStartOver
 }: NoProfilesStateProps) => {
   const action = onAction || onStartOver;
   return (
-    <div className="text-center py-12">
-      <div className="text-6xl mb-4">??</div>
-      <h2 className="text-2xl font-bold mb-2">{title}</h2>
-      <p className="text-gray-400 mb-4">{description}</p>
+    <div className="mx-auto max-w-md py-12 text-center">
+      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-pink-400/40 bg-pink-500/15 text-3xl">
+        ✨
+      </div>
+      <h2 className="mb-2 text-2xl font-bold text-white">{title}</h2>
+      <p className="mb-5 text-sm leading-relaxed text-slate-300">{description}</p>
       {action && (
         <button
           onClick={action}
-          className="bg-pink-600 hover:bg-pink-500 px-6 py-2 rounded-full transition-colors"
+          className="rounded-full bg-gradient-to-r from-pink-500 to-fuchsia-500 px-6 py-2.5 font-semibold text-white transition hover:from-pink-400 hover:to-fuchsia-400"
         >
           {actionLabel}
         </button>

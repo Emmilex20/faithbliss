@@ -262,7 +262,7 @@ export function usePotentialMatches() {
   return useApi(
     isAuthenticated ? apiCall : null,
     [accessToken, isAuthenticated],
-    { immediate: isAuthenticated, showErrorToast: true, cacheTime: 3 * 60 * 1000, redirectOnUnauthorized: false }
+    { immediate: isAuthenticated, showErrorToast: true, cacheTime: 0, redirectOnUnauthorized: false }
   );
 }
 
