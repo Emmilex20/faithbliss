@@ -147,7 +147,12 @@ const OnboardingPage = () => {
 
       // Merge photo URLs with other data
       const { photos: _, customDenomination: __, ...baseData } = onboardingData;
-      const rawData = { ...baseData };
+      const rawData = {
+        ...baseData,
+        // Keep legacy keys and persist canonical profile keys used across the app.
+        profession: onboardingData.occupation,
+        fieldOfStudy: onboardingData.education,
+      } as Record<string, any>;
 
       // Assign Cloudinary URLs to profilePhoto1,2,3,4
       photoUrls.forEach((url, index) => {

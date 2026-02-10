@@ -88,7 +88,19 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
             </div>
           </Link>
 
-        <Link to="/messages" onClick={onClose}>
+          <Link to="/matches" onClick={onClose}>
+            <div className="flex items-center space-x-4 p-4 hover:bg-gray-800/50 rounded-2xl transition-colors cursor-pointer group">
+              <div className="p-2 bg-pink-500/20 rounded-xl group-hover:bg-pink-500/30 transition-colors">
+                <Heart className="w-5 h-5 text-pink-400" />
+              </div>
+              <div>
+                <h4 className="text-white font-semibold">My Matches</h4>
+                <p className="text-gray-400 text-sm">See who liked you</p>
+              </div>
+            </div>
+          </Link>
+
+          <Link to="/messages" onClick={onClose}>
           <div className="flex items-center space-x-4 p-4 hover:bg-gray-800/50 rounded-2xl transition-colors cursor-pointer group">
             <div className="p-2 bg-blue-500/20 rounded-xl group-hover:bg-blue-500/30 transition-colors">
               <MessageCircle className="w-5 h-5 text-blue-400" />
@@ -99,8 +111,20 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
             </div>
           </div>
         </Link>
-        
-        <Link to="/notifications" onClick={onClose}>
+
+          <Link to="/profile" onClick={onClose}>
+            <div className="flex items-center space-x-4 p-4 hover:bg-gray-800/50 rounded-2xl transition-colors cursor-pointer group">
+              <div className="p-2 bg-green-500/20 rounded-xl group-hover:bg-green-500/30 transition-colors">
+                <User className="w-5 h-5 text-green-400" />
+              </div>
+              <div>
+                <h4 className="text-white font-semibold">My Profile</h4>
+                <p className="text-gray-400 text-sm">Edit profile & photos</p>
+              </div>
+            </div>
+          </Link>
+
+          <Link to="/notifications" onClick={onClose}>
           <div className="flex items-center space-x-4 p-4 hover:bg-gray-800/50 rounded-2xl transition-colors cursor-pointer group">
             <div className="p-2 bg-amber-500/20 rounded-xl group-hover:bg-amber-500/30 transition-colors relative">
               <Bell className="w-5 h-5 text-amber-400" />
@@ -115,37 +139,12 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
               <p className="text-gray-400 text-sm">Likes, matches & messages</p>
             </div>
           </div>
-        </Link>
+          </Link>
         </div>
 
         {/* Secondary Navigation */}
         <div className="border-t border-gray-700/50 pt-4">
-          <h5 className="text-gray-400 text-xs uppercase tracking-wider font-semibold mb-3 px-4">Profile</h5>
-          
-          <Link to="/profile" onClick={onClose}>
-            <div className="flex items-center space-x-4 p-4 hover:bg-gray-800/50 rounded-2xl transition-colors cursor-pointer group">
-              <div className="p-2 bg-green-500/20 rounded-xl group-hover:bg-green-500/30 transition-colors">
-                <User className="w-5 h-5 text-green-400" />
-              </div>
-              <div>
-                <h4 className="text-white font-semibold">My Profile</h4>
-                <p className="text-gray-400 text-sm">Edit profile & photos</p>
-              </div>
-            </div>
-          </Link>
-
-          <Link to="/matches" onClick={onClose}>
-            <div className="flex items-center space-x-4 p-4 hover:bg-gray-800/50 rounded-2xl transition-colors cursor-pointer group">
-              <div className="p-2 bg-pink-500/20 rounded-xl group-hover:bg-pink-500/30 transition-colors">
-                <Heart className="w-5 h-5 text-pink-400" />
-              </div>
-              <div>
-                <h4 className="text-white font-semibold">My Matches</h4>
-                <p className="text-gray-400 text-sm">See who liked you</p>
-              </div>
-            </div>
-          </Link>
-        </div>
+          <h5 className="text-gray-400 text-xs uppercase tracking-wider font-semibold mb-3 px-4">More</h5>
 
           <Link to="/premium" onClick={onClose}>
             <div className="flex items-center space-x-4 p-4 hover:bg-gray-800/50 rounded-2xl transition-colors cursor-pointer group">
@@ -207,6 +206,7 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
               </div>
             </div>
           </Link>
+        </div>
         </div>
       </div>
 
