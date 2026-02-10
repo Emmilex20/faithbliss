@@ -2,7 +2,7 @@
 import { admin, usersCollection, db } from '../config/firebase-admin';
 import { emitToUser } from '../socket/socket';
 
-type NotificationType = 'PROFILE_LIKED' | 'NEW_MATCH' | 'NEW_MESSAGE';
+type NotificationType = 'PROFILE_LIKED' | 'NEW_MATCH' | 'NEW_MESSAGE' | 'STORY_POSTED';
 
 interface CreateNotificationInput {
   userId: string;
@@ -56,6 +56,8 @@ export const createNotification = async ({
         ? 'You have a new like'
         : type === 'NEW_MATCH'
         ? "It's a match!"
+        : type === 'STORY_POSTED'
+        ? 'A new story was posted'
         : 'New message on FaithBliss';
     await sendEmail(email, subject, message);
   }

@@ -674,6 +674,7 @@ export function useNotificationUnreadCount() {
 export function useStories() {
   const { accessToken, isAuthenticated } = useRequireAuth();
   const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
+  const webSocketService = useWebSocket();
   const { showSuccess, showError } = useToast();
 
   const apiCall = useCallback(() => apiClient.Story.getFeed(), [apiClient]);
@@ -725,6 +726,21 @@ export function useStories() {
   const replyToStory = useCallback(async (storyId: string, content: string) => {
     return apiClient.Story.reply(storyId, content);
   }, [apiClient]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !webSocketService) return;
+
+    const handleNotification = (payload: NotificationPayload) => {
+      if (payload.type === 'STORY_POSTED') {
+        feedHook.refetch().catch(() => null);
+      }
+    };
+
+    webSocketService.onNotification(handleNotification);
+    return () => {
+      webSocketService.off('notification', handleNotification);
+    };
+  }, [isAuthenticated, webSocketService, feedHook.refetch]);
 
   return {
     ...feedHook,

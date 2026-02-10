@@ -127,6 +127,29 @@ const createStory = async (req: Request, res: Response) => {
       expiresAt,
     });
 
+    // Notify all mutual users in real time so their story feed refreshes without manual reload.
+    try {
+      const mutualIds = await getMutualFriendIds(currentUserId);
+      const recipients = Array.from(mutualIds).filter((uid) => uid && uid !== currentUserId);
+      if (recipients.length > 0) {
+        const authorDoc = await usersCollection.doc(currentUserId).get();
+        const authorName = (authorDoc.data() as { name?: string } | undefined)?.name || 'A mutual friend';
+
+        await Promise.all(
+          recipients.map((userId) =>
+            createNotification({
+              userId,
+              type: 'STORY_POSTED',
+              message: `${authorName} posted a new story`,
+              data: { authorId: currentUserId, storyId: storyRef.id },
+            })
+          )
+        );
+      }
+    } catch {
+      // Best-effort notification dispatch; story creation should still succeed.
+    }
+
     return res.status(201).json({
       story: {
         id: storyRef.id,

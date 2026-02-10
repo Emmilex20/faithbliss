@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import { useAuthContext } from '../contexts/AuthContext';
@@ -25,6 +25,44 @@ type OnboardingUpdateData = Partial<Omit<OnboardingData, 'photos' | 'customDenom
   profilePhoto2?: string;
   profilePhoto3?: string;
   profilePhoto4?: string;
+};
+
+const getStepValidationError = (step: number, data: OnboardingData): string | null => {
+  if (step === 0 && data.photos.length < 2) {
+    return 'Please upload at least 2 photos.';
+  }
+
+  if (
+    step === 1 &&
+    (!data.birthday || !data.location || !data.faithJourney || !data.churchAttendance)
+  ) {
+    return 'Please fill out all required profile information.';
+  }
+
+  if (step === 2 && data.relationshipGoals.length === 0) {
+    return 'Please select your relationship goal.';
+  }
+
+  if (step === 3 && !data.preferredFaithJourney) {
+    return 'Please complete your partner preferences.';
+  }
+
+  if (
+    step === 4 &&
+    (
+      !data.preferredGender ||
+      data.minAge === null ||
+      data.minAge === undefined ||
+      data.maxAge === null ||
+      data.maxAge === undefined ||
+      data.maxDistance === null ||
+      data.maxDistance === undefined
+    )
+  ) {
+    return 'Please fill out all matching preferences.';
+  }
+
+  return null;
 };
 
 // --- MAIN COMPONENT ---
@@ -75,37 +113,22 @@ const OnboardingPage = () => {
     preferredDenomination: null,
   });
 
+  useEffect(() => {
+    if (!validationError) return;
+    const stepError = getStepValidationError(currentStep, onboardingData);
+    if (!stepError) {
+      setValidationError(null);
+    }
+  }, [currentStep, onboardingData, validationError]);
+
   // --- STEP CONTROLS ---
   const nextStep = async () => {
     setValidationError(null);
 
     // --- Validation per step ---
-    if (currentStep === 0 && onboardingData.photos.length < 2) {
-      return setValidationError('Please upload at least 2 photos.');
-    }
-    if (
-      currentStep === 1 &&
-      (!onboardingData.birthday ||
-        !onboardingData.location ||
-        !onboardingData.faithJourney ||
-        !onboardingData.churchAttendance)
-    ) {
-      return setValidationError('Please fill out all required profile information.');
-    }
-    if (currentStep === 2 && onboardingData.relationshipGoals.length === 0) {
-      return setValidationError('Please select your relationship goal.');
-    }
-    if (currentStep === 3 && !onboardingData.preferredFaithJourney) {
-      return setValidationError('Please complete your partner preferences.');
-    }
-    if (
-      currentStep === 4 &&
-      (!onboardingData.preferredGender ||
-        !onboardingData.minAge ||
-        !onboardingData.maxAge ||
-        !onboardingData.maxDistance)
-    ) {
-      return setValidationError('Please fill out all matching preferences.');
+    const stepError = getStepValidationError(currentStep, onboardingData);
+    if (stepError) {
+      return setValidationError(stepError);
     }
 
     // --- Continue or Submit ---

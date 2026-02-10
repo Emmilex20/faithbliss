@@ -30,6 +30,8 @@ const typeMeta = (type?: string) => {
       return { label: 'New Match', icon: Sparkles, color: 'from-emerald-500 to-cyan-500' };
     case 'NEW_MESSAGE':
       return { label: 'New Message', icon: MessageCircle, color: 'from-blue-500 to-teal-500' };
+    case 'STORY_POSTED':
+      return { label: 'New Story', icon: Sparkles, color: 'from-fuchsia-500 to-indigo-500' };
     default:
       return { label: 'Notification', icon: Bell, color: 'from-slate-500 to-slate-600' };
   }
@@ -135,6 +137,11 @@ const NotificationsContent = () => {
         return;
       }
       navigate('/matches');
+      return;
+    }
+
+    if (item.type === 'STORY_POSTED') {
+      navigate('/dashboard');
       return;
     }
 
