@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Plus, X, ChevronLeft, ChevronRight, Trash2, Heart, Send, Eye } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import type { StoryGroup } from '@/hooks/useAPI';
 
 interface StoryBarProps {
@@ -26,7 +25,6 @@ export const StoryBar = ({
   onDeleteStory,
   loading = false,
 }: StoryBarProps) => {
-  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const storyVideoRef = useRef<HTMLVideoElement | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -44,7 +42,6 @@ export const StoryBar = ({
   const [localLikeCount, setLocalLikeCount] = useState<Record<string, number>>({});
   const [replyText, setReplyText] = useState('');
   const [isReplying, setIsReplying] = useState(false);
-  const [isReplyFocused, setIsReplyFocused] = useState(false);
   const [showLikersModal, setShowLikersModal] = useState(false);
   const [isLoadingLikers, setIsLoadingLikers] = useState(false);
   const [likers, setLikers] = useState<Array<{ id: string; name: string; profilePhoto1?: string }>>([]);
@@ -89,7 +86,6 @@ export const StoryBar = ({
     setSelectedItemIndex(0);
     setProgressMs(0);
     setReplyText('');
-    setIsReplyFocused(false);
     setShowLikersModal(false);
   };
 
@@ -99,7 +95,6 @@ export const StoryBar = ({
     setSelectedItemIndex(0);
     setProgressMs(0);
     setReplyText('');
-    setIsReplyFocused(false);
     setShowLikersModal(false);
   };
 
@@ -109,7 +104,6 @@ export const StoryBar = ({
       setSelectedItemIndex((prev) => prev + 1);
       setProgressMs(0);
       setReplyText('');
-      setIsReplyFocused(false);
       return;
     }
 
@@ -119,7 +113,6 @@ export const StoryBar = ({
       setSelectedItemIndex(0);
       setProgressMs(0);
       setReplyText('');
-      setIsReplyFocused(false);
       return;
     }
 
@@ -132,7 +125,6 @@ export const StoryBar = ({
       setSelectedItemIndex((prev) => prev - 1);
       setProgressMs(0);
       setReplyText('');
-      setIsReplyFocused(false);
       return;
     }
 
@@ -143,7 +135,6 @@ export const StoryBar = ({
       setSelectedItemIndex(Math.max(0, prevStory.items.length - 1));
       setProgressMs(0);
       setReplyText('');
-      setIsReplyFocused(false);
     }
   };
 
@@ -223,10 +214,7 @@ export const StoryBar = ({
     setIsReplying(true);
     try {
       await onReplyToStory(selectedItem.id, replyText.trim());
-      const urlName = encodeURIComponent(activeStory.authorName || 'User');
       setReplyText('');
-      closeStory();
-      navigate(`/messages?profileId=${activeStory.authorId}&profileName=${urlName}`);
     } finally {
       setIsReplying(false);
     }
@@ -234,7 +222,6 @@ export const StoryBar = ({
 
   const handleCancelReply = () => {
     setReplyText('');
-    setIsReplyFocused(false);
   };
 
   useEffect(() => {
@@ -253,7 +240,7 @@ export const StoryBar = ({
     setLikers([]);
   }, [selectedItem?.id]);
 
-  const isTypingReply = replyText.trim().length > 0 || isReplyFocused || isReplying;
+  const isTypingReply = replyText.trim().length > 0 || isReplying;
   const shouldPauseStory = showLikersModal || (!activeStory?.isCurrentUser && isTypingReply);
 
   useEffect(() => {
@@ -491,8 +478,6 @@ export const StoryBar = ({
                     type="text"
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
-                    onFocus={() => setIsReplyFocused(true)}
-                    onBlur={() => setIsReplyFocused(false)}
                     placeholder="Reply to story"
                     className="flex-1 bg-white/10 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/40"
                     maxLength={400}
