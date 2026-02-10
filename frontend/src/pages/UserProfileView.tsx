@@ -1,58 +1,105 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { HeartBeatLoader } from "@/components/HeartBeatLoader";
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { HeartBeatLoader } from '@/components/HeartBeatLoader';
+import { TopBar } from '@/components/dashboard/TopBar';
+import { SidePanel } from '@/components/dashboard/SidePanel';
+import { useAuthContext } from '@/contexts/AuthContext';
+import { useMatches, useMatching } from '@/hooks/useAPI';
 import {
-  Heart,
-  X,
-  MessageCircle,
-  MapPin,
-  Church,
-  Music,
-  Verified,
+  BadgeCheck,
+  Briefcase,
   ChevronLeft,
   ChevronRight,
-} from "lucide-react";
-import type { User } from "@/services/api";
-import { TopBar } from "@/components/dashboard/TopBar";
-import { SidePanel } from "@/components/dashboard/SidePanel";
-import { useAuthContext } from "@/contexts/AuthContext";
+  Church,
+  GraduationCap,
+  Heart,
+  MapPin,
+  MessageCircle,
+  Sparkles,
+  UserRound,
+  X,
+} from 'lucide-react';
+import type { User } from '@/services/api';
 
 const getProfilePhotos = (user: User): string[] => {
-  const photos: string[] = [];
-  if (user.profilePhoto1) photos.push(user.profilePhoto1);
-  if (user.profilePhoto2) photos.push(user.profilePhoto2);
-  if (user.profilePhoto3) photos.push(user.profilePhoto3);
-  return photos.filter(Boolean);
+  const photos = [
+    user.profilePhoto1,
+    user.profilePhoto2,
+    user.profilePhoto3,
+    user.profilePhoto4,
+    user.profilePhoto5,
+    user.profilePhoto6,
+  ].filter(Boolean) as string[];
+
+  if (photos.length === 0) {
+    return ['/default-avatar.png'];
+  }
+
+  return photos;
+};
+
+const formatValue = (value?: string | null): string => {
+  if (!value) return 'Not provided';
+  return value
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+const InfoCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <section className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-6 backdrop-blur-sm">
+    <h3 className="mb-3 text-base font-semibold text-white sm:text-lg">{title}</h3>
+    {children}
+  </section>
+);
+
+const ChipList = ({ items, emptyText = 'Not provided' }: { items?: string[]; emptyText?: string }) => {
+  if (!items || items.length === 0) {
+    return <p className="text-sm text-slate-300">{emptyText}</p>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {items.map((item, index) => (
+        <span
+          key={`${item}-${index}`}
+          className="rounded-full border border-cyan-300/40 bg-cyan-400/10 px-3 py-1 text-xs font-medium text-cyan-100 sm:text-sm"
+        >
+          {formatValue(item)}
+        </span>
+      ))}
+    </div>
+  );
 };
 
 const ProfilePage = () => {
   const { id: profileId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { getUserProfileById, user: contextUser } = useAuthContext();
+  const { likeUser, passUser } = useMatching();
+  const { mutual } = useMatches();
+
   const [showSidePanel, setShowSidePanel] = useState(false);
-
-  const layoutUser = contextUser;
-  const layoutName = layoutUser?.name || "User";
-  const layoutImage = layoutUser?.profilePhoto1 || undefined;
-
   const [profile, setProfile] = useState<User | null>(null);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<'like' | 'pass' | null>(null);
 
-  // Fetch another user’s profile
+  const layoutName = contextUser?.name || 'User';
+  const layoutImage = contextUser?.profilePhoto1 || undefined;
+
   useEffect(() => {
     const fetchProfile = async () => {
       if (!profileId) {
-        console.error("No profile ID found in URL");
         setLoading(false);
         return;
       }
+
       setLoading(true);
       try {
         const userData = await getUserProfileById(profileId);
         setProfile(userData);
-      } catch (error) {
-        console.error("Failed to fetch user profile:", error);
+      } catch {
         setProfile(null);
       } finally {
         setLoading(false);
@@ -62,41 +109,75 @@ const ProfilePage = () => {
     fetchProfile();
   }, [profileId, getUserProfileById]);
 
-  const handleMessage = () => {
-    if (profile?.id) {
-      navigate(
-        `/messages?profileId=${profile.id}&profileName=${encodeURIComponent(
-          profile.name
-        )}`
-      );
-    }
-  };
+  const photos = useMemo(() => (profile ? getProfilePhotos(profile) : ['/default-avatar.png']), [profile]);
+
+  useEffect(() => {
+    setCurrentPhotoIndex(0);
+  }, [profile?.id]);
+
+  const currentPhotoUrl = photos[currentPhotoIndex] || photos[0];
+  const isOwnProfile = Boolean(contextUser?.id && profile?.id && contextUser.id === profile.id);
+  const mutualIds = useMemo(() => {
+    const list = Array.isArray(mutual)
+      ? mutual
+      : mutual && typeof mutual === 'object' && 'matches' in (mutual as Record<string, unknown>)
+      ? ((mutual as { matches?: any[] }).matches ?? [])
+      : [];
+
+    return new Set(
+      list
+        .map((item: any) => item?.matchedUserId || item?.id || item?.matchedUser?.id)
+        .filter(Boolean)
+        .map((id: string) => String(id))
+    );
+  }, [mutual]);
+  const isMutual = Boolean(profile?.id && mutualIds.has(String(profile.id)));
 
   const nextPhoto = () => {
-    if (!profile) return;
-    const photos = getProfilePhotos(profile);
     setCurrentPhotoIndex((prev) => (prev + 1) % photos.length);
   };
 
   const prevPhoto = () => {
-    if (!profile) return;
-    const photos = getProfilePhotos(profile);
     setCurrentPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length);
+  };
+
+  const handleMessage = () => {
+    if (!profile?.id) return;
+    navigate(`/messages?profileId=${profile.id}&profileName=${encodeURIComponent(profile.name)}`);
+  };
+
+  const handleLike = async () => {
+    if (!profile?.id || isOwnProfile) return;
+    setActionLoading('like');
+    try {
+      await likeUser(profile.id);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handlePass = async () => {
+    if (!profile?.id || isOwnProfile) return;
+    setActionLoading('pass');
+    try {
+      await passUser(profile.id);
+      navigate('/dashboard');
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   if (loading) return <HeartBeatLoader message="Loading profile..." />;
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 flex items-center justify-center">
-        <div className="text-white text-center">
-          <h1 className="text-2xl font-bold mb-4">Profile Not Found</h1>
-          <p className="text-gray-400 mb-6">
-            This user may not exist or the link is incorrect.
-          </p>
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
+        <div className="max-w-md rounded-2xl border border-white/10 bg-white/5 p-7 text-center backdrop-blur-sm">
+          <h1 className="mb-2 text-2xl font-bold">Profile Not Found</h1>
+          <p className="mb-6 text-sm text-slate-300">This user may no longer be available or the link is invalid.</p>
           <button
-            onClick={() => navigate("/dashboard")}
-            className="bg-pink-500 hover:bg-pink-600 px-6 py-3 rounded-full font-medium transition-colors"
+            onClick={() => navigate('/dashboard')}
+            className="rounded-full bg-cyan-500 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
           >
             Return to Dashboard
           </button>
@@ -105,153 +186,220 @@ const ProfilePage = () => {
     );
   }
 
-  const photos = getProfilePhotos(profile);
-  const currentPhotoUrl =
-    photos[currentPhotoIndex] || photos[0] || "/default-avatar.png";
-
   const content = (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-      {/* Photo Gallery */}
-      <div className="relative overflow-hidden">
-        <div className="aspect-[4/5] md:aspect-[16/10] relative overflow-hidden">
-          <img
-            src={currentPhotoUrl}
-            alt={`${profile.name} photo`}
-            className="object-cover w-full h-full absolute top-0 left-0"
-          />
-          {photos.length > 1 && (
-            <>
-              <button
-                onClick={prevPhoto}
-                className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors z-10"
-              >
-                <ChevronLeft className="w-6 h-6" />
-              </button>
-              <button
-                onClick={nextPhoto}
-                className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors z-10"
-              >
-                <ChevronRight className="w-6 h-6" />
-              </button>
-
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2 z-10">
-                {photos.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentPhotoIndex(index)}
-                    className={`w-2 h-2 rounded-full ${
-                      index === currentPhotoIndex
-                        ? "bg-white"
-                        : "bg-white/50"
-                    }`}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-
-          {profile.isVerified && (
-            <div className="absolute top-4 right-4 bg-blue-500/90 backdrop-blur-md text-white p-2 rounded-full z-10">
-              <Verified className="w-5 h-5" />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Profile Details */}
-      <div className="p-6 space-y-6">
-        {/* Basic Info */}
-        <div className="space-y-4">
-          <div>
-            <h1 className="text-3xl font-bold">
-              {profile.name}, {profile.age}
-            </h1>
-            <div className="flex items-center space-x-2 text-gray-300 mt-2">
-              <MapPin className="w-4 h-4" />
-              <span>{profile.location || "Not specified"}</span>
-            </div>
-          </div>
-          {profile.bio && (
-            <div className="bg-gray-800/50 rounded-2xl p-4">
-              <h3 className="text-lg font-semibold mb-2">About Me</h3>
-              <p className="text-gray-300">{profile.bio}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Faith & Values */}
-        <div className="space-y-4">
-          <h2 className="text-2xl font-bold flex items-center space-x-2">
-            <Church className="w-6 h-6 text-blue-400" />
-            <span>Faith & Values</span>
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {profile.faithJourney && (
-              <div className="bg-gray-800/50 rounded-xl p-4">
-                <h4 className="font-semibold text-blue-300 mb-2">
-                  Faith Journey
-                </h4>
-                <p className="text-gray-300">{profile.faithJourney}</p>
-              </div>
-            )}
-            {profile.sundayActivity && (
-              <div className="bg-gray-800/50 rounded-xl p-4">
-                <h4 className="font-semibold text-blue-300 mb-2">
-                  Sunday Activity
-                </h4>
-                <p className="text-gray-300">{profile.sundayActivity}</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Hobbies */}
-        {profile.hobbies && profile.hobbies.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-2xl font-bold flex items-center space-x-2">
-              <Music className="w-6 h-6 text-purple-400" />
-              <span>Interests & Hobbies</span>
-            </h2>
-            <div className="flex flex-wrap gap-3">
-              {profile.hobbies.map((hobby, index) => (
-                <div
-                  key={index}
-                  className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 text-purple-300 px-4 py-2 rounded-full text-sm font-medium"
-                >
-                  {hobby}
+    <div className="mx-auto w-full max-w-7xl px-3 pb-28 pt-4 sm:px-5 sm:pb-24 lg:px-8">
+      <div className="overflow-hidden rounded-3xl border border-white/10 bg-slate-900/70 shadow-[0_20px_80px_rgba(8,20,34,0.45)]">
+        <div className="relative h-44 overflow-hidden sm:h-56 lg:h-64">
+          <img src={currentPhotoUrl} alt={`${profile.name} cover`} className="h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/50 to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <div className="mb-2 flex items-center gap-2">
+                  <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{profile.name}</h1>
+                  {profile.isVerified && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/50 bg-cyan-400/20 px-2 py-1 text-xs font-semibold text-cyan-100">
+                      <BadgeCheck className="h-3.5 w-3.5" />
+                      Verified
+                    </span>
+                  )}
                 </div>
-              ))}
+                <p className="text-sm text-slate-200 sm:text-base">
+                  {profile.age ? `${profile.age} years` : 'Age not provided'}
+                  {profile.gender ? ` � ${formatValue(profile.gender)}` : ''}
+                </p>
+                <p className="mt-1 flex items-center gap-2 text-xs text-slate-300 sm:text-sm">
+                  <MapPin className="h-4 w-4" />
+                  {profile.location || 'Location not provided'}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-white/15 bg-slate-900/60 px-3 py-2 text-xs text-slate-200 backdrop-blur-sm sm:text-sm">
+                <p className="font-medium">Profile Photos</p>
+                <p>{photos.length}</p>
+              </div>
             </div>
           </div>
-        )}
+        </div>
+
+        <div className="grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(320px,1.05fr)_1.45fr] lg:gap-6">
+          <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/70">
+              <div className="relative aspect-[4/5]">
+                <img src={currentPhotoUrl} alt={`${profile.name} photo`} className="h-full w-full object-cover" />
+                {photos.length > 1 && (
+                  <>
+                    <button
+                      onClick={prevPhoto}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-slate-900/65 p-2 text-white transition hover:bg-slate-800"
+                      aria-label="Previous photo"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={nextPhoto}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-slate-900/65 p-2 text-white transition hover:bg-slate-800"
+                      aria-label="Next photo"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                    <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full bg-slate-900/60 px-2 py-1 backdrop-blur-sm">
+                      {photos.map((_, index) => (
+                        <button
+                          key={`photo-dot-${index}`}
+                          onClick={() => setCurrentPhotoIndex(index)}
+                          className={`h-2 w-2 rounded-full ${
+                            index === currentPhotoIndex ? 'bg-cyan-300' : 'bg-white/40'
+                          }`}
+                          aria-label={`Go to photo ${index + 1}`}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <InfoCard title="Quick Snapshot">
+              <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">Denomination</p>
+                  <p className="mt-1 font-medium text-white">{formatValue(profile.denomination)}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">Faith Journey</p>
+                  <p className="mt-1 font-medium text-white">{formatValue(profile.faithJourney)}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">Profession</p>
+                  <p className="mt-1 font-medium text-white">{profile.profession || 'Not provided'}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">Field of Study</p>
+                  <p className="mt-1 font-medium text-white">{profile.fieldOfStudy || 'Not provided'}</p>
+                </div>
+              </div>
+            </InfoCard>
+          </div>
+
+          <div className="space-y-4 sm:space-y-5">
+            <InfoCard title="Bio">
+              <p className="leading-relaxed text-slate-200">{profile.bio?.trim() || 'No bio provided yet.'}</p>
+            </InfoCard>
+
+            <InfoCard title="Faith and Values">
+              <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="flex items-center gap-2 text-xs text-slate-400">
+                    <Church className="h-4 w-4" /> Church Attendance
+                  </p>
+                  <p className="mt-1 font-medium text-white">{formatValue(profile.churchAttendance || profile.sundayActivity)}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">Baptism Status</p>
+                  <p className="mt-1 font-medium text-white">{formatValue(profile.baptismStatus)}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 sm:col-span-2">
+                  <p className="mb-2 text-xs text-slate-400">Spiritual Gifts</p>
+                  <ChipList items={profile.spiritualGifts} emptyText="No spiritual gifts listed" />
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 sm:col-span-2">
+                  <p className="mb-2 text-xs text-slate-400">Core Values</p>
+                  <ChipList items={profile.values} emptyText="No values listed" />
+                </div>
+              </div>
+            </InfoCard>
+
+            <InfoCard title="Lifestyle and Relationship Goals">
+              <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="mb-2 text-xs text-slate-400">Looking For</p>
+                  <ChipList items={profile.lookingFor} emptyText="No relationship preference listed" />
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="mb-2 text-xs text-slate-400">Relationship Goals</p>
+                  <ChipList items={profile.relationshipGoals} emptyText="No goals listed" />
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 sm:col-span-2">
+                  <p className="text-xs text-slate-400">Lifestyle</p>
+                  <p className="mt-1 font-medium text-white">{formatValue(profile.lifestyle)}</p>
+                </div>
+              </div>
+            </InfoCard>
+
+            <InfoCard title="Interests and Personal Details">
+              <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="mb-2 flex items-center gap-2 text-xs text-slate-400">
+                    <Sparkles className="h-4 w-4" /> Interests / Hobbies
+                  </p>
+                  <ChipList items={profile.hobbies} emptyText="No hobbies listed" />
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">Favorite Verse</p>
+                  <p className="mt-1 italic text-white">{profile.favoriteVerse ? `"${profile.favoriteVerse}"` : 'Not provided'}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="flex items-center gap-2 text-xs text-slate-400">
+                    <Briefcase className="h-4 w-4" /> Profession
+                  </p>
+                  <p className="mt-1 font-medium text-white">{profile.profession || 'Not provided'}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="flex items-center gap-2 text-xs text-slate-400">
+                    <GraduationCap className="h-4 w-4" /> Education
+                  </p>
+                  <p className="mt-1 font-medium text-white">{profile.fieldOfStudy || 'Not provided'}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 sm:col-span-2">
+                  <p className="flex items-center gap-2 text-xs text-slate-400">
+                    <UserRound className="h-4 w-4" /> Gender
+                  </p>
+                  <p className="mt-1 font-medium text-white">{formatValue(profile.gender)}</p>
+                </div>
+              </div>
+            </InfoCard>
+          </div>
+        </div>
       </div>
 
-      {/* Actions */}
-      {contextUser?.id !== profile.id && (
-        <div className="sticky bottom-0 bg-gray-900/90 backdrop-blur-xl border-t border-gray-700/50 p-4">
-          <div className="flex items-center justify-center space-x-4 max-w-md mx-auto">
+      {!isOwnProfile && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-slate-950/88 px-4 py-3 backdrop-blur-xl">
+          <div className="mx-auto flex w-full max-w-4xl items-center gap-2 sm:gap-3">
             <button
               onClick={() => navigate(-1)}
-              className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 p-4 rounded-full transition-all hover:scale-110"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-rose-400/50 bg-rose-500/10 text-rose-300 transition hover:bg-rose-500/20"
+              aria-label="Back"
             >
-              <X className="w-6 h-6" />
+              <X className="h-5 w-5" />
             </button>
-
-            <button
-              onClick={handleMessage}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-8 py-4 rounded-full font-semibold transition-all hover:scale-105 flex items-center space-x-2"
-            >
-              <MessageCircle className="w-5 h-5" />
-              <span>Message</span>
-            </button>
-
-            <button
-              onClick={() => console.log("Like", profile.name)}
-              className="bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/30 text-pink-400 p-4 rounded-full transition-all hover:scale-110"
-            >
-              <Heart className="w-6 h-6" />
-            </button>
+            {isMutual ? (
+              <button
+                onClick={handleMessage}
+                className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-cyan-500 px-5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Message
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={handlePass}
+                  disabled={actionLoading !== null}
+                  className="inline-flex h-11 items-center justify-center rounded-full border border-orange-300/50 bg-orange-500/10 px-4 text-sm font-semibold text-orange-200 transition hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {actionLoading === 'pass' ? 'Passing...' : 'Pass'}
+                </button>
+                <button
+                  onClick={handleLike}
+                  disabled={actionLoading !== null}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-pink-300/50 bg-pink-500/10 px-4 text-sm font-semibold text-pink-100 transition hover:bg-pink-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Heart className="h-4 w-4" />
+                  {actionLoading === 'like' ? 'Liking...' : 'Like'}
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -259,17 +407,16 @@ const ProfilePage = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white overflow-x-hidden dashboard-main">
-      {/* Desktop Layout */}
-      <div className="hidden lg:flex min-h-screen">
+    <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_10%_20%,rgba(34,211,238,0.16),transparent_38%),radial-gradient(circle_at_90%_12%,rgba(56,189,248,0.12),transparent_34%),linear-gradient(180deg,#020617_0%,#0b1220_100%)] text-white dashboard-main">
+      <div className="hidden min-h-screen lg:flex">
         <div className="w-80 flex-shrink-0">
-          <SidePanel userName={layoutName} userImage={layoutImage} user={layoutUser} onClose={() => setShowSidePanel(false)} />
+          <SidePanel userName={layoutName} userImage={layoutImage} user={contextUser} onClose={() => setShowSidePanel(false)} />
         </div>
-        <div className="flex-1 flex flex-col min-h-screen">
+        <div className="flex min-h-screen flex-1 flex-col">
           <TopBar
             userName={layoutName}
             userImage={layoutImage}
-            user={layoutUser}
+            user={contextUser}
             showFilters={false}
             showSidePanel={showSidePanel}
             onToggleFilters={() => {}}
@@ -280,12 +427,11 @@ const ProfilePage = () => {
         </div>
       </div>
 
-      {/* Mobile Layout */}
-      <div className="lg:hidden min-h-screen">
+      <div className="min-h-screen lg:hidden">
         <TopBar
           userName={layoutName}
           userImage={layoutImage}
-          user={layoutUser}
+          user={contextUser}
           showFilters={false}
           showSidePanel={showSidePanel}
           onToggleFilters={() => {}}
@@ -297,17 +443,9 @@ const ProfilePage = () => {
 
       {showSidePanel && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => setShowSidePanel(false)}
-          />
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowSidePanel(false)} />
           <div className="absolute inset-y-0 left-0 w-80 max-w-[85vw]">
-            <SidePanel
-              userName={layoutName}
-              userImage={layoutImage}
-              user={layoutUser}
-              onClose={() => setShowSidePanel(false)}
-            />
+            <SidePanel userName={layoutName} userImage={layoutImage} user={contextUser} onClose={() => setShowSidePanel(false)} />
           </div>
         </div>
       )}

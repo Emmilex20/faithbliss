@@ -37,6 +37,11 @@ export interface User {
   profession?: string;
   faithJourney?: string;
   sundayActivity?: string;
+  churchAttendance?: string;
+  baptismStatus?: string;
+  spiritualGifts?: string[];
+  relationshipGoals?: string[];
+  lifestyle?: string;
   lookingFor?: string[];
   hobbies?: string[];
   values?: string[];

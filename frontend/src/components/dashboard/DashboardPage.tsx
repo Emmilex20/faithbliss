@@ -4,7 +4,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom'; 
 import { HeartBeatLoader } from '@/components/HeartBeatLoader';
 import { useToast } from '@/contexts/ToastContext'; 
 import { DesktopLayout } from '@/components/dashboard/DesktopLayout';
@@ -21,10 +20,10 @@ import { API, type User } from '@/services/api';
 insertScrollbarStyles();
 
 export const DashboardPage = ({ user: activeUser }: { user: User }) => {
-    const navigate = useNavigate(); 
-    
-    const { showSuccess, showInfo } = useToast();
-    const [showFilters, setShowFilters] = useState(false);
+ 
+  
+  const { showSuccess, showInfo } = useToast();
+  const [showFilters, setShowFilters] = useState(false);
     const [showSidePanel, setShowSidePanel] = useState(false);
     const [currentProfileIndex, setCurrentProfileIndex] = useState(0);
     const [filteredProfiles, setFilteredProfiles] = useState<User[] | null>(null);
@@ -32,21 +31,21 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const [isExhausted, setIsExhausted] = useState(false);
     const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
 
-    // Fetch real potential matches from backend
-    const { 
-        data: profiles, 
-        loading: matchesLoading, 
-        error: matchesError, 
-        refetch 
-    } = usePotentialMatches();
+  // Fetch real potential matches from backend
+  const { 
+    data: profiles, 
+    loading: matchesLoading, 
+    error: matchesError, 
+    refetch 
+  } = usePotentialMatches();
 
-    // Note: userProfile is now fetching the currently logged-in user's *latest* profile data
-    const { data: userProfile, loading: userLoading } = useUserProfile(); 
+  // Note: userProfile is now fetching the currently logged-in user's *latest* profile data
+  const { data: userProfile, loading: userLoading } = useUserProfile(); 
 
     const { likeUser, passUser } = useMatching();
     const { stories, loading: storiesLoading, createStory, markStorySeen, likeStory, getStoryLikes, replyToStory, deleteStory } = useStories();
 
-    // Use the data from useUserProfile if available, otherwise use the prop
+  // Use the data from useUserProfile if available, otherwise use the prop
     const currentUserData = userProfile || activeUser;
     const userName = currentUserData.name || "User";
     const userImage = currentUserData.profilePhoto1 || undefined; // Uses profilePhoto1 from the User interface
@@ -111,19 +110,19 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
         setIsExhausted(false);
     }, [filteredProfiles, activeProfiles]);
 
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            setFilteredProfiles(null);
-        };
-    }, []);
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      setFilteredProfiles(null);
+    };
+  }, []);
 
-    // Show loading state while fetching matches or refreshing the token.
+  // Show loading state while fetching matches or refreshing the token.
     if (matchesLoading || userLoading) {
         return <HeartBeatLoader message="Preparing your matches..." />;
     }
 
-    // Handle error state for profiles
+  // Handle error state for profiles
     if (matchesError) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white flex items-center justify-center">
@@ -134,11 +133,11 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
                         className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
                     >
                         Try Again
-                    </button>
-                </div>
-            </div>
-        );
-    }
+          </button>
+        </div>
+      </div>
+    );
+  }
 
     // Use a safe, non-asserted way to define the current profile
     const currentProfile = !isExhausted && activeProfiles ? activeProfiles[currentProfileIndex] : undefined; 
@@ -168,16 +167,16 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
         await refetch();
     };
 
-    const handleLike = async () => {
-        // 🚨 CRITICAL FIX: Use currentProfile?.id OR currentProfile?._id
-        const userIdToLike = currentProfile?.id || currentProfile?._id;
-        
-        if (!userIdToLike) {
-            console.warn("No user ID found to like. Skipping API call.");
-            goToNextProfile(); // Move to the next profile placeholder
-            return;
-        }
-        
+  const handleLike = async () => {
+    //  CRITICAL FIX: Use currentProfile?.id OR currentProfile?._id
+    const userIdToLike = currentProfile?.id || currentProfile?._id;
+    
+    if (!userIdToLike) {
+      console.warn("No user ID found to like. Skipping API call.");
+      goToNextProfile(); // Move to the next profile placeholder
+      return;
+    }
+    
             try {
                 // Note: userIdToLike might be an ObjectId object, but JS will convert it to a string for the API call.
                 await likeUser(userIdToLike);
@@ -187,38 +186,31 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
             } catch (error) {
                 console.error('Failed to like user:', error);
             }
-    };
+  };
 
-    const handlePass = async () => {
-        // 🚨 CRITICAL FIX: Use currentProfile?.id OR currentProfile?._id
-        const userIdToPass = currentProfile?.id || currentProfile?._id;
-        
-        if (!userIdToPass) {
-            console.warn("No user ID found to pass. Skipping API call.");
-            goToNextProfile(); // Move to the next profile placeholder
-            return;
-        }
-        
-        try {
-            await passUser(userIdToPass);
-            console.log(`Passed on profile ${userIdToPass}`);
-            goToNextProfile();
-        } catch (error) {
-            console.error('Failed to pass user:', error);
-            goToNextProfile(); // Always move on even if API fails
-        }
-    };
+  const handlePass = async () => {
+    //  CRITICAL FIX: Use currentProfile?.id OR currentProfile?._id
+    const userIdToPass = currentProfile?.id || currentProfile?._id;
+    
+    if (!userIdToPass) {
+      console.warn("No user ID found to pass. Skipping API call.");
+      goToNextProfile(); // Move to the next profile placeholder
+      return;
+    }
+    
+    try {
+      await passUser(userIdToPass);
+      console.log(`Passed on profile ${userIdToPass}`);
+      goToNextProfile();
+    } catch (error) {
+      console.error('Failed to pass user:', error);
+      goToNextProfile(); // Always move on even if API fails
+    }
+  };
 
 
-    const handleMessage = () => {
-        // 🚨 FIX: Safely check for required data using fallback
-        const profileId = currentProfile?.id || currentProfile?._id;
-        if (profileId && currentProfile?.name) { 
-            navigate(`/messages?profileId=${profileId}&profileName=${encodeURIComponent(currentProfile.name)}`);
-        }
-    };
-
-    const handleApplyFilters = async (filters: any) => {
+ 
+const handleApplyFilters = async (filters: any) => {
         setIsLoadingFilters(true);
         try {
             const results = await API.Discovery.filterProfiles(filters); 
@@ -232,17 +224,17 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
         }
     };
 
-    return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white pb-20 no-horizontal-scroll dashboard-main">
-            {isLoadingFilters && <HeartBeatLoader message="Applying filters..." />}
-            
-            {/* Desktop Layout */}
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white pb-20 no-horizontal-scroll dashboard-main">
+      {isLoadingFilters && <HeartBeatLoader message="Applying filters..." />}
+      
+      {/* Desktop Layout */}
                 <DesktopLayout
-                userName={userName}
-                userImage={userImage}
-                user={currentUserData} 
-                showFilters={showFilters}
-                showSidePanel={showSidePanel}
+        userName={userName}
+        userImage={userImage}
+        user={currentUserData} 
+        showFilters={showFilters}
+        showSidePanel={showSidePanel}
                     onToggleFilters={() => setShowFilters(!showFilters)}
                     onToggleSidePanel={() => setShowSidePanel(!showSidePanel)}
                     topContent={
@@ -264,7 +256,6 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
                         onGoBack={() => setCurrentProfileIndex(Math.max(0, currentProfileIndex - 1))}
                         onLike={handleLike}
                         onPass={handlePass}
-                        onMessage={handleMessage}
                         noProfilesTitle="No more profiles right now"
                         noProfilesDescription="You have reached the end of your potential matches. Check back later for new people."
                         noProfilesActionLabel="Check again"
@@ -272,13 +263,13 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
                     />
                 </DesktopLayout>
 
-            {/* Mobile Layout */}
+      {/* Mobile Layout */}
                 <MobileLayout
-                userName={userName}
-                userImage={userImage}
-                user={currentUserData} 
-                showFilters={showFilters}
-                showSidePanel={showSidePanel}
+        userName={userName}
+        userImage={userImage}
+        user={currentUserData} 
+        showFilters={showFilters}
+        showSidePanel={showSidePanel}
                     onToggleFilters={() => setShowFilters(!showFilters)}
                     onToggleSidePanel={() => setShowSidePanel(!showSidePanel)}
                     topContent={
@@ -300,7 +291,6 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
                         onGoBack={() => setCurrentProfileIndex(Math.max(0, currentProfileIndex - 1))}
                         onLike={handleLike}
                         onPass={handlePass}
-                        onMessage={handleMessage}
                         noProfilesTitle="No more profiles right now"
                         noProfilesDescription="You have reached the end of your potential matches. Check back later for new people."
                         noProfilesActionLabel="Check again"
@@ -308,17 +298,18 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
                     />
                 </MobileLayout>
 
-            {/* Overlay Panels */}
-            <OverlayPanels
-                showFilters={showFilters}
-                showSidePanel={showSidePanel}
-                userName={userName}
-                userImage={userImage}
-                user={currentUserData} 
-                onCloseFilters={() => setShowFilters(false)}
-                onCloseSidePanel={() => setShowSidePanel(false)}
-                onApplyFilters={handleApplyFilters}
-            />
-        </div>
-    );
+      {/* Overlay Panels */}
+      <OverlayPanels
+        showFilters={showFilters}
+        showSidePanel={showSidePanel}
+        userName={userName}
+        userImage={userImage}
+        user={currentUserData} 
+        onCloseFilters={() => setShowFilters(false)}
+        onCloseSidePanel={() => setShowSidePanel(false)}
+        onApplyFilters={handleApplyFilters}
+      />
+    </div>
+  );
 };
+

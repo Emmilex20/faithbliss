@@ -30,6 +30,7 @@ import uploadRoutes from './routes/uploadRoutes';
 import photoRoutes from './routes/photoRoutes';
 import supportRoutes from './routes/supportRoutes';
 import storyRoutes from './routes/storyRoutes';
+import { startStoryCleanupService } from './services/storyCleanupService';
 
 
 const app = express();
@@ -139,6 +140,8 @@ app.use((err: any, req: Request, res: Response, next: any) => {
 // Start server
 connectDB().then(() => {
   httpServer.listen(PORT, () => {
+    startStoryCleanupService();
     console.log(`⚡ Server running on port ${PORT} (HTTP + WebSocket)`);
   });
 });
+
