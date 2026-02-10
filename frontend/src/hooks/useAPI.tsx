@@ -11,12 +11,12 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import type { GetUsersResponse } from '@/services/api'; 
 import type { Match } from "../types/Match";
 
- // ✅ Adjusted path
+ // Ã¢Å“â€¦ Adjusted path
 
 interface ApiState<T> {
-  data: T | null;
-  loading: boolean;
-  error: string | null;
+  data: T | null;
+  loading: boolean;
+  error: string | null;
 }
 
 interface UseApiOptions {
@@ -28,8 +28,8 @@ interface UseApiOptions {
 }
 
 export interface ConversationMessagesResponse {
-  match: Match;
-  messages: Message[];
+  match: Match;
+  messages: Message[];
 }
 
 // Global request cache to prevent duplicate requests
@@ -43,16 +43,38 @@ import type { Message } from '@/services/api';
 import { useWebSocket } from './useWebSocket';
 import type { NotificationPayload } from '../services/WebSocketService'; 
 
+export interface StoryItem {
+  id: string;
+  mediaUrl: string;
+  mediaType: 'image' | 'video';
+  caption?: string;
+  hasSeen?: boolean;
+  seenByCount?: number;
+  likesCount?: number;
+  likedByCurrentUser?: boolean;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface StoryGroup {
+  authorId: string;
+  authorName: string;
+  authorPhoto?: string;
+  isCurrentUser: boolean;
+  latestCreatedAt: string;
+  unseenCount?: number;
+  items: StoryItem[];
+}
 interface ConversationSummary {
-  id: string; // matchId
-  otherUser: {
-    id: string;
-    name: string;
-    profilePhoto1: string;
-  };
-  lastMessage: Message | null;
-  unreadCount: number;
-  updatedAt: string; // ISO date string
+  id: string; // matchId
+  otherUser: {
+    id: string;
+    name: string;
+    profilePhoto1: string;
+  };
+  lastMessage: Message | null;
+  unreadCount: number;
+  updatedAt: string; // ISO date string
 }
 
 // Generic hook for API calls
@@ -61,7 +83,6 @@ export function useApi<T>(
   dependencies: unknown[] = [],
   options: UseApiOptions = { showErrorToast: false }
 ) {
-  console.log("🟦 useApi init with deps:", dependencies);
 
   const [state, setState] = useState<ApiState<T>>({
     data: null,
@@ -93,7 +114,6 @@ export function useApi<T>(
       const cached = requestCache.get(cacheKey)!;
       if (Date.now() - cached.timestamp < cacheTime) {
         if (isMountedRef.current) {
-          console.log("✅ Using cached data");
           setState({ data: cached.data, loading: false, error: null });
         }
         return cached.data;
@@ -108,13 +128,11 @@ export function useApi<T>(
     // Cancel previous request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
-      console.log("⚠️ Previous request aborted");
     }
 
     abortControllerRef.current = new AbortController();
 
     if (isMountedRef.current) {
-      console.log("🔄 Loading set true");
       setState(prev => ({ ...prev, loading: true, error: null }));
     }
 
@@ -122,7 +140,6 @@ export function useApi<T>(
     const requestPromise = (async () => {
       try {
         const data = await apiCall();
-        console.log("✅ API call successful:", cacheKey, data);
 
         if (!isMountedRef.current) return data;
 
@@ -137,10 +154,10 @@ export function useApi<T>(
 
         return data;
       } catch (error: any) {
-        console.error("❌ API call failed:", cacheKey, error);
+        console.error("Ã¢ÂÅ’ API call failed:", cacheKey, error);
         if (!isMountedRef.current) throw error;
 
-        // ✅ FIX: Check for 'Unauthorized' message thrown by api-client.ts on 401
+        // Ã¢Å“â€¦ FIX: Check for 'Unauthorized' message thrown by api-client.ts on 401
         if (error?.message?.includes('Unauthorized')) {
           showError('Your session has expired. Please log in again.', 'Authentication Error');
           if (redirectOnUnauthorized) {
@@ -169,12 +186,10 @@ export function useApi<T>(
   }, [apiCall, cacheKey, cacheTime, showError, showSuccess, showErrorToast, showSuccessToast, navigate]);
 
   useEffect(() => {
-    console.log("🎬 useApi effect triggered for deps:", dependencies);
     isMountedRef.current = true;
 
     if (immediate && apiCall) {
-      console.log("▶️ Immediate execution triggered");
-      execute().catch(err => console.debug('API call error:', err));
+      execute().catch(() => null);
     }
 
     return () => {
@@ -200,21 +215,16 @@ export function useApi<T>(
 
 // Hook for user profile
 export function useUserProfile(currentUserId?: string, currentUserEmail?: string) {
-  console.log("👤 useUserProfile init", { currentUserId, currentUserEmail });
   const { accessToken, isAuthenticated } = useRequireAuth();
   const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
 
   const apiCall = useCallback(async () => {
-    console.log("📡 Fetching /api/users/me");
     if (!accessToken) {
       throw new Error('Authentication required. Please log in.');
     }
 
     const response = await apiClient.User.getMe();
-    console.log("✅ Response from /api/users/me:", response);
-
     if (Array.isArray(response)) {
-      console.warn("⚠️ useUserProfile: API returned array instead of object", response);
       if (currentUserId) {
         const found = response.find((u: any) => String(u.id) === String(currentUserId) || String(u.firebaseUid) === String(currentUserId));
         if (found) return found;
@@ -224,7 +234,6 @@ export function useUserProfile(currentUserId?: string, currentUserEmail?: string
         if (foundByEmail) return foundByEmail;
       }
       if (response.length === 1) return response[0];
-      console.warn('⚠️ Multiple users, no match found');
       return null;
     }
 
@@ -242,13 +251,11 @@ export function useUserProfile(currentUserId?: string, currentUserEmail?: string
 
 // Hook for potential matches
 export function usePotentialMatches() {
-  console.log("💘 usePotentialMatches triggered");
   const { accessToken, isAuthenticated } = useRequireAuth();
   const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
 
   const apiCall = useCallback(() => {
     if (!accessToken) throw new Error('Authentication required.');
-    console.log("📡 Fetching potential matches");
     return apiClient.Match.getPotentialMatches();
   }, [apiClient, accessToken]);
 
@@ -261,7 +268,6 @@ export function usePotentialMatches() {
 
 // Hook for matches
 export function useMatches() {
-  console.log("🧩 useMatches init");
   const { accessToken } = useRequireAuth();
   const api = getApiClient(accessToken);
   const [mutual, setMutual] = useState<any[]>([]);
@@ -271,7 +277,6 @@ export function useMatches() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchMatches = async () => {
-    console.log("📡 Fetching all match sections...");
     if (!accessToken) return;
 
     try {
@@ -284,13 +289,12 @@ export function useMatches() {
         api.Match.getReceivedMatches(),
       ]);
 
-      console.log("✅ Match data fetched:", { mutualData, sentData, receivedData });
 
       setMutual(mutualData || []);
       setSent(sentData || []);
       setReceived(receivedData || []);
     } catch (err: any) {
-      console.error("❌ Error fetching matches:", err);
+      console.error("Ã¢ÂÅ’ Error fetching matches:", err);
       setError(err.message || "Failed to fetch matches");
     } finally {
       setLoading(false);
@@ -311,15 +315,13 @@ export function useMatches() {
   };
 }
 
-// ✅ Mutual, Sent, Received match hooks with logs
+// Ã¢Å“â€¦ Mutual, Sent, Received match hooks with logs
 export function useMutualMatches() {
-  console.log("🤝 useMutualMatches triggered");
   const { accessToken, isAuthenticated } = useRequireAuth();
   const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
 
   const apiCall = useCallback(() => {
     if (!accessToken) throw new Error('Authentication required.');
-    console.log("📡 Fetching mutual matches");
     return apiClient.Match.getMutualMatches();
   }, [apiClient, accessToken]);
 
@@ -331,13 +333,11 @@ export function useMutualMatches() {
 }
 
 export function useSentMatches() {
-  console.log("📤 useSentMatches triggered");
   const { accessToken, isAuthenticated } = useRequireAuth();
   const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
 
   const apiCall = useCallback(() => {
     if (!accessToken) throw new Error('Authentication required.');
-    console.log("📡 Fetching sent matches");
     return apiClient.Match.getSentMatches();
   }, [apiClient, accessToken]);
 
@@ -349,13 +349,11 @@ export function useSentMatches() {
 }
 
 export function useReceivedMatches() {
-  console.log("📥 useReceivedMatches triggered");
   const { accessToken, isAuthenticated } = useRequireAuth();
   const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
 
   const apiCall = useCallback(() => {
     if (!accessToken) throw new Error('Authentication required.');
-    console.log("📡 Fetching received matches");
     return apiClient.Match.getReceivedMatches();
   }, [apiClient, accessToken]);
 
@@ -368,172 +366,215 @@ export function useReceivedMatches() {
 
 // Hook for liking/passing users (No change needed)
 export function useMatching() {
-  const { accessToken } = useRequireAuth();
-  const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
-  const { showSuccess, showError, showInfo } = useToast();
+  const { accessToken } = useRequireAuth();
+  const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
+  const { showSuccess, showError, showInfo } = useToast();
 
-  // Store toast refs to avoid adding them to dependencies
-  const toastRef = useRef({ showSuccess, showError, showInfo });
+  // Store toast refs to avoid adding them to dependencies
+  const toastRef = useRef({ showSuccess, showError, showInfo });
 
-  // Update refs when they change, but don't trigger callback recreation
-  useEffect(() => {
-    toastRef.current = { showSuccess, showError, showInfo };
-  }, [showSuccess, showError, showInfo]);
+  // Update refs when they change, but don't trigger callback recreation
+  useEffect(() => {
+    toastRef.current = { showSuccess, showError, showInfo };
+  }, [showSuccess, showError, showInfo]);
 
-  const likeUser = useCallback(async (userId: string) => {
-    if (!accessToken) {
-      throw new Error('Authentication required. Please log in.');
-    }
-    try {
-      const result = await apiClient.Match.likeUser(userId);
-      toastRef.current.showSuccess(result.isMatch ? '💕 It\'s a match!' : '👍 Like sent!');
-      return result;
-    } catch (error: any) {
-      if (error.message && error.message.includes('User already liked')) {
-        toastRef.current.showInfo('You\'ve already liked this profile!', 'Already Liked');
-        return; // Do not re-throw, just inform the user
-      }
-      toastRef.current.showError('Failed to like user', 'Error');
-      throw error; // Re-throw other errors
-    }
-  }, [apiClient, accessToken]);
+  const likeUser = useCallback(async (userId: string) => {
+    if (!accessToken) {
+      throw new Error('Authentication required. Please log in.');
+    }
+    try {
+      const result = await apiClient.Match.likeUser(userId);
+      toastRef.current.showSuccess(result.isMatch ? 'Ã°Å¸â€™â€¢ It\'s a match!' : 'Ã°Å¸â€˜Â Like sent!');
+      return result;
+    } catch (error: any) {
+      if (error.message && error.message.includes('User already liked')) {
+        toastRef.current.showInfo('You\'ve already liked this profile!', 'Already Liked');
+        return; // Do not re-throw, just inform the user
+      }
+      toastRef.current.showError('Failed to like user', 'Error');
+      throw error; // Re-throw other errors
+    }
+  }, [apiClient, accessToken]);
 
-  const passUser = useCallback(async (userId: string) => {
-    if (!accessToken) {
-      throw new Error('Authentication required. Please log in.');
-    }
-    try {
-      await apiClient.Match.passUser(userId);
-      return true;
-    } catch (error) {
-      toastRef.current.showError('Failed to pass user', 'Error');
-      throw error;
-    }
-  }, [apiClient, accessToken]);
+  const passUser = useCallback(async (userId: string) => {
+    if (!accessToken) {
+      throw new Error('Authentication required. Please log in.');
+    }
+    try {
+      await apiClient.Match.passUser(userId);
+      return true;
+    } catch (error) {
+      toastRef.current.showError('Failed to pass user', 'Error');
+      throw error;
+    }
+  }, [apiClient, accessToken]);
 
-  return { likeUser, passUser };
+  return { likeUser, passUser };
 }
 
 // Hook for completing onboarding
 export function useOnboarding() {
-  // 🛑 NOTE: completeOnboarding API function is REMOVED from apiClient.
-  // The actual Firestore logic should be in useAuth's completeOnboarding method.
-  // This hook is now just a stub for client-side API logic if needed.
-  const { accessToken, refetchUser } = useRequireAuth();
-  const { showSuccess, showError } = useToast();
+  // Ã°Å¸â€ºâ€˜ NOTE: completeOnboarding API function is REMOVED from apiClient.
+  // The actual Firestore logic should be in useAuth's completeOnboarding method.
+  // This hook is now just a stub for client-side API logic if needed.
+  const { accessToken, refetchUser } = useRequireAuth();
+  const { showSuccess, showError } = useToast();
 
-  const toastRef = useRef({ showSuccess, showError });
+  const toastRef = useRef({ showSuccess, showError });
 
-  useEffect(() => {
-    toastRef.current = { showSuccess, showError };
-  }, [showSuccess, showError]);
+  useEffect(() => {
+    toastRef.current = { showSuccess, showError };
+  }, [showSuccess, showError]);
 
-  // This is a placeholder now, as the main onboarding logic is in useAuth.
-  const completeOnboarding = useCallback(async () => {
-    if (!accessToken) {
-      throw new Error('Authentication required. Please log in.');
-    }
-    try {
-      // 🛑 ERROR: This line is still incorrect if you intended to use the old API.
+  // This is a placeholder now, as the main onboarding logic is in useAuth.
+  const completeOnboarding = useCallback(async () => {
+    if (!accessToken) {
+      throw new Error('Authentication required. Please log in.');
+    }
+    try {
+      // Ã°Å¸â€ºâ€˜ ERROR: This line is still incorrect if you intended to use the old API.
       // If you are migrating the API call to Firestore, this function should 
       // be called from useAuth, and this hook should be removed/re-written 
       // if it's not performing any API calls.
       // Since the user is asking for the fully updated code, I am commenting out 
       // the now-deleted API call, as per your previous request.
-      // const result = await apiClient.Auth.completeOnboarding(onboardingData); 
+      // const result = await apiClient.Auth.completeOnboarding(onboardingData); 
       
       // *** Assuming the actual API call logic (if any) is now handled elsewhere ***
       const result = { success: true, profilePhotos: { photo1: '' } }; // Placeholder result
 
-      if (refetchUser) {
-        await refetchUser(); 
-      }
+      if (refetchUser) {
+        await refetchUser(); 
+      }
 
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-      toastRef.current.showSuccess('Profile setup complete! Welcome to FaithBliss! 🎉', 'Ready to Find Love');
-      return result;
-    } catch (error: any) {
-      console.error('Onboarding error:', error);
-      
-      if (error?.message?.includes('Unauthorized')) {
-        toastRef.current.showError('Your session has expired. Please login again.', 'Authentication Error');
-      } else {
-        toastRef.current.showError('Failed to complete profile setup. Please try again.', 'Setup Error');
-      }
-      
-      throw error;
-    }
-  }, [accessToken, refetchUser]); // apiClient removed from dependencies as it's not used in the body
+      toastRef.current.showSuccess('Profile setup complete! Welcome to FaithBliss! Ã°Å¸Å½â€°', 'Ready to Find Love');
+      return result;
+    } catch (error: any) {
+      console.error('Onboarding error:', error);
+      
+      if (error?.message?.includes('Unauthorized')) {
+        toastRef.current.showError('Your session has expired. Please login again.', 'Authentication Error');
+      } else {
+        toastRef.current.showError('Failed to complete profile setup. Please try again.', 'Setup Error');
+      }
+      
+      throw error;
+    }
+  }, [accessToken, refetchUser]); // apiClient removed from dependencies as it's not used in the body
 
-  return { completeOnboarding };
+  return { completeOnboarding };
 }
 
 
 // Hook for WebSocket connection
 export function useConversations() {
-  const { pathname } = useLocation(); 
-  console.log("useConversations")
-  const { accessToken, isAuthenticated } = useRequireAuth();
-  
-  const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
-  
-  const apiCall = useCallback(async (): Promise<ConversationSummary[]> => {
-    if (!accessToken) {
-      throw new Error('Authentication required. Please log in.');
-    }
-    const resp = await apiClient.Message.getMatchConversations();
-    console.log("useConversations: ",resp)
-    return resp;
-  }, [apiClient, accessToken]);
+  const { pathname } = useLocation();
+  const { accessToken, isAuthenticated } = useRequireAuth();
+  const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
 
-  const { data, loading, error, refetch } = useApi(
-    isAuthenticated ? apiCall : null,
-    [accessToken, isAuthenticated],
-    { immediate: true }
-  );
+  const [data, setData] = useState<ConversationSummary[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
 
-  // Re-fetch when user navigates back to `/messages`
-  useEffect(() => {
-    if (pathname === '/messages') {
-      refetch();
-    }
-  }, [pathname, refetch]);
+  const loadPage = useCallback(async (cursor: string | null = null, append = false) => {
+    if (!accessToken || !isAuthenticated) return;
 
-  return { data, loading, error, refetch };
+    try {
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+
+      const resp = await apiClient.Message.getMatchConversations({ limit: 25, cursor });
+      const items = (resp?.items || []) as ConversationSummary[];
+
+      setData((prev) => {
+        if (!append || !prev) return items;
+        const merged = [...prev, ...items];
+        const seen = new Set<string>();
+        return merged.filter((item) => {
+          const key = item.id;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      });
+
+      setNextCursor(resp?.nextCursor || null);
+      setHasMore(Boolean(resp?.hasMore));
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load conversations');
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, [apiClient, accessToken, isAuthenticated]);
+
+  const refetch = useCallback(async () => {
+    await loadPage(null, false);
+  }, [loadPage]);
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor || loadingMore || loading) return;
+    await loadPage(nextCursor, true);
+  }, [nextCursor, loadingMore, loading, loadPage]);
+
+  useEffect(() => {
+    if (isAuthenticated && accessToken) {
+      loadPage(null, false);
+    } else {
+      setData(null);
+      setNextCursor(null);
+      setHasMore(false);
+      setError(null);
+    }
+  }, [isAuthenticated, accessToken, loadPage]);
+
+  useEffect(() => {
+    if (pathname === '/messages' && isAuthenticated && accessToken) {
+      refetch();
+    }
+  }, [pathname, refetch, isAuthenticated, accessToken]);
+
+  return { data, loading, loadingMore, error, hasMore, refetch, loadMore };
 }
 
 // Hook for conversation messages (No change needed other than imports)
 export function useConversationMessages(
-  matchId: string,
-  otherUserId?: string,
-  page: number = 1,
-  limit: number = 50
+  matchId: string,
+  otherUserId?: string,
+  page: number = 1,
+  limit: number = 50
 ): {
-  execute: () => Promise<ConversationMessagesResponse>;
-  refetch: () => Promise<ConversationMessagesResponse>;
-  data: ConversationMessagesResponse | null;
-  loading: boolean;
-  error: string | null;
+  execute: () => Promise<ConversationMessagesResponse>;
+  refetch: () => Promise<ConversationMessagesResponse>;
+  data: ConversationMessagesResponse | null;
+  loading: boolean;
+  error: string | null;
 } {
-  console.log("useConversationMessages: ", otherUserId)
-  const { accessToken, isAuthenticated } = useRequireAuth();
-  const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
-  
-  const apiCall = useCallback(async (): Promise<ConversationMessagesResponse> => {
-    if (!accessToken) throw new Error('Authentication required');
-    
-    // Return the full response from backend
-    const response = await apiClient.Message.getCreateMatchMessages(matchId, otherUserId, page, limit);
-    console.log("useConversationMessages: ", response)
-    return response; // should be { match: ..., messages: [...] }
-  }, [apiClient, accessToken, matchId, otherUserId, page, limit]);
+  const { accessToken, isAuthenticated } = useRequireAuth();
+  const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
+  
+  const apiCall = useCallback(async (): Promise<ConversationMessagesResponse> => {
+    if (!accessToken) throw new Error('Authentication required');
+    
+    // Return the full response from backend
+    const response = await apiClient.Message.getCreateMatchMessages(matchId, otherUserId, page, limit);
+    return response; // should be { match: ..., messages: [...] }
+  }, [apiClient, accessToken, matchId, otherUserId, page, limit]);
 
-  return useApi<ConversationMessagesResponse>(
-    isAuthenticated && matchId ? apiCall : null,
-    [accessToken, isAuthenticated, matchId, otherUserId, page, limit],
-    { immediate: !!(isAuthenticated && matchId) }
-  );
+  return useApi<ConversationMessagesResponse>(
+    isAuthenticated && matchId ? apiCall : null,
+    [accessToken, isAuthenticated, matchId, otherUserId, page, limit],
+    { immediate: !!(isAuthenticated && matchId) }
+  );
 }
 
 // Hook for notifications (No change needed other than imports)
@@ -629,28 +670,95 @@ export function useNotificationUnreadCount() {
   return hook;
 }
 
+
+export function useStories() {
+  const { accessToken, isAuthenticated } = useRequireAuth();
+  const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
+  const { showSuccess, showError } = useToast();
+
+  const apiCall = useCallback(() => apiClient.Story.getFeed(), [apiClient]);
+  const feedHook = useApi<{ stories: StoryGroup[] }>(
+    isAuthenticated ? apiCall : null,
+    [accessToken, isAuthenticated, 'stories'],
+    { immediate: isAuthenticated, showErrorToast: false, redirectOnUnauthorized: false, cacheTime: 60 * 1000 }
+  );
+
+  const createStory = useCallback(async (payload: FormData) => {
+    try {
+      const result = await apiClient.Story.create(payload);
+      showSuccess('Story posted');
+      await feedHook.refetch();
+      return result;
+    } catch (error) {
+      showError('Failed to post story', 'Story Error');
+      throw error;
+    }
+  }, [apiClient, feedHook, showError, showSuccess]);
+
+  const markStorySeen = useCallback(async (storyId: string) => {
+    try {
+      await apiClient.Story.markSeen(storyId);
+    } catch {
+      // Best effort only. UI keeps local seen state.
+    }
+  }, [apiClient]);
+
+  const deleteStory = useCallback(async (storyId: string) => {
+    try {
+      await apiClient.Story.delete(storyId);
+      showSuccess('Story deleted');
+      await feedHook.refetch();
+    } catch (error) {
+      showError('Failed to delete story', 'Story Error');
+      throw error;
+    }
+  }, [apiClient, feedHook, showError, showSuccess]);
+
+  const likeStory = useCallback(async (storyId: string) => {
+    return apiClient.Story.like(storyId);
+  }, [apiClient]);
+
+  const getStoryLikes = useCallback(async (storyId: string) => {
+    return apiClient.Story.getLikes(storyId);
+  }, [apiClient]);
+
+  const replyToStory = useCallback(async (storyId: string, content: string) => {
+    return apiClient.Story.reply(storyId, content);
+  }, [apiClient]);
+
+  return {
+    ...feedHook,
+    stories: feedHook.data?.stories || [],
+    createStory,
+    markStorySeen,
+    likeStory,
+    getStoryLikes,
+    replyToStory,
+    deleteStory,
+  };
+}
 // Hook for fetching all users (No change needed)
 export function useAllUsers(filters?: {
-  page?: number;
-  limit?: number;
-  search?: string;
+  page?: number;
+  limit?: number;
+  search?: string;
 }) {
-  const { accessToken, isAuthenticated } = useRequireAuth();
-  const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
+  const { accessToken, isAuthenticated } = useRequireAuth();
+  const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
 
-  const apiCall = useCallback(() => {
-    if (!accessToken) {
-      throw new Error('Authentication required. Please log in.');
-    }
+  const apiCall = useCallback(() => {
+    if (!accessToken) {
+      throw new Error('Authentication required. Please log in.');
+    }
 
-    const normalizedFilters = {
-      page: filters?.page || 1,
-      limit: Math.min(filters?.limit || 20, 20), // Cap at 20 to reduce memory
-      search: filters?.search || undefined,
-    };
+    const normalizedFilters = {
+      page: filters?.page || 1,
+      limit: Math.min(filters?.limit || 20, 20), // Cap at 20 to reduce memory
+      search: filters?.search || undefined,
+    };
 
-    return apiClient.User.getAllUsers(normalizedFilters);
-  }, [apiClient, accessToken, filters?.page, filters?.limit, filters?.search]);
+    return apiClient.User.getAllUsers(normalizedFilters);
+  }, [apiClient, accessToken, filters?.page, filters?.limit, filters?.search]);
 
   return useApi<GetUsersResponse>(
     isAuthenticated ? apiCall : null,
@@ -661,26 +769,32 @@ export function useAllUsers(filters?: {
 
 // Hook for unread message count (No change needed)
 export function useUnreadCount() {
-  const { accessToken, isAuthenticated } = useRequireAuth();
-  const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
+  const { accessToken, isAuthenticated } = useRequireAuth();
+  const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
 
-  const apiCall = useCallback(() => {
-    if (!accessToken) {
-      throw new Error('Authentication required. Please log in.');
-    }
-    return apiClient.Message.getUnreadCount();
-  }, [apiClient, accessToken]);
+  const apiCall = useCallback(() => {
+    if (!accessToken) {
+      throw new Error('Authentication required. Please log in.');
+    }
+    return apiClient.Message.getUnreadCount();
+  }, [apiClient, accessToken]);
 
-  return useApi<{ count: number }>(
-    isAuthenticated ? apiCall : null,
-    [accessToken, isAuthenticated],
-    { immediate: isAuthenticated }
-  );
+  return useApi<{ count: number }>(
+    isAuthenticated ? apiCall : null,
+    [accessToken, isAuthenticated],
+    { immediate: isAuthenticated }
+  );
 }
 
 export function useClearApiCache() {
-  return useCallback(() => {
-    requestCache.clear();
-    activeRequests.clear();
-  }, []);
+  return useCallback(() => {
+    requestCache.clear();
+    activeRequests.clear();
+  }, []);
 }
+
+
+
+
+
+

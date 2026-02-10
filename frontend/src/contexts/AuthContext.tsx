@@ -8,27 +8,13 @@ type AuthContextType = AuthHookReturn;
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const auth = useAuth(); 
+    const auth = useAuth(); 
 
-    if (auth.isLoading) {
-        // --- LOG (C) ---
-        console.log("C. AUTH_CONTEXT: App is loading user session...");
-        return <div className="p-8 text-center text-gray-500">Initializing session...</div>;
-    }
-    
-    // --- LOG (D) ---
-    console.log("D. AUTH_CONTEXT: Session loaded and ready.");
-    if (auth.user) {
-        console.log("   -> IsAuthenticated:", auth.isAuthenticated, "Onboarding:", auth.user.onboardingCompleted);
-    } else {
-        console.log("   -> IsAuthenticated: false (user null).");
-    }
-
-    return (
-        <AuthContext.Provider value={auth}>
-            {children}
-        </AuthContext.Provider>
-    );
+    return (
+        <AuthContext.Provider value={auth}>
+          {children}
+        </AuthContext.Provider>
+    );
 };
 
 // eslint-disable-next-line react-refresh/only-export-components

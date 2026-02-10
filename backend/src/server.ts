@@ -29,6 +29,7 @@ import { protect } from './middleware/authMiddleware';
 import uploadRoutes from './routes/uploadRoutes';
 import photoRoutes from './routes/photoRoutes';
 import supportRoutes from './routes/supportRoutes';
+import storyRoutes from './routes/storyRoutes';
 
 
 const app = express();
@@ -116,6 +117,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/support', protect, supportRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/users', photoRoutes);
+app.use('/api/stories', protect, storyRoutes);
 
 // Central Error Handler (Remains unchanged)
 app.use((err: any, req: Request, res: Response, next: any) => {

@@ -279,6 +279,14 @@ const getMatchConversations = async (req: Request, res: Response) => {
   if (!currentUser) return;
 
   const currentUid = currentUser.id;
+  const requestedLimit = Number(req.query.limit);
+  const safeLimit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.floor(requestedLimit), 1), 50)
+    : 25;
+  const requestedCursor = Number(req.query.cursor);
+  const safeCursor = Number.isFinite(requestedCursor)
+    ? Math.max(Math.floor(requestedCursor), 0)
+    : 0;
 
   try {
     const matchIds = currentUser.matches || [];
@@ -288,9 +296,18 @@ const getMatchConversations = async (req: Request, res: Response) => {
       matchIds.map((id) => matchesCollection.doc(id).get())
     );
 
-    const matches: IMatch[] = matchDocs
+    const allMatches: IMatch[] = matchDocs
       .filter((doc) => doc.exists)
       .map((doc) => ({ id: doc.id, ...doc.data() } as IMatch));
+
+    // Keep first payload small to improve page load time.
+    const sortedMatches = allMatches
+      .sort(
+        (a, b) =>
+          b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime()
+      );
+
+    const matches = sortedMatches.slice(safeCursor, safeCursor + safeLimit);
 
     const otherUids = matches
       .map((m) => m.users.find((u) => u !== currentUid))
@@ -308,6 +325,19 @@ const getMatchConversations = async (req: Request, res: Response) => {
       }
     });
 
+    // Query unread messages once, then group per match to avoid N+1 unread queries.
+    const unreadSnap = await messagesCollection
+      .where('unreadBy', 'array-contains', currentUid)
+      .get();
+
+    const unreadCountByMatch = new Map<string, number>();
+    unreadSnap.forEach((doc) => {
+      const data = doc.data() as IMessage;
+      const mid = data.matchId;
+      if (!mid) return;
+      unreadCountByMatch.set(mid, (unreadCountByMatch.get(mid) || 0) + 1);
+    });
+
     const conversations = await Promise.all(
       matches.map(async (match) => {
         const lastMessageSnap = await messagesCollection
@@ -320,11 +350,6 @@ const getMatchConversations = async (req: Request, res: Response) => {
         const lastMsg = lastMsgDoc
           ? ({ id: lastMsgDoc.id, ...lastMsgDoc.data() } as IMessage)
           : null;
-
-        const unreadSnap = await messagesCollection
-          .where('matchId', '==', match.id)
-          .where('unreadBy', 'array-contains', currentUid)
-          .get();
 
         const otherUid = match.users.find((u) => u !== currentUid);
         const otherUser = userMap.get(otherUid || '');
@@ -339,7 +364,7 @@ const getMatchConversations = async (req: Request, res: Response) => {
           lastMessage: lastMsg
             ? { content: lastMsg.content, createdAt: lastMsg.createdAt.toDate().toISOString() }
             : null,
-          unreadCount: unreadSnap.size,
+          unreadCount: unreadCountByMatch.get(match.id) || 0,
           updatedAt,
         };
       })
@@ -349,7 +374,16 @@ const getMatchConversations = async (req: Request, res: Response) => {
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
 
-    res.status(200).json(conversations);
+    const nextCursor =
+      safeCursor + matches.length < sortedMatches.length
+        ? String(safeCursor + matches.length)
+        : null;
+
+    res.status(200).json({
+      items: conversations,
+      nextCursor,
+      hasMore: nextCursor !== null,
+    });
   } catch (error) {
     const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
     console.error('Error fetching conversations:', error);

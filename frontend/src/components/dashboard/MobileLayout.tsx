@@ -10,6 +10,7 @@ interface MobileLayoutProps {
   showSidePanel: boolean;
   onToggleFilters: () => void;
   onToggleSidePanel: () => void;
+  topContent?: ReactNode;
   children: ReactNode;
 }
 
@@ -21,6 +22,7 @@ export const MobileLayout = ({
   showSidePanel,
   onToggleFilters,
   onToggleSidePanel,
+  topContent,
   children
 }: MobileLayoutProps) => {
   return (
@@ -30,14 +32,21 @@ export const MobileLayout = ({
         userName={userName}
         userImage={userImage}
         user={user}
+        showFilterButton={true}
         showFilters={showFilters}
         showSidePanel={showSidePanel}
         onToggleFilters={onToggleFilters}
         onToggleSidePanel={onToggleSidePanel}
       />
+
+      {topContent && (
+        <div className="px-2">
+          {topContent}
+        </div>
+      )}
       
       {/* Mobile Profile Display */}
-      <div className="px-2 py-3 h-[calc(100vh-80px)] flex flex-col">
+      <div className="px-2 py-3 h-[calc(100vh-180px)] flex flex-col">
         <div className="flex-1 relative">
           {children}
         </div>

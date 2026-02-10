@@ -25,9 +25,7 @@ import {
 // Assuming these imports are correct for your Vite project structure
 import { useConversations, useConversationMessages } from '@/hooks/useAPI';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { useAuth } from '@/hooks/useAuth';
 import { HeartBeatLoader } from '@/components/HeartBeatLoader';
-import { API } from '@/services/api';
 
 interface OptimizedImageProps {
   src: string;
@@ -66,17 +64,18 @@ const MessagesContent = () => {
   );
   const [newMessage, setNewMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const conversationsListRef = useRef<HTMLDivElement | null>(null);
+  const messagesListRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastRefetchedMatchId = useRef<string | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [typingStatus, setTypingStatus] = useState<Record<string, boolean>>({});
 
-  const { user: authUser } = useAuth();
   const { user: layoutUser } = useAuthContext();
   const [showSidePanel, setShowSidePanel] = useState(false);
-  const layoutName = layoutUser?.name || authUser?.name || 'User';
-  const layoutImage = layoutUser?.profilePhoto1 || authUser?.profilePhoto1 || undefined;
-  const currentUserId = authUser?.id;
+  const layoutName = layoutUser?.name || 'User';
+  const layoutImage = layoutUser?.profilePhoto1 || undefined;
+  const currentUserId = layoutUser?.id;
 
   // Use a local state for messages to allow real-time updates without immediate refetch
   const [localMessagesData, setLocalMessagesData] = useState<ConversationMessagesResponse | null>(null);
@@ -97,20 +96,36 @@ const MessagesContent = () => {
     setLocalMessagesData(fetchedMessages);
     if (fetchedMessages?.match?.id && lastReadMatchId.current !== fetchedMessages.match.id) {
       lastReadMatchId.current = fetchedMessages.match.id;
-      refetch();
     }
   }, [fetchedMessages]);
 
   // Fetch raw conversations data from backend
   const {
-    data: rawConversations, loading, error, refetch
-  } = useConversations() as { data: ConversationSummary[] | null, loading: boolean, error: any, refetch: () => void };
+    data: rawConversations, loading, loadingMore, error, hasMore, refetch, loadMore
+  } = useConversations() as {
+    data: ConversationSummary[] | null;
+    loading: boolean;
+    loadingMore: boolean;
+    error: any;
+    hasMore: boolean;
+    refetch: () => void;
+    loadMore: () => void;
+  };
 
   const webSocketService = useWebSocket();
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
+    const container = messagesListRef.current;
+    if (container) {
+      if (behavior === 'smooth') {
+        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+      } else {
+        container.scrollTop = container.scrollHeight;
+      }
+      return;
+    }
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  }, []);
 
   const realConversations: ConversationSummary[] = Array.isArray(rawConversations) ? rawConversations : [];
 
@@ -138,7 +153,25 @@ const MessagesContent = () => {
   const [localConversations, setLocalConversations] = useState<ConversationSummary[]>([]);
 
   useEffect(() => {
-    setLocalConversations(dedupedConversations);
+    setLocalConversations((prev) => {
+      if (prev.length === dedupedConversations.length) {
+        let same = true;
+        for (let i = 0; i < prev.length; i += 1) {
+          const a = prev[i];
+          const b = dedupedConversations[i];
+          if (
+            a.id !== b.id ||
+            a.updatedAt !== b.updatedAt ||
+            (a.lastMessage?.content || '') !== (b.lastMessage?.content || '')
+          ) {
+            same = false;
+            break;
+          }
+        }
+        if (same) return prev;
+      }
+      return dedupedConversations;
+    });
   }, [dedupedConversations]);
 
   const currentConversation: ConversationSummary | null = useMemo(() => {
@@ -271,12 +304,36 @@ const MessagesContent = () => {
     };
   }, [webSocketService]);
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom when opening/switching a conversation and once messages finish loading.
   useEffect(() => {
-    if (localMessagesData) {
-      scrollToBottom();
-    }
-  }, [localMessagesData?.messages.length]);
+    if (!selectedChat) return;
+    if (conversationLoading) return;
+    if (localMessagesData?.match?.id !== selectedChat) return;
+
+    let raf2 = 0;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const raf1 = requestAnimationFrame(() => {
+      scrollToBottom('auto');
+      raf2 = requestAnimationFrame(() => {
+        scrollToBottom('auto');
+      });
+      t = setTimeout(() => {
+        scrollToBottom('auto');
+      }, 60);
+    });
+
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+      if (t) clearTimeout(t);
+    };
+  }, [
+    selectedChat,
+    conversationLoading,
+    localMessagesData?.match?.id,
+    localMessagesData?.messages.length,
+    scrollToBottom
+  ]);
 
 
   const handleSendMessage = async () => {
@@ -414,18 +471,14 @@ const MessagesContent = () => {
     }
   }, [localConversations, profileIdParam, selectedChat]);
 
-  useEffect(() => {
-    if (!selectedChat || !localMessagesData?.messages?.length) return;
-    if (localMessagesData.match?.id !== selectedChat) return;
-    const unreadIds = localMessagesData.messages
-      .filter(m => !m.isRead && m.senderId !== currentUserId)
-      .map(m => m.id);
-    if (unreadIds.length === 0) return;
-    unreadIds.forEach(id => {
-      API.Message.markMessageAsRead(id).catch(() => null);
-    });
-  }, [selectedChat, localMessagesData, currentUserId]);
-
+  const handleConversationListScroll = useCallback(() => {
+    const el = conversationsListRef.current;
+    if (!el || loadingMore || !hasMore) return;
+    const remaining = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (remaining < 220) {
+      loadMore();
+    }
+  }, [loadingMore, hasMore, loadMore]);
 
   // Show loading state
   if (loading) {
@@ -498,7 +551,11 @@ const MessagesContent = () => {
           </div>
 
           {/* Conversations */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1 min-w-0">
+          <div
+            ref={conversationsListRef}
+            onScroll={handleConversationListScroll}
+            className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1 min-w-0"
+          >
             {filteredConversations.map((conversation) => {
               const matchedUser = conversation.otherUser;
               return (
@@ -545,6 +602,9 @@ const MessagesContent = () => {
                 </button>
               );
             })}
+            {loadingMore && (
+              <div className="text-center text-xs text-gray-400 py-3">Loading more...</div>
+            )}
           </div>
         </div>
 
@@ -596,7 +656,10 @@ const MessagesContent = () => {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4 min-w-0">
+            <div
+              ref={messagesListRef}
+              className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4 min-w-0"
+            >
               {conversationLoading && !localMessagesData ? (
                 <div className="flex justify-center items-center h-full">
                   <HeartBeatLoader message="Loading messages..." />

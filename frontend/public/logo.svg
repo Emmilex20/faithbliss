@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="FaithBliss">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ec4899" />
+      <stop offset="100%" stop-color="#7c3aed" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#grad)" />
+  <path d="M256 92v320" stroke="#ffffff" stroke-width="38" stroke-linecap="round" />
+  <path d="M164 184h184" stroke="#ffffff" stroke-width="38" stroke-linecap="round" />
+  <path d="M256 426c53-29 91-76 91-126 0-30-19-52-45-52-18 0-34 8-46 24-12-16-28-24-46-24-26 0-45 22-45 52 0 50 38 97 91 126z" fill="#ffffff" />
+</svg>

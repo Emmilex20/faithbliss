@@ -11,8 +11,9 @@ import { DesktopLayout } from '@/components/dashboard/DesktopLayout';
 import { MobileLayout } from '@/components/dashboard/MobileLayout';
 import { ProfileDisplay } from '@/components/dashboard/ProfileDisplay';
 import { OverlayPanels } from '@/components/dashboard/OverlayPanels';
+import { StoryBar } from '@/components/dashboard/StoryBar';
 import { insertScrollbarStyles } from '@/components/dashboard/styles'; 
-import { usePotentialMatches, useMatching, useUserProfile } from '@/hooks/useAPI'; 
+import { usePotentialMatches, useMatching, useStories, useUserProfile } from '@/hooks/useAPI'; 
 
 import { API, type User } from '@/services/api'; 
 
@@ -42,7 +43,8 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     // Note: userProfile is now fetching the currently logged-in user's *latest* profile data
     const { data: userProfile, loading: userLoading } = useUserProfile(); 
 
-    const { likeUser, passUser } = useMatching();
+    const { likeUser, passUser } = useMatching();
+    const { stories, loading: storiesLoading, createStory, markStorySeen, likeStory, getStoryLikes, replyToStory, deleteStory } = useStories();
 
     // Use the data from useUserProfile if available, otherwise use the prop
     const currentUserData = userProfile || activeUser;
@@ -235,15 +237,27 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
             {isLoadingFilters && <HeartBeatLoader message="Applying filters..." />}
             
             {/* Desktop Layout */}
-            <DesktopLayout
+                <DesktopLayout
                 userName={userName}
                 userImage={userImage}
                 user={currentUserData} 
                 showFilters={showFilters}
                 showSidePanel={showSidePanel}
-                onToggleFilters={() => setShowFilters(!showFilters)}
-                onToggleSidePanel={() => setShowSidePanel(!showSidePanel)}
-            >
+                    onToggleFilters={() => setShowFilters(!showFilters)}
+                    onToggleSidePanel={() => setShowSidePanel(!showSidePanel)}
+                    topContent={
+                      <StoryBar
+                        stories={stories}
+                        loading={storiesLoading}
+                        onCreateStory={createStory}
+                        onMarkStorySeen={markStorySeen}
+                        onLikeStory={likeStory}
+                        onGetStoryLikes={getStoryLikes}
+                        onReplyToStory={replyToStory}
+                        onDeleteStory={deleteStory}
+                      />
+                    }
+                >
                     <ProfileDisplay
                         currentProfile={currentProfile}
                         onStartOver={() => setCurrentProfileIndex(0)}
@@ -259,15 +273,27 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
                 </DesktopLayout>
 
             {/* Mobile Layout */}
-            <MobileLayout
+                <MobileLayout
                 userName={userName}
                 userImage={userImage}
                 user={currentUserData} 
                 showFilters={showFilters}
                 showSidePanel={showSidePanel}
-                onToggleFilters={() => setShowFilters(!showFilters)}
-                onToggleSidePanel={() => setShowSidePanel(!showSidePanel)}
-            >
+                    onToggleFilters={() => setShowFilters(!showFilters)}
+                    onToggleSidePanel={() => setShowSidePanel(!showSidePanel)}
+                    topContent={
+                      <StoryBar
+                        stories={stories}
+                        loading={storiesLoading}
+                        onCreateStory={createStory}
+                        onMarkStorySeen={markStorySeen}
+                        onLikeStory={likeStory}
+                        onGetStoryLikes={getStoryLikes}
+                        onReplyToStory={replyToStory}
+                        onDeleteStory={deleteStory}
+                      />
+                    }
+                >
                     <ProfileDisplay
                         currentProfile={currentProfile}
                         onStartOver={() => setCurrentProfileIndex(0)}

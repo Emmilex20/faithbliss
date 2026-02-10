@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="FaithBliss mark">
+  <defs>
+    <linearGradient id="m" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ec4899" />
+      <stop offset="100%" stop-color="#7c3aed" />
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#m)" />
+  <path d="M128 46v160" stroke="#ffffff" stroke-width="18" stroke-linecap="round" />
+  <path d="M82 92h92" stroke="#ffffff" stroke-width="18" stroke-linecap="round" />
+  <path d="M128 212c27-15 46-39 46-64 0-15-10-26-23-26-9 0-17 4-23 12-6-8-14-12-23-12-13 0-23 11-23 26 0 25 19 49 46 64z" fill="#ffffff" />
+</svg>

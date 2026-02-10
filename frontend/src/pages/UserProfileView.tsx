@@ -12,7 +12,6 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
 import type { User } from "@/services/api";
 import { TopBar } from "@/components/dashboard/TopBar";
 import { SidePanel } from "@/components/dashboard/SidePanel";
@@ -29,11 +28,10 @@ const getProfilePhotos = (user: User): string[] => {
 const ProfilePage = () => {
   const { id: profileId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getUserProfileById, user } = useAuth();
-  const { user: contextUser } = useAuthContext();
+  const { getUserProfileById, user: contextUser } = useAuthContext();
   const [showSidePanel, setShowSidePanel] = useState(false);
 
-  const layoutUser = contextUser || user;
+  const layoutUser = contextUser;
   const layoutName = layoutUser?.name || "User";
   const layoutImage = layoutUser?.profilePhoto1 || undefined;
 
@@ -230,7 +228,7 @@ const ProfilePage = () => {
       </div>
 
       {/* Actions */}
-      {user?.id !== profile.id && (
+      {contextUser?.id !== profile.id && (
         <div className="sticky bottom-0 bg-gray-900/90 backdrop-blur-xl border-t border-gray-700/50 p-4">
           <div className="flex items-center justify-center space-x-4 max-w-md mx-auto">
             <button

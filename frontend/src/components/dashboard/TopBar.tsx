@@ -2,42 +2,47 @@
 // src/components/TopBar.tsx (Vite/React Conversion)
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bell, Filter, Sparkles, ArrowLeft } from 'lucide-react';
-// 🌟 VITE FIX 1: Use Link from react-router-dom
-import { Link } from 'react-router-dom'; 
-// import Image from 'next/image'; // 🌟 VITE FIX 2: Replaced with standard <img>
-import { useNotificationUnreadCount } from '@/hooks/useAPI'; // Assuming this hook is non-Next.js compatible
+import { Link } from 'react-router-dom';
+import { useNotificationUnreadCount } from '@/hooks/useAPI';
+import { useRequireAuth } from '@/hooks/useAuth';
 
 interface TopBarProps {
-  userName: string;
-  userImage?: string;
-  user?: any;
-  showFilters?: boolean;
-  showSidePanel?: boolean;
-  onToggleFilters?: () => void;
-  onToggleSidePanel?: () => void;
-  title?: string;
-  showBackButton?: boolean;
-  onBack?: () => void;
+  userName: string;
+  userImage?: string;
+  user?: any;
+  showFilterButton?: boolean;
+  showFilters?: boolean;
+  showSidePanel?: boolean;
+  onToggleFilters?: () => void;
+  onToggleSidePanel?: () => void;
+  title?: string;
+  showBackButton?: boolean;
+  onBack?: () => void;
 }
 
-export const TopBar = ({ 
-  userName, 
-  userImage,
-  user,
-  showFilters = false, 
-  onToggleFilters, 
-  onToggleSidePanel,
-  title,
-  showBackButton = false,
-  onBack
+export const TopBar = ({
+  userName,
+  userImage,
+  user,
+  showFilterButton = false,
+  showFilters = false,
+  onToggleFilters,
+  onToggleSidePanel,
+  title,
+  showBackButton = false,
+  onBack,
 }: TopBarProps) => {
-  const displayImage = user?.profilePhotos?.photo1 || userImage || '/default-avatar.png';
-  const { data: unreadData } = useNotificationUnreadCount();
-  const unreadCount = unreadData?.count || 0;
+  const displayImage = user?.profilePhotos?.photo1 || userImage || '/default-avatar.png';
+  const { data: unreadData } = useNotificationUnreadCount();
+  const unreadCount = unreadData?.count || 0;
+  const { logout } = useRequireAuth();
+
   const [notificationsAvailable, setNotificationsAvailable] = useState(false);
   const [notificationsPermission, setNotificationsPermission] = useState<'default' | 'granted' | 'denied'>('default');
+  const [showMobileProfileMenu, setShowMobileProfileMenu] = useState(false);
+  const mobileProfileMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -45,6 +50,23 @@ export const TopBar = ({
     setNotificationsAvailable(true);
     setNotificationsPermission(Notification.permission);
   }, []);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (mobileProfileMenuRef.current && !mobileProfileMenuRef.current.contains(target)) {
+        setShowMobileProfileMenu(false);
+      }
+    };
+
+    if (showMobileProfileMenu) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [showMobileProfileMenu]);
 
   const handleEnableNotifications = async () => {
     if (!notificationsAvailable) return;
@@ -64,15 +86,18 @@ export const TopBar = ({
     }
   };
 
-  return (
+  const subtitleText = title
+    ? title === 'My Profile'
+      ? `Edit your profile, ${userName}`
+      : `${title} page`
+    : userName;
+
+  return (
     <div className="bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 px-4 py-4 sticky top-0 z-50">
-      {/* Gradient Overlay */}
       <div className="absolute inset-0 bg-gradient-to-r from-pink-500/5 via-purple-500/5 to-blue-500/5"></div>
 
       <div className="max-w-7xl mx-auto relative z-10">
-        {/* 3-column grid keeps icons from overlapping text on mobile */}
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
-          {/* Left */}
           <div className="flex items-center gap-3">
             {showBackButton ? (
               <button
@@ -104,18 +129,16 @@ export const TopBar = ({
             </Link>
           </div>
 
-          {/* Center */}
           <div className="min-w-0">
             <h1 className="text-base sm:text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent truncate text-center sm:text-left">
               {title || 'FaithBliss'}
             </h1>
             <p className="text-xs text-gray-400 hidden md:block truncate">
-              {title ? `Edit your profile, ${userName}` : `${userName} ?`}
+              {subtitleText}
             </p>
           </div>
 
-          {/* Right */}
-          <div className="flex items-center gap-2 justify-end">
+          <div className="relative flex items-center gap-2 justify-end">
             {notificationsAvailable && notificationsPermission !== 'granted' && (
               <button
                 onClick={handleEnableNotifications}
@@ -136,8 +159,21 @@ export const TopBar = ({
               </button>
             </Link>
 
+            {showFilterButton && onToggleFilters && (
+              <button
+                onClick={onToggleFilters}
+                className={`p-2.5 sm:p-3 rounded-2xl transition-all hover:scale-105 ${
+                  showFilters
+                    ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
+                    : 'hover:bg-white/10 text-gray-300 hover:text-white'
+                }`}
+              >
+                <Filter className="w-6 h-6 transition-colors" />
+              </button>
+            )}
+
             <button
-              onClick={onToggleSidePanel}
+              onClick={() => setShowMobileProfileMenu((prev) => !prev)}
               className="p-2.5 sm:p-3 hover:bg-white/10 rounded-2xl transition-all hover:scale-105 group lg:hidden"
             >
               <div className="w-8 h-8 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full flex items-center justify-center">
@@ -155,17 +191,28 @@ export const TopBar = ({
               </div>
             </button>
 
-            {onToggleFilters && (
-              <button
-                onClick={onToggleFilters}
-                className={`p-2.5 sm:p-3 rounded-2xl transition-all hover:scale-105 ${
-                  showFilters
-                    ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
-                    : 'hover:bg-white/10 text-gray-300 hover:text-white'
-                }`}
+            {showMobileProfileMenu && (
+              <div
+                ref={mobileProfileMenuRef}
+                className="absolute top-full right-0 mt-2 w-44 rounded-xl border border-white/15 bg-gray-900/95 backdrop-blur-xl shadow-xl p-1 lg:hidden"
               >
-                <Filter className="w-6 h-6 transition-colors" />
-              </button>
+                <Link
+                  to="/profile"
+                  onClick={() => setShowMobileProfileMenu(false)}
+                  className="block w-full px-3 py-2 text-sm text-gray-200 hover:bg-white/10 rounded-lg"
+                >
+                  Profile
+                </Link>
+                <button
+                  onClick={async () => {
+                    setShowMobileProfileMenu(false);
+                    await logout();
+                  }}
+                  className="block w-full text-left px-3 py-2 text-sm text-red-300 hover:bg-red-500/10 rounded-lg"
+                >
+                  Logout
+                </button>
+              </div>
             )}
           </div>
         </div>

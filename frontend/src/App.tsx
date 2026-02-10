@@ -3,6 +3,7 @@
 
 import { Outlet, useLocation } from 'react-router-dom';
 import { NotificationListener } from './components/NotificationListener';
+import { SeoMetaManager } from './components/SeoMetaManager';
 
 // Define the paths that should use the special "Auth Layout"
 const authPaths = ['/login', '/signup'];
@@ -19,6 +20,7 @@ function App() {
   // 🌟 GLOBAL LAYOUT BASE: Apply the dark background to the root container 🌟
   return (
     <div className="min-h-screen bg-gray-900 text-white">
+    <SeoMetaManager />
     <NotificationListener />
       {isAuthRoute ? (
         // 🔐 AUTH LAYOUT: Centered content (Login, Signup)

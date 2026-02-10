@@ -120,8 +120,16 @@ export const getApiClient = (accessToken: string | null) => ({
         { method: 'GET' },
         accessToken
       ),
-    getMatchConversations: () =>
-      apiClientRequest<any[]>('/api/messages/conversations', { method: 'GET' }, accessToken),
+    getMatchConversations: (params?: { limit?: number; cursor?: string | null }) => {
+      const query = new URLSearchParams();
+      query.set('limit', String(params?.limit ?? 25));
+      if (params?.cursor) query.set('cursor', params.cursor);
+      return apiClientRequest<{ items: any[]; nextCursor: string | null; hasMore: boolean }>(
+        `/api/messages/conversations?${query.toString()}`,
+        { method: 'GET' },
+        accessToken
+      );
+    },
   },
   Notification: {
     getNotifications: () =>
@@ -136,6 +144,30 @@ export const getApiClient = (accessToken: string | null) => ({
       apiClientRequest<void>(`/api/notifications/${id}/read`, { method: 'PATCH' }, accessToken),
     markAllAsRead: () =>
       apiClientRequest<void>('/api/notifications/read-all', { method: 'PATCH' }, accessToken),
+  },
+  Story: {
+    getFeed: () =>
+      apiClientRequest<{ stories: any[] }>('/api/stories/feed', { method: 'GET' }, accessToken),
+    create: (payload: FormData) =>
+      apiClientRequest<{ story: any }>('/api/stories', { method: 'POST', body: payload }, accessToken),
+    markSeen: (storyId: string) =>
+      apiClientRequest<{ success: boolean }>(`/api/stories/${storyId}/seen`, { method: 'PATCH' }, accessToken),
+    like: (storyId: string) =>
+      apiClientRequest<{ liked: boolean; likesCount: number }>(`/api/stories/${storyId}/like`, { method: 'POST' }, accessToken),
+    getLikes: (storyId: string) =>
+      apiClientRequest<{ users: Array<{ id: string; name: string; profilePhoto1?: string }>; count: number }>(
+        `/api/stories/${storyId}/likes`,
+        { method: 'GET' },
+        accessToken
+      ),
+    reply: (storyId: string, content: string) =>
+      apiClientRequest<{ success: boolean; matchId: string; message: any }>(
+        `/api/stories/${storyId}/reply`,
+        { method: 'POST', body: JSON.stringify({ content }) },
+        accessToken
+      ),
+    delete: (storyId: string) =>
+      apiClientRequest<{ success: boolean }>(`/api/stories/${storyId}`, { method: 'DELETE' }, accessToken),
   },
 });
 

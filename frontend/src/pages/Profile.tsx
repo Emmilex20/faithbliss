@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { useUserProfile } from '@/hooks/useAPI';
 import { API } from '@/services/api';
-import { useAuth } from '@/hooks/useAuth';
 import ProfileHeader from '@/components/profile/ProfileHeader';
 import { TopBar } from '@/components/dashboard/TopBar';
 import { SidePanel } from '@/components/dashboard/SidePanel';
@@ -20,10 +19,9 @@ import type { UpdateProfileDto } from '@/services/api';
 import { updateProfileClient, uploadSpecificPhotoClient } from '@/services/api-client';
 
 const ProfilePage: React.FC = () => {
-  const { accessToken, user: authUser } = useAuth();
-  const { user: contextUser } = useAuthContext();
+  const { accessToken, user: authUser } = useAuthContext();
 
-  // ✅ Use only valid id/email from your User type
+  // âœ… Use only valid id/email from your User type
   const currentUserId = authUser?.id;
   const currentUserEmail = authUser?.email;
 
@@ -36,8 +34,6 @@ const ProfilePage: React.FC = () => {
   const [showSidePanel, setShowSidePanel] = useState(false);
 
   useEffect(() => {
-    console.log('🔥 ProfilePage: raw userData from useUserProfile:', userData);
-
     let resolved = userData as any;
 
     if (Array.isArray(userData)) {
@@ -46,12 +42,10 @@ const ProfilePage: React.FC = () => {
         userData.find((u: any) => u.email?.toLowerCase() === currentUserEmail?.toLowerCase()) ||
         userData[0] ||
         null;
-      console.warn('ProfilePage: useUserProfile returned array. Resolved to:', resolved ? resolved.id || resolved.email : null);
     }
 
     const user = resolved;
     if (!user) {
-      console.warn('ProfilePage: no user found to map into profileData — user remains null');
       return;
     }
 
@@ -108,7 +102,7 @@ const ProfilePage: React.FC = () => {
     });
   }, [userData, currentUserId, currentUserEmail]);
 
-  // ✅ Save handler
+  // âœ… Save handler
   const handleSave = async () => {
     if (!profileData || !accessToken) return;
     setIsSaving(true);
@@ -148,7 +142,7 @@ const ProfilePage: React.FC = () => {
     }
   };
 
-  // ✅ Photo upload handler
+  // âœ… Photo upload handler
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>, slotIndex: number) => {
     const file = event.target.files?.[0];
     if (!file || !profileData || !accessToken) return;
@@ -178,7 +172,7 @@ const ProfilePage: React.FC = () => {
     }
   };
 
-  // ✅ Remove photo
+  // âœ… Remove photo
   const removePhoto = async (index: number) => {
     if (!profileData || !accessToken) return;
     setIsSaving(true);
@@ -223,7 +217,7 @@ const ProfilePage: React.FC = () => {
     );
   }
 
-  const layoutUser = contextUser || authUser;
+  const layoutUser = authUser;
   const layoutName = layoutUser?.name || profileData?.name || 'User';
   const layoutImage = layoutUser?.profilePhoto1 || profileData?.photos?.[0] || undefined;
   const isPremium = layoutUser?.subscriptionStatus === 'active' && ['premium', 'elite'].includes(layoutUser?.subscriptionTier || '');
@@ -332,3 +326,7 @@ export default function ProtectedProfileWrapper() {
     </ProtectedRoute>
   );
 }
+
+
+
+

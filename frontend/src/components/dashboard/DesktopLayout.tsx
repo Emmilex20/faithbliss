@@ -11,6 +11,7 @@ interface DesktopLayoutProps {
   showSidePanel: boolean;
   onToggleFilters: () => void;
   onToggleSidePanel: () => void;
+  topContent?: ReactNode;
   children: ReactNode;
 }
 
@@ -22,6 +23,7 @@ export const DesktopLayout = ({
   showSidePanel,
   onToggleFilters,
   onToggleSidePanel,
+  topContent,
   children
 }: DesktopLayoutProps) => {
   return (
@@ -37,15 +39,22 @@ export const DesktopLayout = ({
           userName={userName}
           userImage={userImage}
           user={user}
+          showFilterButton={true}
           showFilters={showFilters}
           showSidePanel={showSidePanel}
           onToggleFilters={onToggleFilters}
           onToggleSidePanel={onToggleSidePanel}
         />
+
+        {topContent && (
+          <div className="px-2">
+            {topContent}
+          </div>
+        )}
         
         {/* Main Profile Display */}
         <div className="flex-1 flex justify-center items-center px-2 py-3 overflow-hidden">
-          <div className="w-full max-w-lg h-full max-h-[calc(100vh-120px)] relative">
+          <div className="w-full max-w-lg h-full max-h-[calc(100vh-220px)] relative">
             {children}
           </div>
         </div>

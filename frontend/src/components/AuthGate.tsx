@@ -17,10 +17,10 @@ export const AuthGate: React.FC = () => {
     const obStatus = user?.onboardingCompleted ? 'Complete' : (user ? 'Pending' : 'N/A');
     console.log(`E. AUTH_GATE CHECK: Path=${path}, Loading=${isLoading}, Auth=${isAuthenticated}, Onboarding=${obStatus}`);
     
-    // 1. Wait for session loading
-    if (isLoading) {
-        return <div className="p-8 text-center text-gray-500">Loading session...</div>;
-    }
+   // 1. Wait for session loading
+   if (isLoading) {
+        return null;
+   }
 
     // 2. Unauthenticated: Redirect to login
     if (!isAuthenticated) {
@@ -66,7 +66,7 @@ export const AuthGate: React.FC = () => {
 export const PublicOnlyRoute: React.FC = () => {
     const { isAuthenticated, user, isLoading } = useAuthContext();
 
-    if (isLoading) return <div className="p-8 text-center text-gray-500">Loading...</div>;
+  if (isLoading) return null;
 
     if (isAuthenticated) {
         // If logged in, redirect them based on onboarding status
