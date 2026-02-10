@@ -337,15 +337,7 @@ const MessagesContent = () => {
 
 
   const handleSendMessage = async () => {
-    // --- DEBUGGING START ---
-    console.log('handleSendMessage called.');
-    // --- DEBUGGING END ---
-
     if (newMessage.trim() && currentConversation && webSocketService && currentUserId) {
-        // --- DEBUGGING START ---
-        console.log('All conditions passed. Attempting to send message...');
-        // --- DEBUGGING END ---
-      
       try {
         const actualMatchId = currentConversation.id;
         const messageContent = newMessage.trim();
@@ -419,15 +411,6 @@ const MessagesContent = () => {
       } catch (error) {
         console.error('Failed to send message:', error);
       }
-    } else {
-        // --- DEBUGGING START ---
-        console.warn('handleSendMessage conditions failed:', {
-            message: newMessage.trim().length > 0, // Is the message not empty?
-            conversation: !!currentConversation, // Is a conversation selected?
-            socket: !!webSocketService, // Is the WebSocket service initialized?
-            user: !!currentUserId // Is the current user ID available?
-        });
-        // --- DEBUGGING END ---
     }
   };
 
@@ -532,11 +515,11 @@ const MessagesContent = () => {
   }
 
   const mainContent = (
-    <div className="h-[calc(100vh-120px)] flex flex-col md:flex-row overflow-hidden max-w-full">
+    <div className="h-[calc(100dvh-78px)] lg:h-[calc(100dvh-82px)] flex flex-col md:flex-row overflow-hidden max-w-full">
         {/* Conversations List */}
-        <div className={`${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 flex-shrink-0 bg-gradient-to-b from-gray-900/60 to-gray-900/30 backdrop-blur-xl border-r border-gray-700/50 overflow-hidden min-w-0 flex-col`}>
+        <div className={`${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-[360px] lg:w-[390px] xl:w-[420px] flex-shrink-0 bg-gradient-to-b from-gray-900/70 to-gray-900/40 backdrop-blur-xl md:border-r border-gray-700/50 overflow-hidden min-w-0 flex-col`}>
           {/* Header */}
-          <div className="p-4 border-b border-gray-700/50">
+          <div className="p-3 md:p-4 border-b border-gray-700/50">
             {/* Search Bar */}
             <div className="relative">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -545,7 +528,7 @@ const MessagesContent = () => {
                 placeholder="Search conversations..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white/10 backdrop-blur-xl border border-white/15 rounded-2xl pl-12 pr-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/50 transition-all duration-300"
+                className="w-full bg-white/10 backdrop-blur-xl border border-white/15 rounded-2xl pl-12 pr-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/50 transition-all duration-300"
               />
             </div>
           </div>
@@ -554,7 +537,7 @@ const MessagesContent = () => {
           <div
             ref={conversationsListRef}
             onScroll={handleConversationListScroll}
-            className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1 min-w-0"
+            className="flex-1 overflow-y-auto overflow-x-hidden p-2 md:p-2.5 space-y-1.5 min-w-0"
           >
             {filteredConversations.map((conversation) => {
               const matchedUser = conversation.otherUser;
@@ -562,7 +545,7 @@ const MessagesContent = () => {
                 <button
                   key={conversation.id}
                   onClick={() => handleSelectChat(conversation.id)}
-                  className={`w-full p-4 rounded-2xl transition-all duration-300 hover:bg-white/10 min-w-0 text-left ${
+                  className={`w-full p-3.5 rounded-2xl transition-all duration-300 hover:bg-white/10 min-w-0 text-left ${
                     selectedChat === conversation.id
                       ? 'bg-gradient-to-r from-pink-500/20 to-purple-600/20 border border-pink-500/30'
                       : 'hover:bg-white/5'
@@ -610,9 +593,9 @@ const MessagesContent = () => {
 
         {/* Chat Area */}
         {selectedChat && currentConversation ? (
-          <div className={`${selectedChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0 overflow-hidden`}>
+          <div className={`${selectedChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0 overflow-hidden bg-gradient-to-b from-gray-900/30 to-gray-950/60`}>
             {/* Chat Header */}
-            <div className="bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 p-4 flex-shrink-0">
+            <div className="bg-gray-900/85 backdrop-blur-xl border-b border-gray-700/50 px-3 py-2.5 md:px-4 md:py-3 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <button
@@ -633,22 +616,22 @@ const MessagesContent = () => {
                     <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-gray-900"></div>
                   </div>
 
-                  <div>
-                    <h3>{currentConversation.otherUser.name}</h3>
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-white truncate">{currentConversation.otherUser.name}</h3>
                     <p className="text-xs text-gray-400">
                       {typingStatus[currentConversation.otherUser.id] ? 'Typing…' : 'Active now'}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <button className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 hover:border-white/30 rounded-2xl transition-all duration-300 hover:scale-105 group">
+                <div className="hidden sm:flex items-center space-x-2">
+                  <button className="p-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 hover:border-white/30 rounded-2xl transition-all duration-300 hover:scale-105 group">
                     <Phone className="w-5 h-5 text-white group-hover:scale-110 transition-transform duration-300" />
                   </button>
-                  <button className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 hover:border-white/30 rounded-2xl transition-all duration-300 hover:scale-105 group">
+                  <button className="p-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 hover:border-white/30 rounded-2xl transition-all duration-300 hover:scale-105 group">
                     <Video className="w-5 h-5 text-white group-hover:scale-110 transition-transform duration-300" />
                   </button>
-                  <button className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 hover:border-white/30 rounded-2xl transition-all duration-300 hover:scale-105 group">
+                  <button className="p-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 hover:border-white/30 rounded-2xl transition-all duration-300 hover:scale-105 group">
                     <Info className="w-5 h-5 text-white group-hover:scale-110 transition-transform duration-300" />
                   </button>
                 </div>
@@ -658,7 +641,7 @@ const MessagesContent = () => {
             {/* Messages */}
             <div
               ref={messagesListRef}
-              className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4 min-w-0"
+              className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 md:p-4 space-y-3 min-w-0"
             >
               {conversationLoading && !localMessagesData ? (
                 <div className="flex justify-center items-center h-full">
@@ -670,7 +653,7 @@ const MessagesContent = () => {
                     key={message.id}
                     className={`flex ${message.senderId === currentUserId ? 'justify-end' : 'justify-start'}`}
                   >
-                    <div className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
+                    <div className={`max-w-[82%] md:max-w-xl lg:max-w-2xl px-3.5 py-2.5 rounded-2xl ${
                       message.senderId === currentUserId
                         ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-br-md'
                         : 'bg-white/10 backdrop-blur-xl border border-white/20 text-white rounded-bl-md'
@@ -703,9 +686,9 @@ const MessagesContent = () => {
             </div>
 
             {/* Message Input */}
-            <div className="bg-gray-900/80 backdrop-blur-xl border-t border-gray-700/50 p-4 flex-shrink-0">
-              <div className="flex items-center space-x-3 min-w-0">
-                <button className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 hover:border-white/30 rounded-2xl transition-all duration-300 hover:scale-105 group flex-shrink-0">
+            <div className="bg-gray-900/85 backdrop-blur-xl border-t border-gray-700/50 px-3 py-2.5 md:p-4 flex-shrink-0" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 10px)' }}>
+              <div className="flex items-center space-x-2.5 md:space-x-3 min-w-0">
+                <button className="hidden md:inline-flex p-3 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 hover:border-white/30 rounded-2xl transition-all duration-300 hover:scale-105 group flex-shrink-0">
                   <Paperclip className="w-5 h-5 text-white group-hover:scale-110 transition-transform duration-300" />
                 </button>
 
@@ -716,9 +699,9 @@ const MessagesContent = () => {
                     value={newMessage}
                     onChange={(e) => handleTypingChange(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    className="w-full bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl px-4 py-3 pr-12 text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/50 transition-all duration-300 min-w-0"
+                    className="w-full bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl px-4 py-2.5 pr-12 text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/50 transition-all duration-300 min-w-0"
                   />
-                  <button className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 hover:bg-white/10 rounded-xl transition-all duration-300">
+                  <button className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 hover:bg-white/10 rounded-xl transition-all duration-300 hidden sm:inline-flex">
                     <Smile className="w-5 h-5 text-gray-400 hover:text-white" />
                   </button>
                 </div>
@@ -727,7 +710,7 @@ const MessagesContent = () => {
                 <button
                   onClick={handleSendMessage}
                   disabled={!newMessage.trim() || !webSocketService?.connected} 
-                  className={`p-3 rounded-2xl transition-all duration-300 hover:scale-105 flex-shrink-0 ${
+                  className={`p-2.5 md:p-3 rounded-2xl transition-all duration-300 hover:scale-105 flex-shrink-0 ${
                     newMessage.trim() && webSocketService?.connected
                       ? 'bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white shadow-lg shadow-pink-500/25'
                       : 'bg-white/10 text-gray-400 cursor-not-allowed'
@@ -753,13 +736,13 @@ const MessagesContent = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white overflow-x-hidden pb-20 no-horizontal-scroll dashboard-main">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white overflow-x-hidden no-horizontal-scroll dashboard-main">
       {/* Desktop Layout */}
       <div className="hidden lg:flex min-h-screen">
         <div className="w-80 flex-shrink-0">
           <SidePanel userName={layoutName} userImage={layoutImage} user={layoutUser} onClose={() => setShowSidePanel(false)} />
         </div>
-        <div className="flex-1 flex flex-col min-h-screen">
+        <div className="flex-1 flex flex-col min-h-screen min-w-0">
           <TopBar
             userName={layoutName}
             userImage={layoutImage}
@@ -770,12 +753,12 @@ const MessagesContent = () => {
             onToggleSidePanel={() => setShowSidePanel(false)}
             title="Messages"
           />
-          <div className="flex-1 overflow-y-auto">{mainContent}</div>
+          <div className="flex-1 min-h-0">{mainContent}</div>
         </div>
       </div>
 
       {/* Mobile Layout */}
-      <div className="lg:hidden min-h-screen">
+      <div className="lg:hidden min-h-screen flex flex-col">
         <TopBar
           userName={layoutName}
           userImage={layoutImage}
@@ -786,7 +769,7 @@ const MessagesContent = () => {
           onToggleSidePanel={() => setShowSidePanel(true)}
           title="Messages"
         />
-        <div className="flex-1">{mainContent}</div>
+        <div className="flex-1 min-h-0">{mainContent}</div>
       </div>
 
       {showSidePanel && (
