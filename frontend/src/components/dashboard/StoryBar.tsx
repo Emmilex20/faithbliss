@@ -28,6 +28,7 @@ export const StoryBar = ({
 }: StoryBarProps) => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const storyVideoRef = useRef<HTMLVideoElement | null>(null);
   const timerRef = useRef<number | null>(null);
   const progressIntervalRef = useRef<number | null>(null);
 
@@ -43,6 +44,7 @@ export const StoryBar = ({
   const [localLikeCount, setLocalLikeCount] = useState<Record<string, number>>({});
   const [replyText, setReplyText] = useState('');
   const [isReplying, setIsReplying] = useState(false);
+  const [isReplyFocused, setIsReplyFocused] = useState(false);
   const [showLikersModal, setShowLikersModal] = useState(false);
   const [isLoadingLikers, setIsLoadingLikers] = useState(false);
   const [likers, setLikers] = useState<Array<{ id: string; name: string; profilePhoto1?: string }>>([]);
@@ -87,6 +89,7 @@ export const StoryBar = ({
     setSelectedItemIndex(0);
     setProgressMs(0);
     setReplyText('');
+    setIsReplyFocused(false);
     setShowLikersModal(false);
   };
 
@@ -96,6 +99,7 @@ export const StoryBar = ({
     setSelectedItemIndex(0);
     setProgressMs(0);
     setReplyText('');
+    setIsReplyFocused(false);
     setShowLikersModal(false);
   };
 
@@ -105,6 +109,7 @@ export const StoryBar = ({
       setSelectedItemIndex((prev) => prev + 1);
       setProgressMs(0);
       setReplyText('');
+      setIsReplyFocused(false);
       return;
     }
 
@@ -114,6 +119,7 @@ export const StoryBar = ({
       setSelectedItemIndex(0);
       setProgressMs(0);
       setReplyText('');
+      setIsReplyFocused(false);
       return;
     }
 
@@ -126,6 +132,7 @@ export const StoryBar = ({
       setSelectedItemIndex((prev) => prev - 1);
       setProgressMs(0);
       setReplyText('');
+      setIsReplyFocused(false);
       return;
     }
 
@@ -136,6 +143,7 @@ export const StoryBar = ({
       setSelectedItemIndex(Math.max(0, prevStory.items.length - 1));
       setProgressMs(0);
       setReplyText('');
+      setIsReplyFocused(false);
     }
   };
 
@@ -224,6 +232,11 @@ export const StoryBar = ({
     }
   };
 
+  const handleCancelReply = () => {
+    setReplyText('');
+    setIsReplyFocused(false);
+  };
+
   useEffect(() => {
     if (!activeStory || !selectedItem) return;
     if (activeStory.isCurrentUser) return;
@@ -240,16 +253,27 @@ export const StoryBar = ({
     setLikers([]);
   }, [selectedItem?.id]);
 
+  const isTypingReply = replyText.trim().length > 0 || isReplyFocused || isReplying;
+  const shouldPauseStory = showLikersModal || (!activeStory?.isCurrentUser && isTypingReply);
+
   useEffect(() => {
     if (!selectedItem) return;
-    if (showLikersModal) return;
 
     clearTimers();
-    setProgressMs(0);
+
+    if (shouldPauseStory) {
+      return;
+    }
+
+    const remainingMs = Math.max(durationMs - progressMs, 0);
+    if (remainingMs <= 0) {
+      nextItem();
+      return;
+    }
 
     timerRef.current = window.setTimeout(() => {
       nextItem();
-    }, durationMs);
+    }, remainingMs);
 
     const tickMs = 100;
     progressIntervalRef.current = window.setInterval(() => {
@@ -257,7 +281,19 @@ export const StoryBar = ({
     }, tickMs);
 
     return () => clearTimers();
-  }, [selectedItem?.id, durationMs, showLikersModal]);
+  }, [selectedItem?.id, durationMs, shouldPauseStory]);
+
+  useEffect(() => {
+    const video = storyVideoRef.current;
+    if (!video || selectedItem?.mediaType !== 'video') return;
+
+    if (shouldPauseStory) {
+      video.pause();
+      return;
+    }
+
+    video.play().catch(() => null);
+  }, [selectedItem?.id, selectedItem?.mediaType, shouldPauseStory]);
 
   useEffect(() => {
     return () => clearTimers();
@@ -398,6 +434,7 @@ export const StoryBar = ({
             <div className="bg-black flex-1 min-h-0 flex items-center justify-center">
               {selectedItem.mediaType === 'video' ? (
                 <video
+                  ref={storyVideoRef}
                   src={selectedItem.mediaUrl}
                   className="w-full h-full object-contain"
                   autoPlay
@@ -454,10 +491,21 @@ export const StoryBar = ({
                     type="text"
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
+                    onFocus={() => setIsReplyFocused(true)}
+                    onBlur={() => setIsReplyFocused(false)}
                     placeholder="Reply to story"
                     className="flex-1 bg-white/10 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/40"
                     maxLength={400}
                   />
+                  {replyText.trim().length > 0 && (
+                    <button
+                      onClick={handleCancelReply}
+                      disabled={isReplying}
+                      className="inline-flex items-center justify-center px-3 h-10 rounded-xl bg-white/10 text-gray-200 hover:bg-white/20 disabled:opacity-60 shrink-0 text-xs font-semibold"
+                    >
+                      Cancel
+                    </button>
+                  )}
                   <button
                     onClick={handleReply}
                     disabled={!replyText.trim() || isReplying}
