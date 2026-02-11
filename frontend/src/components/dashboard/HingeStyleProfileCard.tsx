@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -17,15 +17,39 @@ export const HingeStyleProfileCard = ({ profile, onGoBack, onPass, onLike }: Hin
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
 
   const photos = useMemo(() => {
-    const list = [profile.profilePhoto1, profile.profilePhoto2, profile.profilePhoto3].filter(Boolean) as string[];
+    const list = [
+      profile.profilePhoto1,
+      profile.profilePhoto2,
+      profile.profilePhoto3,
+      profile.profilePhoto4,
+      profile.profilePhoto5,
+      profile.profilePhoto6,
+    ].filter(Boolean) as string[];
     return list.length > 0 ? list : ['/default-avatar.png'];
-  }, [profile.profilePhoto1, profile.profilePhoto2, profile.profilePhoto3]);
+  }, [
+    profile.profilePhoto1,
+    profile.profilePhoto2,
+    profile.profilePhoto3,
+    profile.profilePhoto4,
+    profile.profilePhoto5,
+    profile.profilePhoto6,
+  ]);
 
   const nextPhoto = () => setCurrentPhotoIndex((prev) => (prev + 1) % photos.length);
   const prevPhoto = () => setCurrentPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length);
   const profileId = profile.id || (profile as any)._id || 'missing';
   const distance = typeof (profile as any).distance === 'number' ? Math.round((profile as any).distance) : null;
   const locationText = profile.location?.trim() || 'Location not set';
+
+  useEffect(() => {
+    setCurrentPhotoIndex(0);
+  }, [profileId]);
+
+  useEffect(() => {
+    if (currentPhotoIndex > photos.length - 1) {
+      setCurrentPhotoIndex(0);
+    }
+  }, [currentPhotoIndex, photos.length]);
 
   return (
     <div className="h-full w-full overflow-hidden rounded-none border-0 bg-slate-900/78 shadow-none sm:rounded-3xl sm:border sm:border-white/12 sm:shadow-[0_20px_65px_rgba(3,12,28,0.62)] sm:backdrop-blur-sm">
@@ -61,6 +85,9 @@ export const HingeStyleProfileCard = ({ profile, onGoBack, onPass, onLike }: Hin
             {photos.map((_, index) => (
               <button
                 key={index}
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
                 onClick={() => setCurrentPhotoIndex(index)}
                 className={`h-1.5 flex-1 rounded-full ${index === currentPhotoIndex ? 'bg-white' : 'bg-white/35'}`}
                 aria-label={`Photo ${index + 1}`}
@@ -72,6 +99,9 @@ export const HingeStyleProfileCard = ({ profile, onGoBack, onPass, onLike }: Hin
         {photos.length > 1 && (
           <>
             <button
+              type="button"
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
               onClick={prevPhoto}
               className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-white/25 bg-black/40 p-2 text-white transition hover:bg-black/60"
               aria-label="Previous photo"
@@ -79,6 +109,9 @@ export const HingeStyleProfileCard = ({ profile, onGoBack, onPass, onLike }: Hin
               <ChevronLeft className="h-5 w-5" />
             </button>
             <button
+              type="button"
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
               onClick={nextPhoto}
               className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-white/25 bg-black/40 p-2 text-white transition hover:bg-black/60"
               aria-label="Next photo"
