@@ -7,15 +7,19 @@ import { useAuthContext } from '../contexts/AuthContext';
 import {
   OnboardingHeader,
   OnboardingNavigation,
-  OnboardingSuccessModal,
   type OnboardingData,
 } from '../components/onboarding/index';
 
 import ImageUploadSlide from '../components/onboarding/ImageUploadSlide';
 import ProfileBuilderSlide from '../components/onboarding/ProfileBuilderSlide';
+import LocationPermissionSlide from '../components/onboarding/LocationPermissionSlide';
 import MatchingPreferencesSlide from '../components/onboarding/MatchingPreferencesSlide';
 import PartnerPreferencesSlide from '../components/onboarding/PartnerPreferencesSlide';
 import RelationshipGoalsSlide from '../components/onboarding/RelationshipGoalsSlide';
+import LifestyleHabitsSlide from '../components/onboarding/LifestyleHabitsSlide';
+import PersonalEssenceSlide from '../components/onboarding/PersonalEssenceSlide';
+import InterestsSelectionSlide from '../components/onboarding/InterestsSelectionSlide';
+import ShareMoreAboutYouSlide from '../components/onboarding/ShareMoreAboutYouSlide';
 
 import { uploadPhotosToCloudinary } from '../api/cloudinaryUpload';
 
@@ -34,21 +38,44 @@ const getStepValidationError = (step: number, data: OnboardingData): string | nu
 
   if (
     step === 1 &&
+    (!data.location || !data.location.trim())
+  ) {
+    return 'Please allow location or enter your location manually.';
+  }
+
+  if (
+    step === 2 &&
     (!data.birthday || !data.location || !data.faithJourney || !data.churchAttendance)
   ) {
     return 'Please fill out all required profile information.';
   }
 
-  if (step === 2 && data.relationshipGoals.length === 0) {
+  if (step === 3 && data.relationshipGoals.length === 0) {
     return 'Please select your relationship goal.';
   }
 
-  if (step === 3 && !data.preferredFaithJourney) {
+  if (step === 4 && (!data.drinkingHabit || !data.smokingHabit || !data.workoutHabit || !data.petPreference)) {
+    return 'Please complete all lifestyle habits.';
+  }
+
+  if (step === 5 && (!data.communicationStyle || !data.loveStyle || !data.educationLevel || !data.zodiacSign)) {
+    return 'Please complete all personal style fields.';
+  }
+
+  if (step === 6 && (!data.bio?.trim() || !data.personalPromptQuestion?.trim() || !data.personalPromptAnswer?.trim())) {
+    return 'Please add your bio, choose a prompt, and provide your answer.';
+  }
+
+  if (step === 7 && (!Array.isArray(data.interests) || data.interests.length === 0)) {
+    return 'Please select at least one interest.';
+  }
+
+  if (step === 8 && !data.preferredFaithJourney) {
     return 'Please complete your partner preferences.';
   }
 
   if (
-    step === 4 &&
+    step === 9 &&
     (
       !data.preferredGender ||
       data.minAge === null ||
@@ -75,9 +102,8 @@ const OnboardingPage = () => {
   };
 
   const [currentStep, setCurrentStep] = useState(0);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const totalSteps = 5;
+  const totalSteps = 10;
 
   const [onboardingData, setOnboardingData] = useState<OnboardingData>({
     photos: [],
@@ -95,6 +121,18 @@ const OnboardingPage = () => {
     hobbies: [],
     values: [],
     favoriteVerse: '',
+    height: '',
+    language: '',
+    personalPromptQuestion: '',
+    personalPromptAnswer: '',
+    communicationStyle: '',
+    loveStyle: '',
+    educationLevel: '',
+    zodiacSign: '',
+    drinkingHabit: '',
+    smokingHabit: '',
+    workoutHabit: '',
+    petPreference: '',
     relationshipGoals: [],
     preferredGender: null,
     minAge: 18,
@@ -177,8 +215,12 @@ const OnboardingPage = () => {
       });
 
       if (success) {
-        setShowSuccessModal(true);
-        setTimeout(() => navigate('/dashboard'), 3000);
+        try {
+          localStorage.setItem('faithbliss_show_post_onboarding_offer', '1');
+        } catch {
+          // Ignore localStorage access errors.
+        }
+        navigate('/dashboard', { replace: true });
       } else {
         throw new Error('Onboarding failed. Please try again.');
       }
@@ -191,8 +233,6 @@ const OnboardingPage = () => {
   const prevStep = () => {
     if (currentStep > 0) setCurrentStep(currentStep - 1);
   };
-
-  if (showSuccessModal) return <OnboardingSuccessModal />;
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -211,22 +251,47 @@ const OnboardingPage = () => {
             setOnboardingData={setOnboardingData}
           />
           <ProfileBuilderSlide
+            isVisible={currentStep === 2}
+            onboardingData={onboardingData}
+            setOnboardingData={setOnboardingData}
+          />
+          <LocationPermissionSlide
             isVisible={currentStep === 1}
             onboardingData={onboardingData}
             setOnboardingData={setOnboardingData}
           />
           <RelationshipGoalsSlide
-            isVisible={currentStep === 2}
-            onboardingData={onboardingData}
-            setOnboardingData={setOnboardingData}
-          />
-          <PartnerPreferencesSlide
             isVisible={currentStep === 3}
             onboardingData={onboardingData}
             setOnboardingData={setOnboardingData}
           />
-          <MatchingPreferencesSlide
+          <LifestyleHabitsSlide
             isVisible={currentStep === 4}
+            onboardingData={onboardingData}
+            setOnboardingData={setOnboardingData}
+          />
+          <PersonalEssenceSlide
+            isVisible={currentStep === 5}
+            onboardingData={onboardingData}
+            setOnboardingData={setOnboardingData}
+          />
+          <InterestsSelectionSlide
+            isVisible={currentStep === 7}
+            onboardingData={onboardingData}
+            setOnboardingData={setOnboardingData}
+          />
+          <ShareMoreAboutYouSlide
+            isVisible={currentStep === 6}
+            onboardingData={onboardingData}
+            setOnboardingData={setOnboardingData}
+          />
+          <PartnerPreferencesSlide
+            isVisible={currentStep === 8}
+            onboardingData={onboardingData}
+            setOnboardingData={setOnboardingData}
+          />
+          <MatchingPreferencesSlide
+            isVisible={currentStep === 9}
             onboardingData={onboardingData}
             setOnboardingData={setOnboardingData}
           />

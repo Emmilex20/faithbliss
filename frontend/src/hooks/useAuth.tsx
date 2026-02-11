@@ -53,15 +53,28 @@ interface OnboardingData {
     longitude?: number; // Added
     phoneNumber?: string; // Added
     countryCode?: string; // Added
-    birthday?: Date; // Added
+    birthday?: Date | string; // Added
     fieldOfStudy?: string; // Added
     profession?: string; // Added
     faithJourney?: string; // Added
     sundayActivity?: string; // Added
     lookingFor?: string[]; // Added
     hobbies?: string[]; // Added
+    interests?: string[]; // Added
     values?: string[]; // Added
     favoriteVerse?: string; // Added
+    drinkingHabit?: string; // Added
+    smokingHabit?: string; // Added
+    workoutHabit?: string; // Added
+    petPreference?: string; // Added
+    height?: string; // Added
+    language?: string; // Added
+    personalPromptQuestion?: string; // Added
+    personalPromptAnswer?: string; // Added
+    communicationStyle?: string; // Added
+    loveStyle?: string; // Added
+    educationLevel?: string; // Added
+    zodiacSign?: string; // Added
     profilePhoto1?: string; // Expecting the final Cloud Storage URL
     profilePhoto2?: string;
     profilePhoto3?: string;
@@ -70,6 +83,112 @@ interface OnboardingData {
     profilePhoto6?: string;
     [key: string]: any; // Allow for dynamic fields to be passed
 }
+
+const sanitizeText = (value: unknown, maxLen: number): string | undefined => {
+    if (typeof value !== "string") return undefined;
+    const cleaned = value.trim();
+    if (!cleaned) return undefined;
+    return cleaned.slice(0, maxLen);
+};
+
+const sanitizeArray = (value: unknown, maxItems = 20, maxLen = 60): string[] | undefined => {
+    if (!Array.isArray(value)) return undefined;
+    const cleaned = value
+        .filter((item) => typeof item === "string")
+        .map((item) => (item as string).trim())
+        .filter(Boolean)
+        .slice(0, maxItems)
+        .map((item) => item.slice(0, maxLen));
+    return cleaned;
+};
+
+const sanitizeOnboardingPayload = (payload: OnboardingData): Record<string, any> => {
+    const result: Record<string, any> = {};
+
+    const textFields: Array<[keyof OnboardingData, number]> = [
+        ["name", 120],
+        ["bio", 500],
+        ["location", 160],
+        ["denomination", 80],
+        ["phoneNumber", 30],
+        ["countryCode", 8],
+        ["fieldOfStudy", 120],
+        ["profession", 120],
+        ["favoriteVerse", 120],
+        ["drinkingHabit", 80],
+        ["smokingHabit", 80],
+        ["workoutHabit", 80],
+        ["petPreference", 80],
+        ["height", 20],
+        ["language", 60],
+        ["personalPromptQuestion", 120],
+        ["personalPromptAnswer", 280],
+        ["communicationStyle", 80],
+        ["loveStyle", 80],
+        ["educationLevel", 80],
+        ["zodiacSign", 40],
+        ["faithJourney", 40],
+        ["churchAttendance", 40],
+        ["sundayActivity", 40],
+        ["baptismStatus", 40],
+        ["preferredGender", 20],
+    ];
+
+    textFields.forEach(([field, maxLen]) => {
+        const value = sanitizeText(payload[field], maxLen);
+        if (value !== undefined) result[field] = value;
+    });
+
+    const arrayFields: Array<keyof OnboardingData> = [
+        "relationshipGoals",
+        "lookingFor",
+        "hobbies",
+        "values",
+        "interests",
+        "spiritualGifts",
+        "preferredFaithJourney",
+        "preferredChurchAttendance",
+        "preferredRelationshipGoals",
+        "preferredDenomination",
+        "personality",
+    ];
+
+    arrayFields.forEach((field) => {
+        const value = sanitizeArray(payload[field]);
+        if (value !== undefined) result[field] = value;
+    });
+
+    if (payload.birthday instanceof Date) {
+        result.birthday = payload.birthday;
+    } else if (typeof payload.birthday === "string" && payload.birthday.trim()) {
+        const parsed = new Date(payload.birthday);
+        if (!Number.isNaN(parsed.getTime())) result.birthday = parsed;
+    }
+
+    const numericBounds: Array<[keyof OnboardingData, number, number, boolean]> = [
+        ["age", 18, 99, true],
+        ["latitude", -90, 90, false],
+        ["longitude", -180, 180, false],
+        ["minAge", 18, 99, true],
+        ["maxAge", 18, 99, true],
+        ["maxDistance", 1, 500, true],
+    ];
+
+    numericBounds.forEach(([field, min, max, integer]) => {
+        const value = payload[field];
+        if (typeof value !== "number" || Number.isNaN(value)) return;
+        const bounded = Math.min(max, Math.max(min, value));
+        result[field] = integer ? Math.round(bounded) : bounded;
+    });
+
+    for (let i = 1; i <= 6; i++) {
+        const key = `profilePhoto${i}`;
+        const url = sanitizeText(payload[key], 500);
+        if (url !== undefined) result[key] = url;
+    }
+
+    return result;
+};
 
 //  FIX 1: Update User interface to include all fields from the Mongoose model
 
@@ -123,8 +242,21 @@ const fetchUserDataFromFirestore = async (fbUser: FirebaseAuthUser): Promise<Use
         sundayActivity: backendData.sundayActivity,
         lookingFor: backendData.lookingFor,
         hobbies: backendData.hobbies,
+        interests: backendData.interests,
         values: backendData.values,
         favoriteVerse: backendData.favoriteVerse,
+        drinkingHabit: backendData.drinkingHabit,
+        smokingHabit: backendData.smokingHabit,
+        workoutHabit: backendData.workoutHabit,
+        petPreference: backendData.petPreference,
+        height: backendData.height,
+        language: backendData.language,
+        personalPromptQuestion: backendData.personalPromptQuestion,
+        personalPromptAnswer: backendData.personalPromptAnswer,
+        communicationStyle: backendData.communicationStyle,
+        loveStyle: backendData.loveStyle,
+        educationLevel: backendData.educationLevel,
+        zodiacSign: backendData.zodiacSign,
         
         // Photo URLs
         profilePhoto1: backendData.profilePhoto1,
@@ -412,7 +544,7 @@ export function useAuth() {
                 //  FIX 3: Spread all fields in onboardingData, which ensures all profile fields 
                 // are updated, even if they were undefined before.
                 await updateDoc(userDocRef, {
-                    ...onboardingData, // This includes all profile fields like faithJourney, lookingFor, etc.
+                    ...sanitizeOnboardingPayload(onboardingData), // sanitize before writing to Firestore
                     onboardingCompleted: true, // Set the flag to true
                     updatedAt: serverTimestamp(),
                 });
@@ -426,7 +558,7 @@ export function useAuth() {
                     // since OnboardingData contains a subset of User fields.
                     const updatedUser: User = { 
                         ...prevUser, 
-                        ...onboardingData, // Merge new data including all profile/photo fields
+                        ...sanitizeOnboardingPayload(onboardingData), // Merge sanitized data
                         onboardingCompleted: true,
                     };
                     localStorage.setItem("user", JSON.stringify(updatedUser));
@@ -649,8 +781,21 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
             lifestyle: data.lifestyle,
             lookingFor: data.lookingFor,
             hobbies: data.hobbies,
+            interests: data.interests,
             values: data.values,
             favoriteVerse: data.favoriteVerse,
+            drinkingHabit: data.drinkingHabit,
+            smokingHabit: data.smokingHabit,
+            workoutHabit: data.workoutHabit,
+            petPreference: data.petPreference,
+            height: data.height,
+            language: data.language,
+            personalPromptQuestion: data.personalPromptQuestion,
+            personalPromptAnswer: data.personalPromptAnswer,
+            communicationStyle: data.communicationStyle,
+            loveStyle: data.loveStyle,
+            educationLevel: data.educationLevel,
+            zodiacSign: data.zodiacSign,
 
             // Photos
             profilePhoto1: data.profilePhoto1,

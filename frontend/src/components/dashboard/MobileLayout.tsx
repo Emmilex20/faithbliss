@@ -22,7 +22,7 @@ export const MobileLayout = ({
   showSidePanel,
   onToggleFilters,
   onToggleSidePanel,
-  topContent,
+  topContent: _topContent,
   children
 }: MobileLayoutProps) => {
   return (
@@ -39,11 +39,9 @@ export const MobileLayout = ({
         onToggleSidePanel={onToggleSidePanel}
       />
 
-      {topContent && <div className="px-2 pt-1">{topContent}</div>}
-      
       {/* Mobile Profile Display */}
-      <div className="flex h-[calc(100vh-210px)] flex-col px-2 pb-3 pt-2">
-        <div className="relative mx-auto h-full w-full max-w-[560px] flex-1">
+      <div className="flex h-[calc(100dvh-74px)] flex-col px-0 pb-0 pt-0">
+        <div className="relative mx-auto h-full w-full flex-1">
           {children}
         </div>
       </div>

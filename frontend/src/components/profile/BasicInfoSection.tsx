@@ -1,4 +1,5 @@
 import type { ProfileData } from "@/types/profile";
+import { BIO_MAX_LENGTH, PROFILE_PROMPT_OPTIONS, PROMPT_ANSWER_MAX_LENGTH } from '@/constants/profilePrompts';
 
 interface BasicInfoSectionProps {
   profileData: ProfileData;
@@ -73,6 +74,28 @@ const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps
               <option value="Postgraduate">Postgraduate</option>
             </select>
           </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-3">Height</label>
+            <input
+              type="text"
+              value={profileData.height || ''}
+              onChange={(e) => setProfileData(prev => prev ? ({...prev, height: e.target.value}) : null)}
+              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-400 focus:border-pink-500 focus:outline-none transition-colors"
+              placeholder={`e.g., 5'9" or 175 cm`}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-3">Language</label>
+            <input
+              type="text"
+              value={profileData.language || ''}
+              onChange={(e) => setProfileData(prev => prev ? ({...prev, language: e.target.value}) : null)}
+              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-400 focus:border-pink-500 focus:outline-none transition-colors"
+              placeholder="English"
+            />
+          </div>
         </div>
 
         <div className="mt-6">
@@ -125,6 +148,136 @@ const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps
               </svg>
             </button>
           </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-3">Personal Prompt</label>
+            <select
+              value={profileData.personalPromptQuestion || ''}
+              onChange={(e) => setProfileData(prev => prev ? ({...prev, personalPromptQuestion: e.target.value}) : null)}
+              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
+            >
+              <option value="">Select a question</option>
+              {PROFILE_PROMPT_OPTIONS.map((prompt) => (
+                <option key={prompt} value={prompt}>
+                  {prompt}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-3">Prompt Answer</label>
+            <textarea
+              value={profileData.personalPromptAnswer || ''}
+              onChange={(e) =>
+                setProfileData((prev) =>
+                  prev
+                    ? ({
+                        ...prev,
+                        personalPromptAnswer: e.target.value.slice(0, PROMPT_ANSWER_MAX_LENGTH),
+                      })
+                    : null
+                )
+              }
+              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-400 focus:border-pink-500 focus:outline-none transition-colors"
+              placeholder="Your answer"
+              rows={3}
+            />
+            <p className="mt-2 text-right text-xs text-gray-400">
+              {(profileData.personalPromptAnswer?.length || 0)}/{PROMPT_ANSWER_MAX_LENGTH}
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-3">Communication Style</label>
+            <select
+              value={profileData.communicationStyle || ''}
+              onChange={(e) => setProfileData(prev => prev ? ({...prev, communicationStyle: e.target.value}) : null)}
+              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
+            >
+              <option value="">Select communication style</option>
+              <option value="Big time texter">Big time texter</option>
+              <option value="Phone caller">Phone caller</option>
+              <option value="Video chatter">Video chatter</option>
+              <option value="Bad texter">Bad texter</option>
+              <option value="Better in person">Better in person</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-3">Love Style</label>
+            <select
+              value={profileData.loveStyle || ''}
+              onChange={(e) => setProfileData(prev => prev ? ({...prev, loveStyle: e.target.value}) : null)}
+              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
+            >
+              <option value="">Select love style</option>
+              <option value="Thoughtful gestures">Thoughtful gestures</option>
+              <option value="Presents">Presents</option>
+              <option value="Touch">Touch</option>
+              <option value="Compliments">Compliments</option>
+              <option value="Time together">Time together</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-3">Education Level</label>
+            <select
+              value={profileData.educationLevel || ''}
+              onChange={(e) => setProfileData(prev => prev ? ({...prev, educationLevel: e.target.value}) : null)}
+              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
+            >
+              <option value="">Select education level</option>
+              <option value="Bachelors">Bachelors</option>
+              <option value="In College">In College</option>
+              <option value="High School">High School</option>
+              <option value="PhD">PhD</option>
+              <option value="In Grad School">In Grad School</option>
+              <option value="Masters">Masters</option>
+              <option value="Trade School">Trade School</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-3">Zodiac Sign</label>
+            <select
+              value={profileData.zodiacSign || ''}
+              onChange={(e) => setProfileData(prev => prev ? ({...prev, zodiacSign: e.target.value}) : null)}
+              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
+            >
+              <option value="">Select zodiac sign</option>
+              <option value="Capricorn">Capricorn</option>
+              <option value="Aquarius">Aquarius</option>
+              <option value="Pisces">Pisces</option>
+              <option value="Aries">Aries</option>
+              <option value="Taurus">Taurus</option>
+              <option value="Gemini">Gemini</option>
+              <option value="Cancer">Cancer</option>
+              <option value="Leo">Leo</option>
+              <option value="Virgo">Virgo</option>
+              <option value="Libra">Libra</option>
+              <option value="Scorpio">Scorpio</option>
+              <option value="Sagittarius">Sagittarius</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <label className="block text-sm font-semibold text-gray-300 mb-3">About Me (Bio)</label>
+          <textarea
+            value={profileData.bio || ''}
+            onChange={(e) =>
+              setProfileData((prev) =>
+                prev
+                  ? ({
+                      ...prev,
+                      bio: e.target.value.slice(0, BIO_MAX_LENGTH),
+                    })
+                  : null
+              )
+            }
+            rows={5}
+            className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-400 resize-none focus:border-pink-500 focus:outline-none transition-colors"
+            placeholder="Introduce yourself to make a strong impression."
+          />
+          <p className="mt-2 text-right text-xs text-gray-400">{(profileData.bio?.length || 0)}/{BIO_MAX_LENGTH}</p>
         </div>
       </div>
     </div>

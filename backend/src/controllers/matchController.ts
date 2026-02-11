@@ -157,12 +157,17 @@ const getPotentialMatches = async (req: Request, res: Response) => {
     res.status(200).json(
       potentialMatches.map((u) => ({
         id: u.id,
-        name: u.name,
+        name: (typeof u.name === 'string' && u.name.trim()) ? u.name.trim() : 'FaithBliss User',
         age: u.age,
         gender: u.gender,
         denomination: u.denomination,
         location: u.location,
         profilePhoto1: u.profilePhoto1,
+        profilePhoto2: (u as any).profilePhoto2,
+        profilePhoto3: (u as any).profilePhoto3,
+        bio: (typeof (u as any).bio === 'string' && (u as any).bio.trim())
+          ? (u as any).bio.trim()
+          : '',
       }))
     );
   } catch (error) {

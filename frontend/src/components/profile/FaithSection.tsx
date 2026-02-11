@@ -139,6 +139,73 @@ const FaithSection = ({ profileData, setProfileData }: FaithSectionProps) => (
           />
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-3">Drinking Habit</label>
+            <select
+              value={profileData.drinkingHabit || ''}
+              onChange={(e) => setProfileData(prev => prev ? ({...prev, drinkingHabit: e.target.value}) : null)}
+              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
+            >
+              <option value="">Select drinking habit</option>
+              <option value="Not for me">Not for me</option>
+              <option value="Sober">Sober</option>
+              <option value="On special occasions">On special occasions</option>
+              <option value="Socially on weekends">Socially on weekends</option>
+              <option value="Most Nights">Most Nights</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-3">Smoking Habit</label>
+            <select
+              value={profileData.smokingHabit || ''}
+              onChange={(e) => setProfileData(prev => prev ? ({...prev, smokingHabit: e.target.value}) : null)}
+              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
+            >
+              <option value="">Select smoking habit</option>
+              <option value="Non-smoker">Non-smoker</option>
+              <option value="Social smoker">Social smoker</option>
+              <option value="Smoker">Smoker</option>
+              <option value="Trying to quit">Trying to quit</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-3">Workout Habit</label>
+            <select
+              value={profileData.workoutHabit || ''}
+              onChange={(e) => setProfileData(prev => prev ? ({...prev, workoutHabit: e.target.value}) : null)}
+              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
+            >
+              <option value="">Select workout habit</option>
+              <option value="Everyday">Everyday</option>
+              <option value="Often">Often</option>
+              <option value="Sometimes">Sometimes</option>
+              <option value="Never">Never</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-3">Pet Preference</label>
+            <select
+              value={profileData.petPreference || ''}
+              onChange={(e) => setProfileData(prev => prev ? ({...prev, petPreference: e.target.value}) : null)}
+              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
+            >
+              <option value="">Select pet preference</option>
+              <option value="Dog">Dog</option>
+              <option value="Cat">Cat</option>
+              <option value="Bird">Bird</option>
+              <option value="Fish">Fish</option>
+              <option value="Don't have but love">Don&apos;t have but love</option>
+              <option value="Pet-free">Pet-free</option>
+              <option value="Want a pet">Want a pet</option>
+              <option value="Allergic to pets">Allergic to pets</option>
+            </select>
+          </div>
+        </div>
+
         <div>
           <label className="block text-sm font-semibold text-gray-300 mb-3">Looking For</label>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

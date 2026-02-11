@@ -72,12 +72,21 @@ const fieldOfStudyOptions = [
   'English',
   'Art',
 ];
+const languageOptions = [
+  'English',
+  'Spanish',
+  'French',
+  'Portuguese',
+  'German',
+  'Yoruba',
+  'Igbo',
+  'Hausa',
+];
 
 const personalityOptions = ['Adventurous', 'Outgoing', 'Creative', 'Reserved', 'Analytical', 'Charismatic'];
 const hobbiesOptions = ['Reading', 'Hiking', 'Photography', 'Cooking', 'Gaming', 'Traveling', 'Sports', 'Music'];
 const valuesOptions = ['Love', 'Faith', 'Hope', 'Honesty', 'Kindness', 'Compassion', 'Family', 'Friendship'];
 const spiritualGiftsOptions = ['Serving', 'Teaching', 'Encouragement', 'Giving', 'Leadership', 'Mercy', 'Wisdom', 'Faith'];
-const interestsOptions = ['Volunteering', 'Travel', 'Brunch', 'Coffee', 'Movies', 'Concerts', 'Art', 'Tech'];
 
 const RequiredLabel = ({ children }: { children: React.ReactNode }) => (
   <h3 className="text-xl font-semibold text-white">
@@ -103,10 +112,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
     setOnboardingData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleMultiSelect = (
-    name: 'personality' | 'hobbies' | 'values' | 'spiritualGifts' | 'interests',
-    value: string
-  ) => {
+  const handleMultiSelect = (name: 'personality' | 'hobbies' | 'values' | 'spiritualGifts', value: string) => {
     setOnboardingData((prev) => {
       const list = prev[name] || [];
       const nextList = list.includes(value) ? list.filter((item: string) => item !== value) : [...list, value];
@@ -220,20 +226,6 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
 
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-300">
-              Location <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="text"
-              name="location"
-              value={onboardingData.location}
-              onChange={handleChange}
-              placeholder="Your location (e.g., City, State)"
-              className="input-style"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-300">
               Field of Study <span className="text-red-400">*</span>
             </label>
             <SelectWithOtherInput
@@ -259,6 +251,30 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
               className="input-style"
             />
           </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-300">Height</label>
+            <input
+              type="text"
+              name="height"
+              value={onboardingData.height || ''}
+              onChange={handleChange}
+              placeholder={`e.g., 5'9" or 175 cm`}
+              className="input-style"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-300">Language</label>
+            <SelectWithOtherInput
+              label=""
+              name="language"
+              options={languageOptions}
+              selectedValue={onboardingData.language || ''}
+              onChange={handleSelectWithOtherChange}
+              placeholder="Select your primary language"
+            />
+          </div>
         </div>
 
         <div>
@@ -270,20 +286,6 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
             onCountryChange={handleCountryChange}
             phoneNumber={onboardingData.phoneNumber}
             onPhoneChange={handlePhoneChange}
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-300">
-            Bio <span className="text-red-400">*</span>
-          </label>
-          <textarea
-            name="bio"
-            value={onboardingData.bio}
-            onChange={handleChange}
-            placeholder="Write a short bio..."
-            rows={4}
-            className="input-style w-full"
           />
         </div>
 
@@ -351,21 +353,6 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
           </div>
         </div>
 
-        <div className="space-y-4">
-          <h3 className="text-xl font-semibold text-white">What are your interests?</h3>
-          <div className="flex flex-wrap gap-2">
-            {interestsOptions.map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => handleMultiSelect('interests', option)}
-                className={`chip ${onboardingData.interests?.includes(option) ? 'chip-selected' : ''}`}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </motion.div>
   );

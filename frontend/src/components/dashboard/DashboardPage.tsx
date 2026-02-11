@@ -11,6 +11,7 @@ import { MobileLayout } from '@/components/dashboard/MobileLayout';
 import { ProfileDisplay } from '@/components/dashboard/ProfileDisplay';
 import { OverlayPanels } from '@/components/dashboard/OverlayPanels';
 import { StoryBar } from '@/components/dashboard/StoryBar';
+import { PostOnboardingWelcomeOverlay } from '@/components/dashboard/PostOnboardingWelcomeOverlay';
 import { insertScrollbarStyles } from '@/components/dashboard/styles'; 
 import { usePotentialMatches, useMatching, useStories, useUserProfile } from '@/hooks/useAPI'; 
 
@@ -25,12 +26,12 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
   const { showSuccess, showInfo } = useToast();
   const [showFilters, setShowFilters] = useState(false);
     const [showSidePanel, setShowSidePanel] = useState(false);
+    const [showPostOnboardingOverlay, setShowPostOnboardingOverlay] = useState(false);
     const [currentProfileIndex, setCurrentProfileIndex] = useState(0);
     const [swipeDirection, setSwipeDirection] = useState<'left' | 'right'>('right');
     const [filteredProfiles, setFilteredProfiles] = useState<User[] | null>(null);
     const [isLoadingFilters, setIsLoadingFilters] = useState(false);
     const [isExhausted, setIsExhausted] = useState(false);
-    const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
     const prefetchingRef = useRef(false);
     const lastPrefetchAtRef = useRef(0);
     const lastPrefetchIndexRef = useRef<number | null>(null);
@@ -54,48 +55,18 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const userName = currentUserData.name || "User";
     const userImage = currentUserData.profilePhoto1 || undefined; // Uses profilePhoto1 from the User interface
 
-    useEffect(() => {
-        const currentUserId = currentUserData?.id ? String(currentUserData.id) : 'anon';
-        const storageKey = `likedUserIds_${currentUserId}`;
-        const stored = localStorage.getItem(storageKey);
-        const storedIds = stored ? (JSON.parse(stored) as string[]) : [];
-        const profileLikes = (currentUserData as any)?.likes || [];
-        const profilePasses = (currentUserData as any)?.passes || [];
-        const profileMatches = (currentUserData as any)?.matches || [];
-        const merged = new Set<string>(
-            [...storedIds, ...profileLikes, ...profilePasses, ...profileMatches].map(String)
-        );
-        setLikedIds(merged);
-    }, [currentUserData]);
-
-    const updateLikedIds = (userId: string) => {
-        const currentUserId = currentUserData?.id ? String(currentUserData.id) : 'anon';
-        const storageKey = `likedUserIds_${currentUserId}`;
-        setLikedIds(prev => {
-            const next = new Set(prev);
-            next.add(userId);
-            localStorage.setItem(storageKey, JSON.stringify(Array.from(next)));
-            return next;
-        });
-    };
-
     const activeProfiles = useMemo(() => {
         // Function to check for valid ID
         // Note: Filters out any null/undefined entries AND entries missing 'id'/'_id'
         const hasValidId = (p: User) => p && (p.id || (p as any)._id);
         const hasDisplayName = (p: User) => typeof p.name === 'string' && p.name.trim().length > 0;
         const currentUserId = currentUserData?.id ? String(currentUserData.id) : null;
-        const isLiked = (p: User) => {
-            const pid = p.id || (p as any)._id;
-            return pid ? likedIds.has(String(pid)) : false;
-        };
 
         if (filteredProfiles && filteredProfiles.length > 0) {
             // Filter filtered results for valid IDs
             return filteredProfiles
                 .filter(hasValidId)
                 .filter(hasDisplayName)
-                .filter(p => !isLiked(p))
                 .filter(p => !currentUserId || String(p.id || (p as any)._id) !== currentUserId);
         }
         
@@ -104,15 +75,18 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
         return safeProfiles
             .filter(hasValidId)
             .filter(hasDisplayName)
-            .filter(p => !isLiked(p))
             .filter(p => !currentUserId || String(p.id || (p as any)._id) !== currentUserId);
         
-    }, [profiles, filteredProfiles, likedIds, currentUserData]);
+    }, [profiles, filteredProfiles, currentUserData]);
 
 
     useEffect(() => {
-        setCurrentProfileIndex(0);
+        if (!Array.isArray(activeProfiles) || activeProfiles.length === 0) {
+            setCurrentProfileIndex(0);
+            return;
+        }
         setIsExhausted(false);
+        setCurrentProfileIndex((prev) => (prev >= activeProfiles.length ? 0 : prev));
     }, [filteredProfiles, activeProfiles]);
 
     useEffect(() => {
@@ -135,11 +109,50 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
           });
     }, [activeProfiles, currentProfileIndex, filteredProfiles, refetch]);
 
+    // Auto-refresh feed when empty so newly registered users appear without manual reload.
+    useEffect(() => {
+        if (filteredProfiles) return;
+        if (matchesLoading || userLoading) return;
+        if (Array.isArray(activeProfiles) && activeProfiles.length > 0) return;
+
+        const refresh = () => {
+            refetch().catch(() => null);
+        };
+
+        const intervalId = window.setInterval(refresh, 10000);
+
+        const handleVisibilityOrFocus = () => {
+            if (document.visibilityState === 'visible') {
+                refresh();
+            }
+        };
+
+        window.addEventListener('focus', handleVisibilityOrFocus);
+        document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+        return () => {
+            window.clearInterval(intervalId);
+            window.removeEventListener('focus', handleVisibilityOrFocus);
+            document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+        };
+    }, [filteredProfiles, matchesLoading, userLoading, activeProfiles, refetch]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       setFilteredProfiles(null);
     };
+  }, []);
+
+  useEffect(() => {
+    try {
+      const shouldShow = localStorage.getItem('faithbliss_show_post_onboarding_offer') === '1';
+      if (shouldShow) {
+        setShowPostOnboardingOverlay(true);
+      }
+    } catch {
+      // Ignore localStorage access errors.
+    }
   }, []);
 
   // Show loading state while fetching matches or refreshing the token.
@@ -165,7 +178,9 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
   }
 
     // Use a safe, non-asserted way to define the current profile
-    const currentProfile = !isExhausted && activeProfiles ? activeProfiles[currentProfileIndex] : undefined; 
+    const currentProfile = !isExhausted && activeProfiles
+      ? (activeProfiles[currentProfileIndex] ?? activeProfiles[0])
+      : undefined; 
 
     const goToNextProfile = () => {
         if (!activeProfiles) return;
@@ -206,7 +221,6 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
                 // Note: userIdToLike might be an ObjectId object, but JS will convert it to a string for the API call.
                 await likeUser(userIdToLike);
                 console.log(`Liked profile ${userIdToLike}`);
-                updateLikedIds(String(userIdToLike));
                 setSwipeDirection('right');
                 goToNextProfile();
             } catch (error) {
@@ -227,7 +241,6 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     try {
       await passUser(userIdToPass);
       console.log(`Passed on profile ${userIdToPass}`);
-      updateLikedIds(String(userIdToPass));
       setSwipeDirection('left');
       goToNextProfile();
     } catch (error) {
@@ -259,6 +272,28 @@ const handleApplyFilters = async (filters: any) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white pb-20 no-horizontal-scroll dashboard-main">
+      {showPostOnboardingOverlay && (
+        <PostOnboardingWelcomeOverlay
+          user={currentUserData}
+          onPrimary={() => {
+            setShowPostOnboardingOverlay(false);
+            setShowFilters(true);
+            try {
+              localStorage.removeItem('faithbliss_show_post_onboarding_offer');
+            } catch {
+              // Ignore localStorage access errors.
+            }
+          }}
+          onDismiss={() => {
+            setShowPostOnboardingOverlay(false);
+            try {
+              localStorage.removeItem('faithbliss_show_post_onboarding_offer');
+            } catch {
+              // Ignore localStorage access errors.
+            }
+          }}
+        />
+      )}
       {isLoadingFilters && <HeartBeatLoader message="Applying filters..." />}
       
       {/* Desktop Layout */}

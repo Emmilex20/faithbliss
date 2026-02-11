@@ -32,24 +32,8 @@ export const ProfileDisplay = ({
 }: ProfileDisplayProps) => {
   const swipeLockRef = useRef(false);
   const swiperRef = useRef<SwiperInstance | null>(null);
-
-  if (!currentProfile || (!currentProfile.id && !(currentProfile as any)._id)) {
-    if (currentProfile) {
-      console.error("ProfileDisplay: Profile object exists but is missing 'id' or '_id'. Skipping card render.");
-    }
-
-    return (
-      <NoProfilesState
-        title={noProfilesTitle}
-        description={noProfilesDescription}
-        actionLabel={noProfilesActionLabel}
-        onAction={onNoProfilesAction}
-        onStartOver={onStartOver}
-      />
-    );
-  }
-
-  const profileKey = String(currentProfile.id || (currentProfile as any)._id);
+  const hasRenderableProfile = Boolean(currentProfile && (currentProfile.id || (currentProfile as any)._id));
+  const profileKey = hasRenderableProfile ? String(currentProfile!.id || (currentProfile as any)._id) : 'no-profile';
 
   const resetToCenter = () => {
     requestAnimationFrame(() => {
@@ -79,8 +63,9 @@ export const ProfileDisplay = ({
   };
 
   useEffect(() => {
+    if (!hasRenderableProfile) return;
     resetToCenter();
-  }, [profileKey]);
+  }, [profileKey, hasRenderableProfile]);
 
   const edgeSlide = useMemo(
     () => (
@@ -88,6 +73,22 @@ export const ProfileDisplay = ({
     ),
     []
   );
+
+  if (!hasRenderableProfile) {
+    if (currentProfile) {
+      console.error("ProfileDisplay: Profile object exists but is missing 'id' or '_id'. Skipping card render.");
+    }
+
+    return (
+      <NoProfilesState
+        title={noProfilesTitle}
+        description={noProfilesDescription}
+        actionLabel={noProfilesActionLabel}
+        onAction={onNoProfilesAction}
+        onStartOver={onStartOver}
+      />
+    );
+  }
 
   return (
     <div className="h-full w-full">
@@ -107,8 +108,8 @@ export const ProfileDisplay = ({
       >
         <SwiperSlide className="h-full">{edgeSlide}</SwiperSlide>
         <SwiperSlide className="h-full">
-          <div className="mx-auto h-full w-full max-w-[560px]">
-            <HingeStyleProfileCard profile={currentProfile} onGoBack={onGoBack} onLike={onLike} onPass={onPass} />
+          <div className="mx-auto h-full w-full lg:max-w-[560px]">
+            <HingeStyleProfileCard profile={currentProfile as User} onGoBack={onGoBack} onLike={onLike} onPass={onPass} />
           </div>
         </SwiperSlide>
         <SwiperSlide className="h-full">{edgeSlide}</SwiperSlide>

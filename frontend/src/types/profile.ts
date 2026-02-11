@@ -27,8 +27,21 @@ export interface ProfileData {
   spiritualGifts?: string[];
   lookingFor?: string[];
   hobbies?: string[]; // This maps to interests in UpdateProfileDto
+  interests?: string[];
   values?: string[];
   favoriteVerse?: string;
+  drinkingHabit?: string;
+  smokingHabit?: string;
+  workoutHabit?: string;
+  petPreference?: string;
+  communicationStyle?: string;
+  loveStyle?: string;
+  educationLevel?: string;
+  zodiacSign?: string;
+  height?: string;
+  language?: string;
+  personalPromptQuestion?: string;
+  personalPromptAnswer?: string;
   // Photos as an array for UI convenience
   photos: Array<string | null>;
   isVerified?: boolean;

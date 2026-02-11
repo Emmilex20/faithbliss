@@ -195,10 +195,145 @@ const updateUserProfile = async (req: Request, res: Response) => {
     const uid = (req as any).userId; // from protect middleware
     if (!uid) return res.status(401).json({ message: 'Unauthorized' });
 
-    const updates = req.body;
+    const body = (req.body || {}) as Record<string, unknown>;
+
+    const toTrimmedString = (value: unknown, maxLen = 300): string | undefined => {
+      if (typeof value !== 'string') return undefined;
+      const cleaned = value.trim();
+      if (!cleaned) return undefined;
+      return cleaned.slice(0, maxLen);
+    };
+
+    const toBoundedNumber = (value: unknown, min: number, max: number): number | undefined => {
+      if (typeof value !== 'number' || Number.isNaN(value)) return undefined;
+      return Math.min(max, Math.max(min, value));
+    };
+
+    const toStringArray = (value: unknown, maxItems = 20, maxLen = 60): string[] | undefined => {
+      if (!Array.isArray(value)) return undefined;
+      const cleaned = value
+        .filter((item) => typeof item === 'string')
+        .map((item) => (item as string).trim())
+        .filter(Boolean)
+        .slice(0, maxItems)
+        .map((item) => item.slice(0, maxLen));
+      return cleaned;
+    };
+
+    const allowedEnum = <T extends string>(value: unknown, allowed: readonly T[]): T | undefined => {
+      if (typeof value !== 'string') return undefined;
+      return (allowed as readonly string[]).includes(value) ? (value as T) : undefined;
+    };
+
+    const normalizedUpdates: Record<string, unknown> = {};
+
+    const gender = allowedEnum(body.gender, ['MALE', 'FEMALE'] as const);
+    if (gender) normalizedUpdates.gender = gender;
+
+    const age = toBoundedNumber(body.age, 18, 99);
+    if (age !== undefined) normalizedUpdates.age = Math.round(age);
+
+    const faithJourney = allowedEnum(body.faithJourney, ['GROWING', 'ROOTED', 'EXPLORING', 'PASSIONATE'] as const);
+    if (faithJourney) normalizedUpdates.faithJourney = faithJourney;
+
+    const churchAttendance = allowedEnum(
+      body.churchAttendance,
+      ['WEEKLY', 'BI_WEEKLY', 'BIWEEKLY', 'MONTHLY', 'OCCASIONALLY', 'RARELY'] as const
+    );
+    if (churchAttendance) normalizedUpdates.churchAttendance = churchAttendance;
+
+    const sundayActivity = allowedEnum(
+      body.sundayActivity,
+      ['WEEKLY', 'BI_WEEKLY', 'BIWEEKLY', 'MONTHLY', 'OCCASIONALLY', 'RARELY'] as const
+    );
+    if (sundayActivity) normalizedUpdates.sundayActivity = sundayActivity;
+
+    const baptismStatus = allowedEnum(
+      body.baptismStatus,
+      ['BAPTIZED', 'NOT_BAPTIZED', 'PENDING', 'PLANNING_TO', 'PREFER_NOT_TO_SAY'] as const
+    );
+    if (baptismStatus) normalizedUpdates.baptismStatus = baptismStatus;
+
+    const preferredGender = allowedEnum(body.preferredGender, ['MALE', 'FEMALE'] as const);
+    if (preferredGender) normalizedUpdates.preferredGender = preferredGender;
+
+    const shortTextFields: Array<[string, number]> = [
+      ['name', 120],
+      ['denomination', 80],
+      ['location', 160],
+      ['countryCode', 8],
+      ['phoneNumber', 30],
+      ['fieldOfStudy', 120],
+      ['profession', 120],
+      ['drinkingHabit', 80],
+      ['smokingHabit', 80],
+      ['workoutHabit', 80],
+      ['petPreference', 80],
+      ['height', 20],
+      ['language', 60],
+      ['favoriteVerse', 120],
+      ['personalPromptQuestion', 120],
+      ['personalPromptAnswer', 280],
+      ['communicationStyle', 80],
+      ['loveStyle', 80],
+      ['educationLevel', 80],
+      ['zodiacSign', 40],
+    ];
+
+    shortTextFields.forEach(([field, maxLen]) => {
+      const value = toTrimmedString(body[field], maxLen);
+      if (value !== undefined) normalizedUpdates[field] = value;
+    });
+
+    const bio = toTrimmedString(body.bio, 500);
+    if (bio !== undefined) normalizedUpdates.bio = bio;
+
+    const birthday = toTrimmedString(body.birthday, 40);
+    if (birthday !== undefined) normalizedUpdates.birthday = birthday;
+
+    const latitude = toBoundedNumber(body.latitude, -90, 90);
+    if (latitude !== undefined) normalizedUpdates.latitude = latitude;
+
+    const longitude = toBoundedNumber(body.longitude, -180, 180);
+    if (longitude !== undefined) normalizedUpdates.longitude = longitude;
+
+    const minAge = toBoundedNumber(body.minAge, 18, 99);
+    if (minAge !== undefined) normalizedUpdates.minAge = Math.round(minAge);
+
+    const maxAge = toBoundedNumber(body.maxAge, 18, 99);
+    if (maxAge !== undefined) normalizedUpdates.maxAge = Math.round(maxAge);
+
+    const maxDistance = toBoundedNumber(body.maxDistance, 1, 500);
+    if (maxDistance !== undefined) normalizedUpdates.maxDistance = Math.round(maxDistance);
+
+    const listFields = [
+      'hobbies',
+      'values',
+      'lookingFor',
+      'relationshipGoals',
+      'interests',
+      'spiritualGifts',
+      'preferredFaithJourney',
+      'preferredChurchAttendance',
+      'preferredRelationshipGoals',
+      'preferredDenomination',
+      'personality',
+    ];
+
+    listFields.forEach((field) => {
+      const value = toStringArray(body[field]);
+      if (value !== undefined) normalizedUpdates[field] = value;
+    });
+
+    normalizedUpdates.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+
+    if (Object.keys(normalizedUpdates).length === 1) {
+      return res.status(400).json({ message: 'No valid profile fields provided.' });
+    }
+
     const userRef = db.collection('users').doc(uid);
 
-    await userRef.update(updates);
+    await userRef.set(normalizedUpdates, { merge: true });
 
     const updatedDoc = await userRef.get();
     const updatedData = updatedDoc.data();

@@ -197,8 +197,21 @@ export interface UpdateProfileDto {
   spiritualGifts?: string[];
   lookingFor?: string[];
   hobbies?: string[];
+  interests?: string[];
   values?: string[];
   favoriteVerse?: string;
+  drinkingHabit?: string;
+  smokingHabit?: string;
+  workoutHabit?: string;
+  petPreference?: string;
+  communicationStyle?: string;
+  loveStyle?: string;
+  educationLevel?: string;
+  zodiacSign?: string;
+  height?: string;
+  language?: string;
+  personalPromptQuestion?: string;
+  personalPromptAnswer?: string;
   isVerified?: boolean;
   onboardingCompleted?: boolean;
 }

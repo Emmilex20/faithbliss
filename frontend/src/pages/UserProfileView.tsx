@@ -72,6 +72,12 @@ const ChipList = ({ items, emptyText = 'Not provided' }: { items?: string[]; emp
   );
 };
 
+const getInterestList = (profile: User): string[] => {
+  if (Array.isArray(profile.interests) && profile.interests.length > 0) return profile.interests;
+  if (Array.isArray(profile.hobbies) && profile.hobbies.length > 0) return profile.hobbies;
+  return [];
+};
+
 const ProfilePage = () => {
   const { id: profileId } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -278,6 +284,14 @@ const ProfilePage = () => {
                   <p className="text-xs text-slate-400">Field of Study</p>
                   <p className="mt-1 font-medium text-white">{profile.fieldOfStudy || 'Not provided'}</p>
                 </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">Height</p>
+                  <p className="mt-1 font-medium text-white">{profile.height || 'Not provided'}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">Language</p>
+                  <p className="mt-1 font-medium text-white">{profile.language || 'Not provided'}</p>
+                </div>
               </div>
             </InfoCard>
           </div>
@@ -285,6 +299,14 @@ const ProfilePage = () => {
           <div className="space-y-4 sm:space-y-5">
             <InfoCard title="Bio">
               <p className="leading-relaxed text-slate-200">{profile.bio?.trim() || 'No bio provided yet.'}</p>
+              {(profile.personalPromptQuestion || profile.personalPromptAnswer) && (
+                <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">
+                    {profile.personalPromptQuestion || 'Prompt'}
+                  </p>
+                  <p className="mt-1 text-slate-100">{profile.personalPromptAnswer || 'No answer provided yet.'}</p>
+                </div>
+              )}
             </InfoCard>
 
             <InfoCard title="Faith and Values">
@@ -324,6 +346,22 @@ const ProfilePage = () => {
                   <p className="text-xs text-slate-400">Lifestyle</p>
                   <p className="mt-1 font-medium text-white">{formatValue(profile.lifestyle)}</p>
                 </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">Drinking</p>
+                  <p className="mt-1 font-medium text-white">{formatValue(profile.drinkingHabit)}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">Smoking</p>
+                  <p className="mt-1 font-medium text-white">{formatValue(profile.smokingHabit)}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">Workout</p>
+                  <p className="mt-1 font-medium text-white">{formatValue(profile.workoutHabit)}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">Pets</p>
+                  <p className="mt-1 font-medium text-white">{formatValue(profile.petPreference)}</p>
+                </div>
               </div>
             </InfoCard>
 
@@ -333,7 +371,7 @@ const ProfilePage = () => {
                   <p className="mb-2 flex items-center gap-2 text-xs text-slate-400">
                     <Sparkles className="h-4 w-4" /> Interests / Hobbies
                   </p>
-                  <ChipList items={profile.hobbies} emptyText="No hobbies listed" />
+                  <ChipList items={getInterestList(profile)} emptyText="No interests listed" />
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3">
                   <p className="text-xs text-slate-400">Favorite Verse</p>
@@ -356,6 +394,22 @@ const ProfilePage = () => {
                     <UserRound className="h-4 w-4" /> Gender
                   </p>
                   <p className="mt-1 font-medium text-white">{formatValue(profile.gender)}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">Communication Style</p>
+                  <p className="mt-1 font-medium text-white">{formatValue(profile.communicationStyle)}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">Love Style</p>
+                  <p className="mt-1 font-medium text-white">{formatValue(profile.loveStyle)}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">Education Level</p>
+                  <p className="mt-1 font-medium text-white">{formatValue(profile.educationLevel)}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">Zodiac Sign</p>
+                  <p className="mt-1 font-medium text-white">{formatValue(profile.zodiacSign)}</p>
                 </div>
               </div>
             </InfoCard>

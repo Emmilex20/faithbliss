@@ -26,6 +26,18 @@ export interface OnboardingData {
   hobbies: string[];
   values: string[];
   favoriteVerse: string;
+  height?: string;
+  language?: string;
+  personalPromptQuestion?: string;
+  personalPromptAnswer?: string;
+  communicationStyle?: string;
+  loveStyle?: string;
+  educationLevel?: string;
+  zodiacSign?: string;
+  drinkingHabit?: string;
+  smokingHabit?: string;
+  workoutHabit?: string;
+  petPreference?: string;
 
   preferredFaithJourney?: FaithJourney[] | null;
   preferredChurchAttendance?: ChurchAttendance[] | null;

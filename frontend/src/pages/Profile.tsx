@@ -54,6 +54,11 @@ const ProfilePage: React.FC = () => {
       : Array.isArray(user.interests)
         ? user.interests
         : [];
+    const mergedInterests = Array.isArray(user.interests) && user.interests.length > 0
+      ? user.interests
+      : Array.isArray(user.hobbies)
+        ? user.hobbies
+        : [];
 
     const mergedLookingFor = Array.isArray(user.lookingFor) && user.lookingFor.length > 0
       ? user.lookingFor
@@ -86,8 +91,21 @@ const ProfilePage: React.FC = () => {
       spiritualGifts: user.spiritualGifts || [],
       lookingFor: mergedLookingFor,
       hobbies: mergedHobbies,
+      interests: mergedInterests,
       values: user.values || [],
       favoriteVerse: user.favoriteVerse || '',
+      drinkingHabit: user.drinkingHabit || '',
+      smokingHabit: user.smokingHabit || '',
+      workoutHabit: user.workoutHabit || '',
+      petPreference: user.petPreference || '',
+      height: user.height || '',
+      language: user.language || '',
+      personalPromptQuestion: user.personalPromptQuestion || '',
+      personalPromptAnswer: user.personalPromptAnswer || '',
+      communicationStyle: user.communicationStyle || '',
+      loveStyle: user.loveStyle || '',
+      educationLevel: user.educationLevel || '',
+      zodiacSign: user.zodiacSign || '',
       photos: [
         user.profilePhoto1 || null,
         user.profilePhoto2 || null,
@@ -120,8 +138,21 @@ const ProfilePage: React.FC = () => {
         baptismStatus: profileData.baptismStatus as any,
         spiritualGifts: profileData.spiritualGifts || [],
         lookingFor: profileData.lookingFor,
-        hobbies: profileData.hobbies,
+        hobbies: profileData.interests || profileData.hobbies,
+        interests: profileData.interests || profileData.hobbies,
         values: profileData.values,
+        drinkingHabit: profileData.drinkingHabit,
+        smokingHabit: profileData.smokingHabit,
+        workoutHabit: profileData.workoutHabit,
+        petPreference: profileData.petPreference,
+        height: profileData.height,
+        language: profileData.language,
+        personalPromptQuestion: profileData.personalPromptQuestion,
+        personalPromptAnswer: profileData.personalPromptAnswer,
+        communicationStyle: profileData.communicationStyle,
+        loveStyle: profileData.loveStyle,
+        educationLevel: profileData.educationLevel,
+        zodiacSign: profileData.zodiacSign,
         location: profileData.location?.address || undefined,
         latitude: profileData.location?.latitude ?? undefined,
         longitude: profileData.location?.longitude ?? undefined,
