@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import type { OnboardingData } from './types';
 import SelectableCard from './SelectableCard';
-import { CountryCodeSelect, defaultCountry } from '@/components/CountryCodeSelect';
+import { CountryCodeSelect, countries, defaultCountry } from '@/components/CountryCodeSelect';
 import type { Country } from '@/components/CountryCodeSelect';
 import SelectWithOtherInput from './SelectWithOtherInput';
 
@@ -96,6 +96,12 @@ const RequiredLabel = ({ children }: { children: React.ReactNode }) => (
 
 const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: ProfileBuilderSlideProps) => {
   const [selectedCountry, setSelectedCountry] = React.useState<Country>(defaultCountry);
+
+  React.useEffect(() => {
+    if (!onboardingData.countryCode) return;
+    const match = countries.find((country) => country.dialCode === onboardingData.countryCode);
+    if (match) setSelectedCountry(match);
+  }, [onboardingData.countryCode]);
 
   if (!isVisible) return null;
 

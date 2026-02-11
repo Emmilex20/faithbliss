@@ -6,59 +6,92 @@ export interface Country {
   name: string;
   code: string;
   dialCode: string;
-  flag: string;
 }
 
-// African countries with dial codes
-const africanCountries: Country[] = [
-  { name: 'Nigeria', code: 'NG', dialCode: '+234', flag: '🇳🇬' },
-  { name: 'South Africa', code: 'ZA', dialCode: '+27', flag: '🇿🇦' },
-  { name: 'Kenya', code: 'KE', dialCode: '+254', flag: '🇰🇪' },
-  { name: 'Ghana', code: 'GH', dialCode: '+233', flag: '🇬🇭' },
-  { name: 'Ethiopia', code: 'ET', dialCode: '+251', flag: '🇪🇹' },
-  { name: 'Egypt', code: 'EG', dialCode: '+20', flag: '🇪🇬' },
-  { name: 'Morocco', code: 'MA', dialCode: '+212', flag: '🇲🇦' },
-  { name: 'Uganda', code: 'UG', dialCode: '+256', flag: '🇺🇬' },
-  { name: 'Algeria', code: 'DZ', dialCode: '+213', flag: '🇩🇿' },
-  { name: 'Tanzania', code: 'TZ', dialCode: '+255', flag: '🇹🇿' },
-  { name: 'Cameroon', code: 'CM', dialCode: '+237', flag: '🇨🇲' },
-  { name: 'Ivory Coast', code: 'CI', dialCode: '+225', flag: '🇨🇮' },
-  { name: 'Angola', code: 'AO', dialCode: '+244', flag: '🇦🇴' },
-  { name: 'Madagascar', code: 'MG', dialCode: '+261', flag: '🇲🇬' },
-  { name: 'Burkina Faso', code: 'BF', dialCode: '+226', flag: '🇧🇫' },
-  { name: 'Mali', code: 'ML', dialCode: '+223', flag: '🇲🇱' },
-  { name: 'Malawi', code: 'MW', dialCode: '+265', flag: '🇲🇼' },
-  { name: 'Niger', code: 'NE', dialCode: '+227', flag: '🇳🇪' },
-  { name: 'Zambia', code: 'ZM', dialCode: '+260', flag: '🇿🇲' },
-  { name: 'Senegal', code: 'SN', dialCode: '+221', flag: '🇸🇳' },
-  { name: 'Chad', code: 'TD', dialCode: '+235', flag: '🇹🇩' },
-  { name: 'Somalia', code: 'SO', dialCode: '+252', flag: '🇸🇴' },
-  { name: 'Zimbabwe', code: 'ZW', dialCode: '+263', flag: '🇿🇼' },
-  { name: 'Guinea', code: 'GN', dialCode: '+224', flag: '🇬🇳' },
-  { name: 'Rwanda', code: 'RW', dialCode: '+250', flag: '🇷🇼' },
-  { name: 'Benin', code: 'BJ', dialCode: '+229', flag: '🇧🇯' },
-  { name: 'Burundi', code: 'BI', dialCode: '+257', flag: '🇧🇮' },
-  { name: 'Tunisia', code: 'TN', dialCode: '+216', flag: '🇹🇳' },
-  { name: 'Togo', code: 'TG', dialCode: '+228', flag: '🇹🇬' },
-  { name: 'Sierra Leone', code: 'SL', dialCode: '+232', flag: '🇸🇱' },
-  { name: 'Libya', code: 'LY', dialCode: '+218', flag: '🇱🇾' },
-  { name: 'Liberia', code: 'LR', dialCode: '+231', flag: '🇱🇷' },
-  { name: 'Mauritania', code: 'MR', dialCode: '+222', flag: '🇲🇷' },
-  { name: 'Lesotho', code: 'LS', dialCode: '+266', flag: '🇱🇸' },
-  { name: 'Gambia', code: 'GM', dialCode: '+220', flag: '🇬🇲' },
-  { name: 'Guinea-Bissau', code: 'GW', dialCode: '+245', flag: '🇬🇼' },
-  { name: 'Gabon', code: 'GA', dialCode: '+241', flag: '🇬🇦' },
-  { name: 'Botswana', code: 'BW', dialCode: '+267', flag: '🇧🇼' },
-  { name: 'Namibia', code: 'NA', dialCode: '+264', flag: '🇳🇦' },
-  { name: 'Mauritius', code: 'MU', dialCode: '+230', flag: '🇲🇺' },
-  { name: 'Swaziland', code: 'SZ', dialCode: '+268', flag: '🇸🇿' },
-  { name: 'Comoros', code: 'KM', dialCode: '+269', flag: '🇰🇲' },
-  { name: 'Cape Verde', code: 'CV', dialCode: '+238', flag: '🇨🇻' },
-  { name: 'Djibouti', code: 'DJ', dialCode: '+253', flag: '🇩🇯' },
-  { name: 'Equatorial Guinea', code: 'GQ', dialCode: '+240', flag: '🇬🇶' },
-  { name: 'Eritrea', code: 'ER', dialCode: '+291', flag: '🇪🇷' },
-  { name: 'São Tomé and Príncipe', code: 'ST', dialCode: '+239', flag: '🇸🇹' },
-  { name: 'Seychelles', code: 'SC', dialCode: '+248', flag: '🇸🇨' },
+// Global country list with dial codes
+export const countries: Country[] = [
+  { name: 'United States', code: 'US', dialCode: '+1' },
+  { name: 'Canada', code: 'CA', dialCode: '+1' },
+  { name: 'United Kingdom', code: 'GB', dialCode: '+44' },
+  { name: 'Australia', code: 'AU', dialCode: '+61' },
+  { name: 'New Zealand', code: 'NZ', dialCode: '+64' },
+  { name: 'Germany', code: 'DE', dialCode: '+49' },
+  { name: 'France', code: 'FR', dialCode: '+33' },
+  { name: 'Italy', code: 'IT', dialCode: '+39' },
+  { name: 'Spain', code: 'ES', dialCode: '+34' },
+  { name: 'Portugal', code: 'PT', dialCode: '+351' },
+  { name: 'Netherlands', code: 'NL', dialCode: '+31' },
+  { name: 'Belgium', code: 'BE', dialCode: '+32' },
+  { name: 'Switzerland', code: 'CH', dialCode: '+41' },
+  { name: 'Austria', code: 'AT', dialCode: '+43' },
+  { name: 'Sweden', code: 'SE', dialCode: '+46' },
+  { name: 'Norway', code: 'NO', dialCode: '+47' },
+  { name: 'Denmark', code: 'DK', dialCode: '+45' },
+  { name: 'Finland', code: 'FI', dialCode: '+358' },
+  { name: 'Ireland', code: 'IE', dialCode: '+353' },
+  { name: 'Poland', code: 'PL', dialCode: '+48' },
+  { name: 'Czech Republic', code: 'CZ', dialCode: '+420' },
+  { name: 'Romania', code: 'RO', dialCode: '+40' },
+  { name: 'Greece', code: 'GR', dialCode: '+30' },
+  { name: 'Turkey', code: 'TR', dialCode: '+90' },
+  { name: 'Russia', code: 'RU', dialCode: '+7' },
+  { name: 'Ukraine', code: 'UA', dialCode: '+380' },
+  { name: 'India', code: 'IN', dialCode: '+91' },
+  { name: 'Pakistan', code: 'PK', dialCode: '+92' },
+  { name: 'Bangladesh', code: 'BD', dialCode: '+880' },
+  { name: 'China', code: 'CN', dialCode: '+86' },
+  { name: 'Japan', code: 'JP', dialCode: '+81' },
+  { name: 'South Korea', code: 'KR', dialCode: '+82' },
+  { name: 'Hong Kong', code: 'HK', dialCode: '+852' },
+  { name: 'Singapore', code: 'SG', dialCode: '+65' },
+  { name: 'Malaysia', code: 'MY', dialCode: '+60' },
+  { name: 'Thailand', code: 'TH', dialCode: '+66' },
+  { name: 'Vietnam', code: 'VN', dialCode: '+84' },
+  { name: 'Philippines', code: 'PH', dialCode: '+63' },
+  { name: 'Indonesia', code: 'ID', dialCode: '+62' },
+  { name: 'Sri Lanka', code: 'LK', dialCode: '+94' },
+  { name: 'Nepal', code: 'NP', dialCode: '+977' },
+  { name: 'UAE', code: 'AE', dialCode: '+971' },
+  { name: 'Saudi Arabia', code: 'SA', dialCode: '+966' },
+  { name: 'Qatar', code: 'QA', dialCode: '+974' },
+  { name: 'Kuwait', code: 'KW', dialCode: '+965' },
+  { name: 'Israel', code: 'IL', dialCode: '+972' },
+  { name: 'Jordan', code: 'JO', dialCode: '+962' },
+  { name: 'Lebanon', code: 'LB', dialCode: '+961' },
+  { name: 'Egypt', code: 'EG', dialCode: '+20' },
+  { name: 'Morocco', code: 'MA', dialCode: '+212' },
+  { name: 'Algeria', code: 'DZ', dialCode: '+213' },
+  { name: 'Tunisia', code: 'TN', dialCode: '+216' },
+  { name: 'Nigeria', code: 'NG', dialCode: '+234' },
+  { name: 'South Africa', code: 'ZA', dialCode: '+27' },
+  { name: 'Kenya', code: 'KE', dialCode: '+254' },
+  { name: 'Ghana', code: 'GH', dialCode: '+233' },
+  { name: 'Ethiopia', code: 'ET', dialCode: '+251' },
+  { name: 'Uganda', code: 'UG', dialCode: '+256' },
+  { name: 'Tanzania', code: 'TZ', dialCode: '+255' },
+  { name: 'Rwanda', code: 'RW', dialCode: '+250' },
+  { name: 'Zimbabwe', code: 'ZW', dialCode: '+263' },
+  { name: 'Angola', code: 'AO', dialCode: '+244' },
+  { name: 'Namibia', code: 'NA', dialCode: '+264' },
+  { name: 'Botswana', code: 'BW', dialCode: '+267' },
+  { name: 'Senegal', code: 'SN', dialCode: '+221' },
+  { name: 'Cameroon', code: 'CM', dialCode: '+237' },
+  { name: 'Ivory Coast', code: 'CI', dialCode: '+225' },
+  { name: 'Argentina', code: 'AR', dialCode: '+54' },
+  { name: 'Brazil', code: 'BR', dialCode: '+55' },
+  { name: 'Chile', code: 'CL', dialCode: '+56' },
+  { name: 'Colombia', code: 'CO', dialCode: '+57' },
+  { name: 'Peru', code: 'PE', dialCode: '+51' },
+  { name: 'Venezuela', code: 'VE', dialCode: '+58' },
+  { name: 'Uruguay', code: 'UY', dialCode: '+598' },
+  { name: 'Paraguay', code: 'PY', dialCode: '+595' },
+  { name: 'Bolivia', code: 'BO', dialCode: '+591' },
+  { name: 'Mexico', code: 'MX', dialCode: '+52' },
+  { name: 'Guatemala', code: 'GT', dialCode: '+502' },
+  { name: 'Costa Rica', code: 'CR', dialCode: '+506' },
+  { name: 'Panama', code: 'PA', dialCode: '+507' },
+  { name: 'Dominican Republic', code: 'DO', dialCode: '+1' },
+  { name: 'Jamaica', code: 'JM', dialCode: '+1' },
 ];
 
 interface CountryCodeSelectProps {
@@ -68,19 +101,26 @@ interface CountryCodeSelectProps {
   onPhoneChange: (phone: string) => void;
 }
 
-export const CountryCodeSelect = ({ 
-  selectedCountry, 
-  onCountryChange, 
-  phoneNumber, 
-  onPhoneChange 
+const getFlag = (countryCode: string) =>
+  countryCode
+    .toUpperCase()
+    .replace(/./g, (char) => String.fromCodePoint(char.charCodeAt(0) + 127397));
+
+export const CountryCodeSelect = ({
+  selectedCountry,
+  onCountryChange,
+  phoneNumber,
+  onPhoneChange,
 }: CountryCodeSelectProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const filteredCountries = africanCountries.filter(country =>
-    country.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    country.dialCode.includes(searchTerm)
+  const filteredCountries = countries.filter(
+    (country) =>
+      country.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      country.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      country.dialCode.includes(searchTerm)
   );
 
   useEffect(() => {
@@ -103,7 +143,6 @@ export const CountryCodeSelect = ({
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-      {/* Country Code Dropdown */}
       <div className="relative" ref={dropdownRef}>
         <label className="block text-sm font-medium text-gray-300 mb-2">
           Country Code <span className="text-pink-500">*</span>
@@ -113,8 +152,8 @@ export const CountryCodeSelect = ({
           onClick={() => setIsOpen(!isOpen)}
           className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 text-white transition-all flex items-center justify-between text-sm md:text-base"
         >
-          <div className="flex items-center space-x-2">
-            <span className="text-lg">{selectedCountry.flag}</span>
+          <div className="flex items-center space-x-2 overflow-hidden">
+            <span className="text-lg">{getFlag(selectedCountry.code)}</span>
             <span>{selectedCountry.dialCode}</span>
           </div>
           <ChevronDown className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -122,7 +161,6 @@ export const CountryCodeSelect = ({
 
         {isOpen && (
           <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 max-h-64 overflow-hidden">
-            {/* Search Input */}
             <div className="p-3 border-b border-gray-700">
               <div className="relative">
                 <Search className="absolute left-3 top-3 w-4 h-4 text-gray-500" />
@@ -137,31 +175,27 @@ export const CountryCodeSelect = ({
               </div>
             </div>
 
-            {/* Countries List */}
             <div className="max-h-48 overflow-y-auto">
               {filteredCountries.length > 0 ? (
                 filteredCountries.map((country) => (
                   <button
-                    key={country.code}
+                    key={`${country.code}-${country.dialCode}`}
                     onClick={() => handleCountrySelect(country)}
                     className="w-full px-3 py-2 text-left hover:bg-gray-700 focus:bg-gray-700 transition-colors flex items-center space-x-3"
                   >
-                    <span className="text-lg">{country.flag}</span>
-                    <span className="text-white text-sm">{country.name}</span>
+                    <span className="text-lg">{getFlag(country.code)}</span>
+                    <span className="text-white text-sm truncate">{country.name}</span>
                     <span className="text-gray-400 text-sm ml-auto">{country.dialCode}</span>
                   </button>
                 ))
               ) : (
-                <div className="p-3 text-gray-400 text-sm text-center">
-                  No countries found
-                </div>
+                <div className="p-3 text-gray-400 text-sm text-center">No countries found</div>
               )}
             </div>
           </div>
         )}
       </div>
 
-      {/* Phone Number Input */}
       <div className="sm:col-span-2">
         <label className="block text-sm font-medium text-gray-300 mb-2">
           Phone Number <span className="text-pink-500">*</span>
@@ -181,5 +215,5 @@ export const CountryCodeSelect = ({
   );
 };
 
-// Default country (Nigeria)
-export const defaultCountry = africanCountries[0];
+// Default country (United States)
+export const defaultCountry = countries[0];

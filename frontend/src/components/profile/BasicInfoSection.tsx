@@ -1,5 +1,8 @@
+import React from 'react';
 import type { ProfileData } from "@/types/profile";
 import { BIO_MAX_LENGTH, PROFILE_PROMPT_OPTIONS, PROMPT_ANSWER_MAX_LENGTH } from '@/constants/profilePrompts';
+import { CountryCodeSelect, countries, defaultCountry } from '@/components/CountryCodeSelect';
+import type { Country } from '@/components/CountryCodeSelect';
 
 interface BasicInfoSectionProps {
   profileData: ProfileData;
@@ -7,6 +10,14 @@ interface BasicInfoSectionProps {
 }
 
 const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps) => {
+  const [selectedCountry, setSelectedCountry] = React.useState<Country>(defaultCountry);
+
+  React.useEffect(() => {
+    if (!profileData.countryCode) return;
+    const match = countries.find((country) => country.dialCode === profileData.countryCode);
+    if (match) setSelectedCountry(match);
+  }, [profileData.countryCode]);
+
   return (
     <div className="space-y-6">
       <div className="bg-gray-800/50 rounded-3xl p-8 border border-gray-700/50">
@@ -96,6 +107,21 @@ const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps
               placeholder="English"
             />
           </div>
+        </div>
+
+        <div className="mt-6">
+          <label className="block text-sm font-semibold text-gray-300 mb-3">Phone Number</label>
+          <CountryCodeSelect
+            selectedCountry={selectedCountry}
+            onCountryChange={(country) => {
+              setSelectedCountry(country);
+              setProfileData((prev) => (prev ? { ...prev, countryCode: country.dialCode } : null));
+            }}
+            phoneNumber={profileData.phoneNumber || ''}
+            onPhoneChange={(phone) =>
+              setProfileData((prev) => (prev ? { ...prev, phoneNumber: phone } : null))
+            }
+          />
         </div>
 
         <div className="mt-6">
