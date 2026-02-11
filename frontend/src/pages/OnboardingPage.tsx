@@ -106,6 +106,7 @@ const OnboardingPage = () => {
   const totalSteps = 10;
 
   const [onboardingData, setOnboardingData] = useState<OnboardingData>({
+    age: undefined,
     photos: [],
     birthday: '',
     location: '',

@@ -4,6 +4,7 @@ export type RelationshipGoals = 'FRIENDSHIP' | 'RELATIONSHIP' | 'MARRIAGE_MINDED
 export type Gender = 'MAN' | 'WOMAN' | 'OTHER';
 
 export interface OnboardingData {
+  age?: number;
   faithJourney: FaithJourney;
   churchAttendance: ChurchAttendance;
   relationshipGoals: RelationshipGoals[];

@@ -105,8 +105,26 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
 
   if (!isVisible) return null;
 
+  const calculateAgeFromBirthday = (birthday: string): number | undefined => {
+    if (!birthday) return undefined;
+    const birthDate = new Date(birthday);
+    if (Number.isNaN(birthDate.getTime())) return undefined;
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age -= 1;
+    }
+    return age >= 0 ? age : undefined;
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    if (name === 'birthday') {
+      const age = calculateAgeFromBirthday(value);
+      setOnboardingData((prev) => ({ ...prev, birthday: value, age }));
+      return;
+    }
     setOnboardingData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -228,6 +246,17 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
               Birthday <span className="text-red-400">*</span>
             </label>
             <input type="date" name="birthday" value={onboardingData.birthday} onChange={handleChange} className="input-style" />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-300">Age (auto-calculated)</label>
+            <input
+              type="number"
+              value={onboardingData.age ?? ''}
+              readOnly
+              className="input-style opacity-80 cursor-not-allowed"
+              placeholder="Will be calculated from birthday"
+            />
           </div>
 
           <div>
