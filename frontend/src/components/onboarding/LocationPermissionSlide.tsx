@@ -11,7 +11,7 @@ interface LocationPermissionSlideProps {
 
 const reverseGeocode = async (latitude: number, longitude: number): Promise<string> => {
   const response = await fetch(
-    `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+    `http://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
   );
   if (!response.ok) throw new Error('Reverse geocoding failed');
   const data = await response.json();

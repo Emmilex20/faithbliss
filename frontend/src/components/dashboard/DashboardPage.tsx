@@ -35,6 +35,8 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const prefetchingRef = useRef(false);
     const lastPrefetchAtRef = useRef(0);
     const lastPrefetchIndexRef = useRef<number | null>(null);
+    const pendingActionIdsRef = useRef<Set<string>>(new Set());
+    const hasCompletedInitialLoadRef = useRef(false);
 
   // Fetch real potential matches from backend
   const { 
@@ -145,6 +147,17 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
   }, []);
 
   useEffect(() => {
+    if (hasCompletedInitialLoadRef.current) return;
+    if (matchesError) {
+      hasCompletedInitialLoadRef.current = true;
+      return;
+    }
+    if (!matchesLoading && profiles !== null) {
+      hasCompletedInitialLoadRef.current = true;
+    }
+  }, [matchesLoading, profiles, matchesError]);
+
+  useEffect(() => {
     try {
       const shouldShow = localStorage.getItem('faithbliss_show_post_onboarding_offer') === '1';
       if (shouldShow) {
@@ -156,7 +169,10 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
   }, []);
 
   // Show loading state while fetching matches or refreshing the token.
-    if (matchesLoading || userLoading || (profiles === null && !matchesError)) {
+    const isInitialHydration =
+      !hasCompletedInitialLoadRef.current && (matchesLoading || userLoading || (profiles === null && !matchesError));
+
+    if (isInitialHydration) {
         return <HeartBeatLoader message="Preparing your matches..." />;
     }
 
@@ -207,7 +223,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
         await refetch();
     };
 
-  const handleLike = async () => {
+  const handleLike = () => {
     //  CRITICAL FIX: Use currentProfile?.id OR currentProfile?._id
     const userIdToLike = currentProfile?.id || currentProfile?._id;
     
@@ -216,19 +232,29 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
       goToNextProfile(); // Move to the next profile placeholder
       return;
     }
-    
-            try {
-                // Note: userIdToLike might be an ObjectId object, but JS will convert it to a string for the API call.
-                await likeUser(userIdToLike);
-                console.log(`Liked profile ${userIdToLike}`);
-                setSwipeDirection('right');
-                goToNextProfile();
-            } catch (error) {
-                console.error('Failed to like user:', error);
-            }
+
+    // Optimistic UX: move to next profile immediately.
+    setSwipeDirection('right');
+    goToNextProfile();
+
+    const key = String(userIdToLike);
+    if (pendingActionIdsRef.current.has(key)) return;
+    pendingActionIdsRef.current.add(key);
+
+    // Fire network call in background so UI never blocks.
+    void likeUser(key)
+      .then(() => {
+        console.log(`Liked profile ${key}`);
+      })
+      .catch((error) => {
+        console.error('Failed to like user:', error);
+      })
+      .finally(() => {
+        pendingActionIdsRef.current.delete(key);
+      });
   };
 
-  const handlePass = async () => {
+  const handlePass = () => {
     //  CRITICAL FIX: Use currentProfile?.id OR currentProfile?._id
     const userIdToPass = currentProfile?.id || currentProfile?._id;
     
@@ -238,15 +264,25 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
       return;
     }
     
-    try {
-      await passUser(userIdToPass);
-      console.log(`Passed on profile ${userIdToPass}`);
-      setSwipeDirection('left');
-      goToNextProfile();
-    } catch (error) {
-      console.error('Failed to pass user:', error);
-      goToNextProfile(); // Always move on even if API fails
-    }
+    // Optimistic UX: move to next profile immediately.
+    setSwipeDirection('left');
+    goToNextProfile();
+
+    const key = String(userIdToPass);
+    if (pendingActionIdsRef.current.has(key)) return;
+    pendingActionIdsRef.current.add(key);
+
+    // Fire network call in background so UI never blocks.
+    void passUser(key)
+      .then(() => {
+        console.log(`Passed on profile ${key}`);
+      })
+      .catch((error) => {
+        console.error('Failed to pass user:', error);
+      })
+      .finally(() => {
+        pendingActionIdsRef.current.delete(key);
+      });
   };
 
   const handleGoBack = () => {
