@@ -15,6 +15,10 @@ interface HingeStyleProfileCardProps {
 
 export const HingeStyleProfileCard = ({ profile, onGoBack, onPass, onLike }: HingeStyleProfileCardProps) => {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const stopEvent = (event: React.SyntheticEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
 
   const photos = useMemo(() => {
     const list = [
@@ -80,15 +84,19 @@ export const HingeStyleProfileCard = ({ profile, onGoBack, onPass, onLike }: Hin
           />
         </AnimatePresence>
 
-        <div className="absolute inset-x-0 top-0 p-3 sm:p-3">
+        <div className="absolute inset-x-0 top-0 z-30 p-3 sm:p-3 swiper-no-swiping">
           <div className="flex items-center gap-1.5 rounded-full bg-black/30 px-3 py-2 backdrop-blur-sm">
             {photos.map((_, index) => (
               <button
                 key={index}
                 type="button"
-                onMouseDown={(e) => e.stopPropagation()}
-                onTouchStart={(e) => e.stopPropagation()}
-                onClick={() => setCurrentPhotoIndex(index)}
+                onPointerDown={stopEvent}
+                onMouseDown={stopEvent}
+                onTouchStart={stopEvent}
+                onClick={(e) => {
+                  stopEvent(e);
+                  setCurrentPhotoIndex(index);
+                }}
                 className={`h-1.5 flex-1 rounded-full ${index === currentPhotoIndex ? 'bg-white' : 'bg-white/35'}`}
                 aria-label={`Photo ${index + 1}`}
               />
@@ -100,20 +108,28 @@ export const HingeStyleProfileCard = ({ profile, onGoBack, onPass, onLike }: Hin
           <>
             <button
               type="button"
-              onMouseDown={(e) => e.stopPropagation()}
-              onTouchStart={(e) => e.stopPropagation()}
-              onClick={prevPhoto}
-              className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-white/25 bg-black/40 p-2 text-white transition hover:bg-black/60"
+              onPointerDown={stopEvent}
+              onMouseDown={stopEvent}
+              onTouchStart={stopEvent}
+              onClick={(e) => {
+                stopEvent(e);
+                prevPhoto();
+              }}
+              className="absolute left-3 top-1/2 z-30 -translate-y-1/2 rounded-full border border-white/25 bg-black/40 p-2 text-white transition hover:bg-black/60 swiper-no-swiping"
               aria-label="Previous photo"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
             <button
               type="button"
-              onMouseDown={(e) => e.stopPropagation()}
-              onTouchStart={(e) => e.stopPropagation()}
-              onClick={nextPhoto}
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-white/25 bg-black/40 p-2 text-white transition hover:bg-black/60"
+              onPointerDown={stopEvent}
+              onMouseDown={stopEvent}
+              onTouchStart={stopEvent}
+              onClick={(e) => {
+                stopEvent(e);
+                nextPhoto();
+              }}
+              className="absolute right-3 top-1/2 z-30 -translate-y-1/2 rounded-full border border-white/25 bg-black/40 p-2 text-white transition hover:bg-black/60 swiper-no-swiping"
               aria-label="Next photo"
             >
               <ChevronRight className="h-5 w-5" />
@@ -121,7 +137,7 @@ export const HingeStyleProfileCard = ({ profile, onGoBack, onPass, onLike }: Hin
           </>
         )}
 
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/75 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-24 sm:px-4 sm:pb-5 sm:pt-20">
+        <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/75 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-24 sm:px-4 sm:pb-5 sm:pt-20">
           <div className="mb-2 inline-flex items-center rounded-full bg-emerald-500/85 px-3 py-1 text-sm font-semibold text-white">
             Nearby
           </div>
