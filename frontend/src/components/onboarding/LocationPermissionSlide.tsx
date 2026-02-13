@@ -9,6 +9,17 @@ interface LocationPermissionSlideProps {
   isVisible: boolean;
 }
 
+const reverseGeocode = async (latitude: number, longitude: number): Promise<string> => {
+  const response = await fetch(
+    `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+  );
+  if (!response.ok) throw new Error('Reverse geocoding failed');
+  const data = await response.json();
+  const city = data.city || data.locality || data.principalSubdivision || '';
+  const country = data.countryName || '';
+  return [city, country].filter(Boolean).join(', ');
+};
+
 const LocationPermissionSlide: React.FC<LocationPermissionSlideProps> = ({
   onboardingData,
   setOnboardingData,
@@ -17,18 +28,46 @@ const LocationPermissionSlide: React.FC<LocationPermissionSlideProps> = ({
   const [isRequesting, setIsRequesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showHowUsed, setShowHowUsed] = useState(false);
-  const [showComingSoonPopup, setShowComingSoonPopup] = useState(false);
 
   if (!isVisible) return null;
 
   const requestLocation = async () => {
     setError(null);
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported on this browser. Enter your location manually below.');
+      return;
+    }
+
     setIsRequesting(true);
-    setShowComingSoonPopup(true);
-    setTimeout(() => {
-      setShowComingSoonPopup(false);
-      setIsRequesting(false);
-    }, 1800);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          const address = await reverseGeocode(latitude, longitude);
+          setOnboardingData((prev) => ({
+            ...prev,
+            latitude,
+            longitude,
+            location: address || prev.location,
+          }));
+        } catch {
+          const { latitude, longitude } = position.coords;
+          setOnboardingData((prev) => ({
+            ...prev,
+            latitude,
+            longitude,
+          }));
+          setError('Location captured, but address lookup failed. Please type your city manually below.');
+        } finally {
+          setIsRequesting(false);
+        }
+      },
+      () => {
+        setError('Location permission denied. You can still continue by typing your location manually.');
+        setIsRequesting(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   return (
@@ -39,17 +78,6 @@ const LocationPermissionSlide: React.FC<LocationPermissionSlideProps> = ({
       transition={{ duration: 0.45 }}
       className="space-y-8 text-center"
     >
-      {showComingSoonPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
-          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900/95 p-5 text-center shadow-2xl">
-            <p className="text-xl font-bold text-white">Coming Soon</p>
-            <p className="mt-2 text-sm text-slate-300">
-              Auto location detection is coming soon. Please enter your location manually for now.
-            </p>
-          </div>
-        </div>
-      )}
-
       <div className="space-y-4">
         <h2 className="text-4xl font-bold leading-tight text-white">So, are you from around here?</h2>
         <p className="mx-auto max-w-xl text-lg text-slate-300">

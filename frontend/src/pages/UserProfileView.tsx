@@ -78,6 +78,12 @@ const getInterestList = (profile: User): string[] => {
   return [];
 };
 
+const normalizeList = (value?: string[] | string | null): string[] => {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === 'string' && value.trim()) return [value.trim()];
+  return [];
+};
+
 const ProfilePage = () => {
   const { id: profileId } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -289,8 +295,10 @@ const ProfilePage = () => {
                   <p className="mt-1 font-medium text-white">{profile.height || 'Not provided'}</p>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-xs text-slate-400">Language</p>
-                  <p className="mt-1 font-medium text-white">{profile.language || 'Not provided'}</p>
+                  <p className="text-xs text-slate-400">Languages Spoken</p>
+                  <div className="mt-2">
+                    <ChipList items={normalizeList(profile.languageSpoken).length ? normalizeList(profile.languageSpoken) : normalizeList(profile.language)} emptyText="Not provided" />
+                  </div>
                 </div>
               </div>
             </InfoCard>
@@ -332,7 +340,7 @@ const ProfilePage = () => {
               </div>
             </InfoCard>
 
-            <InfoCard title="Lifestyle and Relationship Goals">
+            <InfoCard title="Relationship Goals">
               <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3">
                   <p className="mb-2 text-xs text-slate-400">Looking For</p>
@@ -341,26 +349,6 @@ const ProfilePage = () => {
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3">
                   <p className="mb-2 text-xs text-slate-400">Relationship Goals</p>
                   <ChipList items={profile.relationshipGoals} emptyText="No goals listed" />
-                </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3 sm:col-span-2">
-                  <p className="text-xs text-slate-400">Lifestyle</p>
-                  <p className="mt-1 font-medium text-white">{formatValue(profile.lifestyle)}</p>
-                </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-xs text-slate-400">Drinking</p>
-                  <p className="mt-1 font-medium text-white">{formatValue(profile.drinkingHabit)}</p>
-                </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-xs text-slate-400">Smoking</p>
-                  <p className="mt-1 font-medium text-white">{formatValue(profile.smokingHabit)}</p>
-                </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-xs text-slate-400">Workout</p>
-                  <p className="mt-1 font-medium text-white">{formatValue(profile.workoutHabit)}</p>
-                </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-xs text-slate-400">Pets</p>
-                  <p className="mt-1 font-medium text-white">{formatValue(profile.petPreference)}</p>
                 </div>
               </div>
             </InfoCard>
@@ -397,19 +385,19 @@ const ProfilePage = () => {
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3">
                   <p className="text-xs text-slate-400">Communication Style</p>
-                  <p className="mt-1 font-medium text-white">{formatValue(profile.communicationStyle)}</p>
+                  <div className="mt-2">
+                    <ChipList items={normalizeList(profile.communicationStyle)} emptyText="Not provided" />
+                  </div>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-xs text-slate-400">Love Style</p>
-                  <p className="mt-1 font-medium text-white">{formatValue(profile.loveStyle)}</p>
+                  <p className="text-xs text-slate-400">Love Language</p>
+                  <div className="mt-2">
+                    <ChipList items={normalizeList(profile.loveStyle)} emptyText="Not provided" />
+                  </div>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3">
                   <p className="text-xs text-slate-400">Education Level</p>
                   <p className="mt-1 font-medium text-white">{formatValue(profile.educationLevel)}</p>
-                </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-xs text-slate-400">Zodiac Sign</p>
-                  <p className="mt-1 font-medium text-white">{formatValue(profile.zodiacSign)}</p>
                 </div>
               </div>
             </InfoCard>

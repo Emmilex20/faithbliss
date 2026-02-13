@@ -1,4 +1,5 @@
 import type { User } from '@/services/api';
+import { Sparkles } from 'lucide-react';
 
 interface PostOnboardingWelcomeOverlayProps {
   user?: User;
@@ -28,14 +29,20 @@ export const PostOnboardingWelcomeOverlay = ({
 
       <div className="relative z-10 flex min-h-screen items-center justify-center px-6 py-10">
         <div className="w-full max-w-xl text-center">
-          <h1 className="text-5xl font-black uppercase tracking-[0.08em] text-white sm:text-6xl">FaithBliss+</h1>
+          <div className="mx-auto mb-5 flex w-fit items-center gap-3 rounded-full border border-white/15 bg-slate-900/50 px-4 py-2 backdrop-blur-md">
+            <div className="rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 p-2">
+              <Sparkles className="h-5 w-5 text-white" />
+            </div>
+            <span className="text-lg font-bold tracking-wide text-white">FaithBliss</span>
+          </div>
 
           <p className="mx-auto mt-6 max-w-lg text-3xl font-semibold leading-tight text-white sm:text-4xl">
-            See more believers near you and connect faster
+            Welcome to your faith-centered journey
           </p>
 
           <p className="mx-auto mt-4 max-w-md text-sm text-slate-200 sm:text-base">
-            Your profile is ready. Start discovering meaningful matches in your city and beyond.
+            Your profile is ready. Meet believers who share your values, grow in purpose together, and build
+            meaningful connections rooted in Christ.
           </p>
 
           <div className="mt-10 space-y-4">

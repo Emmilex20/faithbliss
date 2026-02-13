@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { MessageCircleHeart, HeartHandshake, GraduationCap, MoonStar } from 'lucide-react';
+import { MessageCircleHeart, HeartHandshake, GraduationCap } from 'lucide-react';
 import type { OnboardingData } from './types';
 
 interface PersonalEssenceSlideProps {
@@ -12,20 +12,19 @@ interface PersonalEssenceSlideProps {
 const communicationOptions = ['Big time texter', 'Phone caller', 'Video chatter', 'Bad texter', 'Better in person'];
 const loveStyleOptions = ['Thoughtful gestures', 'Presents', 'Touch', 'Compliments', 'Time together'];
 const educationLevelOptions = ['Bachelors', 'In College', 'High School', 'PhD', 'In Grad School', 'Masters', 'Trade School'];
-const zodiacOptions = ['Capricorn', 'Aquarius', 'Pisces', 'Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius'];
 
-const SingleSelectChips = ({
+const MultiSelectChips = ({
   options,
   selected,
   onSelect,
 }: {
   options: string[];
-  selected?: string;
+  selected?: string[];
   onSelect: (value: string) => void;
 }) => (
   <div className="flex flex-wrap gap-2.5">
     {options.map((option) => {
-      const isSelected = selected === option;
+      const isSelected = selected?.includes(option);
       return (
         <button
           key={option}
@@ -47,6 +46,17 @@ const SingleSelectChips = ({
 const PersonalEssenceSlide: React.FC<PersonalEssenceSlideProps> = ({ onboardingData, setOnboardingData, isVisible }) => {
   if (!isVisible) return null;
 
+  const toggleMulti = (field: 'communicationStyle' | 'loveStyle', value: string) => {
+    setOnboardingData((prev) => {
+      const current = Array.isArray(prev[field]) ? prev[field] : [];
+      const exists = current.includes(value);
+      return {
+        ...prev,
+        [field]: exists ? current.filter((item) => item !== value) : [...current, value],
+      };
+    });
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, x: 100 }}
@@ -65,10 +75,10 @@ const PersonalEssenceSlide: React.FC<PersonalEssenceSlideProps> = ({ onboardingD
           <MessageCircleHeart className="h-5 w-5 text-pink-300" />
           What is your communication style?
         </h3>
-        <SingleSelectChips
+        <MultiSelectChips
           options={communicationOptions}
           selected={onboardingData.communicationStyle}
-          onSelect={(value) => setOnboardingData((prev) => ({ ...prev, communicationStyle: value }))}
+          onSelect={(value) => toggleMulti('communicationStyle', value)}
         />
       </div>
 
@@ -77,34 +87,22 @@ const PersonalEssenceSlide: React.FC<PersonalEssenceSlideProps> = ({ onboardingD
           <HeartHandshake className="h-5 w-5 text-pink-300" />
           How do you receive love?
         </h3>
-        <SingleSelectChips
+        <MultiSelectChips
           options={loveStyleOptions}
           selected={onboardingData.loveStyle}
-          onSelect={(value) => setOnboardingData((prev) => ({ ...prev, loveStyle: value }))}
-        />
-      </div>
-
-      <div className="space-y-4 border-b border-white/10 pb-7">
-        <h3 className="flex items-center gap-2 text-xl font-semibold text-white">
-          <GraduationCap className="h-5 w-5 text-pink-300" />
-          What is your education level?
-        </h3>
-        <SingleSelectChips
-          options={educationLevelOptions}
-          selected={onboardingData.educationLevel}
-          onSelect={(value) => setOnboardingData((prev) => ({ ...prev, educationLevel: value }))}
+          onSelect={(value) => toggleMulti('loveStyle', value)}
         />
       </div>
 
       <div className="space-y-4 pb-10">
         <h3 className="flex items-center gap-2 text-xl font-semibold text-white">
-          <MoonStar className="h-5 w-5 text-pink-300" />
-          What is your zodiac sign?
+          <GraduationCap className="h-5 w-5 text-pink-300" />
+          What is your education level?
         </h3>
-        <SingleSelectChips
-          options={zodiacOptions}
-          selected={onboardingData.zodiacSign}
-          onSelect={(value) => setOnboardingData((prev) => ({ ...prev, zodiacSign: value }))}
+        <MultiSelectChips
+          options={educationLevelOptions}
+          selected={onboardingData.educationLevel ? [onboardingData.educationLevel] : []}
+          onSelect={(value) => setOnboardingData((prev) => ({ ...prev, educationLevel: value }))}
         />
       </div>
     </motion.div>
@@ -112,4 +110,3 @@ const PersonalEssenceSlide: React.FC<PersonalEssenceSlideProps> = ({ onboardingD
 };
 
 export default PersonalEssenceSlide;
-

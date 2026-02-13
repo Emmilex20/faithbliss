@@ -4,6 +4,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { HeartBeatLoader } from '@/components/HeartBeatLoader';
 import { useToast } from '@/contexts/ToastContext'; 
 import { DesktopLayout } from '@/components/dashboard/DesktopLayout';
@@ -21,8 +22,7 @@ import { API, type User } from '@/services/api';
 insertScrollbarStyles();
 
 export const DashboardPage = ({ user: activeUser }: { user: User }) => {
- 
-  
+  const navigate = useNavigate();
   const { showSuccess, showInfo } = useToast();
   const [showFilters, setShowFilters] = useState(false);
     const [showSidePanel, setShowSidePanel] = useState(false);
@@ -37,6 +37,8 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const lastPrefetchIndexRef = useRef<number | null>(null);
     const pendingActionIdsRef = useRef<Set<string>>(new Set());
     const hasCompletedInitialLoadRef = useRef(false);
+    const [showForcedOnboardingPrompt, setShowForcedOnboardingPrompt] = useState(false);
+    const ONBOARDING_PAUSE_STORAGE_KEY = 'faithbliss_onboarding_pause_state';
 
   // Fetch real potential matches from backend
   const { 
@@ -167,6 +169,55 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
       // Ignore localStorage access errors.
     }
   }, []);
+
+  useEffect(() => {
+    const uid = currentUserData?.id;
+    if (!uid || currentUserData?.onboardingCompleted) return;
+
+    let timeoutId: number | undefined;
+
+    try {
+      const raw = localStorage.getItem(ONBOARDING_PAUSE_STORAGE_KEY);
+      if (!raw) return;
+      const pauseState = JSON.parse(raw) as {
+        uid?: string;
+        dashboardEnteredAt?: number | null;
+        promptShown?: boolean;
+      };
+      if (pauseState.uid !== uid || pauseState.promptShown) return;
+
+      const enteredAt = typeof pauseState.dashboardEnteredAt === 'number' ? pauseState.dashboardEnteredAt : Date.now();
+      if (typeof pauseState.dashboardEnteredAt !== 'number') {
+        localStorage.setItem(
+          ONBOARDING_PAUSE_STORAGE_KEY,
+          JSON.stringify({ ...pauseState, dashboardEnteredAt: enteredAt })
+        );
+      }
+
+      const elapsed = Date.now() - enteredAt;
+      const remaining = Math.max(0, 10 * 60 * 1000 - elapsed);
+      timeoutId = window.setTimeout(() => {
+        setShowForcedOnboardingPrompt(true);
+        try {
+          const latestRaw = localStorage.getItem(ONBOARDING_PAUSE_STORAGE_KEY);
+          if (!latestRaw) return;
+          const latest = JSON.parse(latestRaw) as Record<string, unknown>;
+          localStorage.setItem(
+            ONBOARDING_PAUSE_STORAGE_KEY,
+            JSON.stringify({ ...latest, promptShown: true })
+          );
+        } catch {
+          // Ignore localStorage errors.
+        }
+      }, remaining);
+    } catch {
+      // Ignore storage parse errors.
+    }
+
+    return () => {
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, [currentUserData?.id, currentUserData?.onboardingCompleted]);
 
   // Show loading state while fetching matches or refreshing the token.
     const isInitialHydration =
@@ -331,6 +382,23 @@ const handleApplyFilters = async (filters: any) => {
         />
       )}
       {isLoadingFilters && <HeartBeatLoader message="Applying filters..." />}
+      {showForcedOnboardingPrompt && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/80 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-pink-400/30 bg-slate-900 p-6 text-center shadow-2xl">
+            <h3 className="text-2xl font-bold text-white">Complete Your Onboarding</h3>
+            <p className="mt-3 text-sm text-slate-300">
+              To continue using FaithBliss, please finish the remaining onboarding steps.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate('/onboarding', { replace: true })}
+              className="mt-6 w-full rounded-full bg-pink-600 px-5 py-3 font-semibold text-white transition hover:bg-pink-700"
+            >
+              Continue Onboarding
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* Desktop Layout */}
                 <DesktopLayout
@@ -356,6 +424,8 @@ const handleApplyFilters = async (filters: any) => {
                 >
                     <ProfileDisplay
                         currentProfile={currentProfile}
+                        viewerLatitude={typeof currentUserData?.latitude === 'number' ? currentUserData.latitude : undefined}
+                        viewerLongitude={typeof currentUserData?.longitude === 'number' ? currentUserData.longitude : undefined}
                         onStartOver={() => setCurrentProfileIndex(0)}
                         onGoBack={handleGoBack}
                         onLike={handleLike}
@@ -392,6 +462,8 @@ const handleApplyFilters = async (filters: any) => {
                 >
                     <ProfileDisplay
                         currentProfile={currentProfile}
+                        viewerLatitude={typeof currentUserData?.latitude === 'number' ? currentUserData.latitude : undefined}
+                        viewerLongitude={typeof currentUserData?.longitude === 'number' ? currentUserData.longitude : undefined}
                         onStartOver={() => setCurrentProfileIndex(0)}
                         onGoBack={handleGoBack}
                         onLike={handleLike}

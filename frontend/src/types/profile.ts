@@ -34,12 +34,14 @@ export interface ProfileData {
   smokingHabit?: string;
   workoutHabit?: string;
   petPreference?: string;
-  communicationStyle?: string;
-  loveStyle?: string;
+  communicationStyle?: string[] | string;
+  loveStyle?: string[] | string;
   educationLevel?: string;
   zodiacSign?: string;
   height?: string;
   language?: string;
+  languageSpoken?: string[];
+  preferredMinHeight?: number;
   personalPromptQuestion?: string;
   personalPromptAnswer?: string;
   // Photos as an array for UI convenience

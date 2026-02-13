@@ -8,12 +8,33 @@ import { FloatingActionButtons } from './FloatingActionButtons';
 
 interface HingeStyleProfileCardProps {
   profile: User;
+  viewerLatitude?: number;
+  viewerLongitude?: number;
   onGoBack: () => void;
   onPass: () => void;
   onLike: () => void;
 }
 
-export const HingeStyleProfileCard = ({ profile, onGoBack, onPass, onLike }: HingeStyleProfileCardProps) => {
+const toRadians = (value: number) => (value * Math.PI) / 180;
+
+const haversineDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return earthRadiusKm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+};
+
+export const HingeStyleProfileCard = ({
+  profile,
+  viewerLatitude,
+  viewerLongitude,
+  onGoBack,
+  onPass,
+  onLike,
+}: HingeStyleProfileCardProps) => {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const stopEvent = (event: React.SyntheticEvent) => {
     event.preventDefault();
@@ -42,7 +63,15 @@ export const HingeStyleProfileCard = ({ profile, onGoBack, onPass, onLike }: Hin
   const nextPhoto = () => setCurrentPhotoIndex((prev) => (prev + 1) % photos.length);
   const prevPhoto = () => setCurrentPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length);
   const profileId = profile.id || (profile as any)._id || 'missing';
-  const distance = typeof (profile as any).distance === 'number' ? Math.round((profile as any).distance) : null;
+  const profileLatitude = typeof (profile as any).latitude === 'number' ? (profile as any).latitude : null;
+  const profileLongitude = typeof (profile as any).longitude === 'number' ? (profile as any).longitude : null;
+  const apiDistance = typeof (profile as any).distance === 'number' ? Math.round((profile as any).distance) : null;
+  const calculatedDistance =
+    viewerLatitude != null && viewerLongitude != null && profileLatitude != null && profileLongitude != null
+      ? Math.round(haversineDistanceKm(viewerLatitude, viewerLongitude, profileLatitude, profileLongitude))
+      : null;
+  const distance = apiDistance ?? calculatedDistance;
+  const distanceBadge = distance !== null ? `${distance} km away` : 'Nearby';
   const locationText = profile.location?.trim() || 'Location not set';
 
   useEffect(() => {
@@ -139,14 +168,13 @@ export const HingeStyleProfileCard = ({ profile, onGoBack, onPass, onLike }: Hin
 
         <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/75 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-24 sm:px-4 sm:pb-5 sm:pt-20">
           <div className="mb-2 inline-flex items-center rounded-full bg-emerald-500/85 px-3 py-1 text-sm font-semibold text-white">
-            Nearby
+            {distanceBadge}
           </div>
           <h2 className="text-[2.2rem] font-bold leading-tight text-white sm:text-4xl">
             {profile.name}
             {profile.age ? `, ${profile.age}` : ''}
           </h2>
           <p className="mt-1 text-base font-medium text-slate-100">{locationText}</p>
-          {distance !== null && <p className="mt-1 text-base text-slate-200">{distance} km away</p>}
 
           <p className="mt-2 line-clamp-3 max-w-xl text-sm text-slate-200 sm:text-base">
             {profile.bio?.trim() || 'No bio available yet.'}

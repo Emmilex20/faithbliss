@@ -1,5 +1,5 @@
-import React from 'react';
-import type { ProfileData } from "@/types/profile";
+﻿import React from 'react';
+import type { ProfileData } from '@/types/profile';
 import { BIO_MAX_LENGTH, PROFILE_PROMPT_OPTIONS, PROMPT_ANSWER_MAX_LENGTH } from '@/constants/profilePrompts';
 import { CountryCodeSelect, countries, defaultCountry } from '@/components/CountryCodeSelect';
 import type { Country } from '@/components/CountryCodeSelect';
@@ -8,6 +8,31 @@ interface BasicInfoSectionProps {
   profileData: ProfileData;
   setProfileData: React.Dispatch<React.SetStateAction<ProfileData | null>>;
 }
+
+const LANGUAGE_OPTIONS = [
+  'English',
+  'French',
+  'Spanish',
+  'Portuguese',
+  'German',
+  'Italian',
+  'Dutch',
+  'Arabic',
+  'Mandarin Chinese',
+  'Hindi',
+  'Yoruba',
+  'Igbo',
+  'Hausa',
+];
+
+const COMMUNICATION_STYLE_OPTIONS = ['Big time texter', 'Phone caller', 'Video chatter', 'Bad texter', 'Better in person'];
+const LOVE_STYLE_OPTIONS = ['Thoughtful gestures', 'Presents', 'Touch', 'Compliments', 'Time together'];
+
+const toArray = (value?: string[] | string): string[] => {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === 'string' && value.trim()) return [value.trim()];
+  return [];
+};
 
 const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps) => {
   const [selectedCountry, setSelectedCountry] = React.useState<Country>(defaultCountry);
@@ -18,99 +43,149 @@ const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps
     if (match) setSelectedCountry(match);
   }, [profileData.countryCode]);
 
+  const parsedHeight = React.useMemo(() => {
+    if (!profileData.height) return 170;
+    const match = String(profileData.height).match(/(\d+)\s*cm/i);
+    const raw = match ? parseInt(match[1], 10) : parseInt(String(profileData.height), 10);
+    if (Number.isNaN(raw)) return 170;
+    return Math.min(220, Math.max(120, raw));
+  }, [profileData.height]);
+
+  const heightProgress = ((parsedHeight - 120) / (220 - 120)) * 100;
+
+  const handleHeightChange = (value: number) => {
+    const inches = Math.round(value / 2.54);
+    const feet = Math.floor(inches / 12);
+    const remInches = inches % 12;
+    setProfileData((prev) => (prev ? { ...prev, height: `${value} cm (${feet}'${remInches}")` } : null));
+  };
+
+  const toggleFromList = (field: 'languageSpoken' | 'communicationStyle' | 'loveStyle', item: string) => {
+    setProfileData((prev) => {
+      if (!prev) return null;
+      const current = toArray(prev[field] as string[] | string);
+      const next = current.includes(item) ? current.filter((value) => value !== item) : [...current, item];
+      if (field === 'languageSpoken') {
+        return { ...prev, languageSpoken: next, language: next[0] || '' };
+      }
+      return { ...prev, [field]: next };
+    });
+  };
+
+  const handleBirthdayChange = (value: string) => {
+    setProfileData((prev) => {
+      if (!prev) return null;
+      const birthDate = new Date(value);
+      let age = prev.age || 0;
+      if (!Number.isNaN(birthDate.getTime())) {
+        const today = new Date();
+        age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age -= 1;
+      }
+      return { ...prev, birthday: value, age: Math.max(18, age || 18) };
+    });
+  };
+
   return (
     <div className="space-y-6">
-      <div className="bg-gray-800/50 rounded-3xl p-8 border border-gray-700/50">
-        <h2 className="text-2xl font-bold text-white mb-6">Basic Information</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="rounded-3xl border border-gray-700/50 bg-gray-800/50 p-8">
+        <h2 className="mb-6 text-2xl font-bold text-white">Basic Information</h2>
+
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-3">Gender</label>
+            <label className="mb-3 block text-sm font-semibold text-gray-300">Gender</label>
             <select
               value={profileData.gender || ''}
-              onChange={(e) => setProfileData(prev => prev ? ({...prev, gender: e.target.value as 'MALE' | 'FEMALE'}) : null)}
-              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
+              onChange={(e) => setProfileData((prev) => (prev ? ({ ...prev, gender: e.target.value as 'MALE' | 'FEMALE' }) : null))}
+              className="w-full rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white transition-colors focus:border-pink-500 focus:outline-none"
             >
               <option value="">Select gender</option>
               <option value="MALE">Male</option>
               <option value="FEMALE">Female</option>
             </select>
           </div>
+
           <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-3">First Name</label>
+            <label className="mb-3 block text-sm font-semibold text-gray-300">First Name</label>
             <input
               type="text"
               value={profileData.name || ''}
-              onChange={(e) => setProfileData(prev => prev ? ({...prev, name: e.target.value}) : null)}
-              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-400 focus:border-pink-500 focus:outline-none transition-colors"
+              onChange={(e) => setProfileData((prev) => (prev ? ({ ...prev, name: e.target.value }) : null))}
+              className="w-full rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white placeholder-gray-400 transition-colors focus:border-pink-500 focus:outline-none"
               placeholder="Enter your first name"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-3">Age</label>
+            <label className="mb-3 block text-sm font-semibold text-gray-300">Birthday</label>
+            <input
+              type="date"
+              value={typeof profileData.birthday === 'string' ? profileData.birthday.slice(0, 10) : ''}
+              onChange={(e) => handleBirthdayChange(e.target.value)}
+              className="w-full rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white transition-colors focus:border-pink-500 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-3 block text-sm font-semibold text-gray-300">Age</label>
             <input
               type="number"
-              value={profileData.age}
-              onChange={(e) => setProfileData(prev => prev ? ({...prev, age: parseInt(e.target.value)}) : null)}
-              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-400 focus:border-pink-500 focus:outline-none transition-colors"
+              value={profileData.age || ''}
+              onChange={(e) => setProfileData((prev) => (prev ? ({ ...prev, age: Number(e.target.value) || 0 }) : null))}
+              className="w-full rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white placeholder-gray-400 transition-colors focus:border-pink-500 focus:outline-none"
               placeholder="25"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-3">Job Title</label>
+            <label className="mb-3 block text-sm font-semibold text-gray-300">Profession</label>
             <input
               type="text"
               value={profileData.profession || ''}
-              onChange={(e) => setProfileData(prev => prev ? ({...prev, profession: e.target.value}) : null)}
-              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-400 focus:border-pink-500 focus:outline-none transition-colors"
+              onChange={(e) => setProfileData((prev) => (prev ? ({ ...prev, profession: e.target.value }) : null))}
+              className="w-full rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white placeholder-gray-400 transition-colors focus:border-pink-500 focus:outline-none"
               placeholder="Product Designer"
             />
           </div>
 
-
-
           <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-3">Education</label>
-            <select
+            <label className="mb-3 block text-sm font-semibold text-gray-300">Field of Study</label>
+            <input
+              type="text"
               value={profileData.fieldOfStudy || ''}
-              onChange={(e) => setProfileData(prev => prev ? ({...prev, fieldOfStudy: e.target.value}) : null)}
-              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
-            >
-              <option value="">Select education</option>
-              <option value="High School">High School</option>
-              <option value="Some College">Some College</option>
-              <option value="University Graduate">University Graduate</option>
-              <option value="Postgraduate">Postgraduate</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-3">Height</label>
-            <input
-              type="text"
-              value={profileData.height || ''}
-              onChange={(e) => setProfileData(prev => prev ? ({...prev, height: e.target.value}) : null)}
-              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-400 focus:border-pink-500 focus:outline-none transition-colors"
-              placeholder={`e.g., 5'9" or 175 cm`}
+              onChange={(e) => setProfileData((prev) => (prev ? ({ ...prev, fieldOfStudy: e.target.value }) : null))}
+              className="w-full rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white placeholder-gray-400 transition-colors focus:border-pink-500 focus:outline-none"
+              placeholder="Computer Science"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-3">Language</label>
-            <input
-              type="text"
-              value={profileData.language || ''}
-              onChange={(e) => setProfileData(prev => prev ? ({...prev, language: e.target.value}) : null)}
-              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-400 focus:border-pink-500 focus:outline-none transition-colors"
-              placeholder="English"
-            />
+          <div className="md:col-span-2">
+            <label className="mb-3 block text-sm font-semibold text-gray-300">Height</label>
+            <div className="rounded-2xl border border-gray-600/40 bg-gray-700/40 p-4">
+              <div className="mb-3 flex items-center justify-between text-sm text-gray-300">
+                <span>120 cm</span>
+                <span className="font-semibold text-white">{profileData.height || `${parsedHeight} cm`}</span>
+                <span>220 cm</span>
+              </div>
+              <input
+                type="range"
+                min={120}
+                max={220}
+                step={1}
+                value={parsedHeight}
+                onChange={(e) => handleHeightChange(Number(e.target.value))}
+                className="h-2 w-full cursor-pointer appearance-none rounded-full"
+                style={{
+                  background: `linear-gradient(90deg, rgba(236,72,153,0.95) ${heightProgress}%, rgba(51,65,85,0.95) ${heightProgress}%)`,
+                }}
+              />
+            </div>
           </div>
         </div>
 
         <div className="mt-6">
-          <label className="block text-sm font-semibold text-gray-300 mb-3">Phone Number</label>
+          <label className="mb-3 block text-sm font-semibold text-gray-300">Phone Number</label>
           <CountryCodeSelect
             selectedCountry={selectedCountry}
             onCountryChange={(country) => {
@@ -118,71 +193,40 @@ const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps
               setProfileData((prev) => (prev ? { ...prev, countryCode: country.dialCode } : null));
             }}
             phoneNumber={profileData.phoneNumber || ''}
-            onPhoneChange={(phone) =>
-              setProfileData((prev) => (prev ? { ...prev, phoneNumber: phone } : null))
-            }
+            onPhoneChange={(phone) => setProfileData((prev) => (prev ? { ...prev, phoneNumber: phone } : null))}
           />
         </div>
 
         <div className="mt-6">
-          <label className="block text-sm font-semibold text-gray-300 mb-3">Location</label>
-          <div className="relative">
-            <input
-              type="text"
-              value={profileData.location?.address || ''}
-              onChange={(e) => setProfileData(prev => prev ? ({
-                ...prev,
-                location: {
-                  ...(prev.location || { latitude: 0, longitude: 0, address: '' }),
-                  address: e.target.value
-                }
-              }) : null)}
-              className="w-full p-4 pr-12 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-400 focus:border-pink-500 focus:outline-none transition-colors"
-              placeholder="Lagos, Nigeria"
-            />
-            <button
-              onClick={async () => {
-                if (navigator.geolocation) {
-                  navigator.geolocation.getCurrentPosition(
-                    async (position) => {
-                      try {
-                        const { latitude, longitude } = position.coords;
-                        // Use reverse geocoding to get location name
-                        const response = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
-                        const data = await response.json();
-                        const address = `${data.city}, ${data.countryName}`;
-                        setProfileData(prev => prev ? ({...prev, location: { latitude, longitude, address }}) : null);
-                      } catch (error) {
-                        console.error('Error getting location:', error);
-                        alert('Unable to get your location. Please enter it manually.');
-                      }
-                    },
-                    (error) => {
-                      console.error('Geolocation error:', error);
-                      alert('Location access denied. Please enter your location manually.');
+          <label className="mb-3 block text-sm font-semibold text-gray-300">Location</label>
+          <input
+            type="text"
+            value={profileData.location?.address || ''}
+            onChange={(e) =>
+              setProfileData((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      location: {
+                        ...(prev.location || { latitude: null, longitude: null, address: '' }),
+                        address: e.target.value,
+                      },
                     }
-                  );
-                } else {
-                  alert('Geolocation is not supported by this browser.');
-                }
-              }}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 bg-pink-500/20 hover:bg-pink-500/30 text-pink-400 rounded-lg transition-colors"
-              title="Detect my location"
-            >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-              </svg>
-            </button>
-          </div>
+                  : null
+              )
+            }
+            className="w-full rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white placeholder-gray-400 transition-colors focus:border-pink-500 focus:outline-none"
+            placeholder="City, State / Country"
+          />
         </div>
 
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
           <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-3">Personal Prompt</label>
+            <label className="mb-3 block text-sm font-semibold text-gray-300">Personal Prompt</label>
             <select
               value={profileData.personalPromptQuestion || ''}
-              onChange={(e) => setProfileData(prev => prev ? ({...prev, personalPromptQuestion: e.target.value}) : null)}
-              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
+              onChange={(e) => setProfileData((prev) => (prev ? ({ ...prev, personalPromptQuestion: e.target.value }) : null))}
+              className="w-full rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white transition-colors focus:border-pink-500 focus:outline-none"
             >
               <option value="">Select a question</option>
               {PROFILE_PROMPT_OPTIONS.map((prompt) => (
@@ -192,8 +236,9 @@ const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps
               ))}
             </select>
           </div>
+
           <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-3">Prompt Answer</label>
+            <label className="mb-3 block text-sm font-semibold text-gray-300">Prompt Answer</label>
             <textarea
               value={profileData.personalPromptAnswer || ''}
               onChange={(e) =>
@@ -206,7 +251,7 @@ const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps
                     : null
                 )
               }
-              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-400 focus:border-pink-500 focus:outline-none transition-colors"
+              className="w-full rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white placeholder-gray-400 transition-colors focus:border-pink-500 focus:outline-none"
               placeholder="Your answer"
               rows={3}
             />
@@ -214,79 +259,82 @@ const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps
               {(profileData.personalPromptAnswer?.length || 0)}/{PROMPT_ANSWER_MAX_LENGTH}
             </p>
           </div>
+        </div>
+
+        <div className="mt-6 space-y-4">
           <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-3">Communication Style</label>
-            <select
-              value={profileData.communicationStyle || ''}
-              onChange={(e) => setProfileData(prev => prev ? ({...prev, communicationStyle: e.target.value}) : null)}
-              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
-            >
-              <option value="">Select communication style</option>
-              <option value="Big time texter">Big time texter</option>
-              <option value="Phone caller">Phone caller</option>
-              <option value="Video chatter">Video chatter</option>
-              <option value="Bad texter">Bad texter</option>
-              <option value="Better in person">Better in person</option>
-            </select>
+            <label className="mb-2 block text-sm font-semibold text-gray-300">Languages spoken</label>
+            <p className="mb-3 text-xs text-slate-400">Select all that apply.</p>
+            <div className="flex flex-wrap gap-2">
+              {LANGUAGE_OPTIONS.map((option) => {
+                const isSelected = toArray(profileData.languageSpoken).includes(option);
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => toggleFromList('languageSpoken', option)}
+                    className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                      isSelected
+                        ? 'border-pink-400 bg-pink-500/20 text-pink-100'
+                        : 'border-white/15 bg-slate-800/30 text-slate-200 hover:border-pink-300/60'
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
           <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-3">Love Style</label>
-            <select
-              value={profileData.loveStyle || ''}
-              onChange={(e) => setProfileData(prev => prev ? ({...prev, loveStyle: e.target.value}) : null)}
-              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
-            >
-              <option value="">Select love style</option>
-              <option value="Thoughtful gestures">Thoughtful gestures</option>
-              <option value="Presents">Presents</option>
-              <option value="Touch">Touch</option>
-              <option value="Compliments">Compliments</option>
-              <option value="Time together">Time together</option>
-            </select>
+            <label className="mb-2 block text-sm font-semibold text-gray-300">Communication style</label>
+            <div className="flex flex-wrap gap-2">
+              {COMMUNICATION_STYLE_OPTIONS.map((option) => {
+                const isSelected = toArray(profileData.communicationStyle).includes(option);
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => toggleFromList('communicationStyle', option)}
+                    className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                      isSelected
+                        ? 'border-pink-400 bg-pink-500/20 text-pink-100'
+                        : 'border-white/15 bg-slate-800/30 text-slate-200 hover:border-pink-300/60'
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
           <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-3">Education Level</label>
-            <select
-              value={profileData.educationLevel || ''}
-              onChange={(e) => setProfileData(prev => prev ? ({...prev, educationLevel: e.target.value}) : null)}
-              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
-            >
-              <option value="">Select education level</option>
-              <option value="Bachelors">Bachelors</option>
-              <option value="In College">In College</option>
-              <option value="High School">High School</option>
-              <option value="PhD">PhD</option>
-              <option value="In Grad School">In Grad School</option>
-              <option value="Masters">Masters</option>
-              <option value="Trade School">Trade School</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-3">Zodiac Sign</label>
-            <select
-              value={profileData.zodiacSign || ''}
-              onChange={(e) => setProfileData(prev => prev ? ({...prev, zodiacSign: e.target.value}) : null)}
-              className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
-            >
-              <option value="">Select zodiac sign</option>
-              <option value="Capricorn">Capricorn</option>
-              <option value="Aquarius">Aquarius</option>
-              <option value="Pisces">Pisces</option>
-              <option value="Aries">Aries</option>
-              <option value="Taurus">Taurus</option>
-              <option value="Gemini">Gemini</option>
-              <option value="Cancer">Cancer</option>
-              <option value="Leo">Leo</option>
-              <option value="Virgo">Virgo</option>
-              <option value="Libra">Libra</option>
-              <option value="Scorpio">Scorpio</option>
-              <option value="Sagittarius">Sagittarius</option>
-            </select>
+            <label className="mb-2 block text-sm font-semibold text-gray-300">How do you receive love?</label>
+            <div className="flex flex-wrap gap-2">
+              {LOVE_STYLE_OPTIONS.map((option) => {
+                const isSelected = toArray(profileData.loveStyle).includes(option);
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => toggleFromList('loveStyle', option)}
+                    className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                      isSelected
+                        ? 'border-pink-400 bg-pink-500/20 text-pink-100'
+                        : 'border-white/15 bg-slate-800/30 text-slate-200 hover:border-pink-300/60'
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
         <div className="mt-6">
-          <label className="block text-sm font-semibold text-gray-300 mb-3">About Me (Bio)</label>
+          <label className="mb-3 block text-sm font-semibold text-gray-300">About Me (Bio)</label>
           <textarea
             value={profileData.bio || ''}
             onChange={(e) =>
@@ -300,7 +348,7 @@ const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps
               )
             }
             rows={5}
-            className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-400 resize-none focus:border-pink-500 focus:outline-none transition-colors"
+            className="w-full resize-none rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white placeholder-gray-400 transition-colors focus:border-pink-500 focus:outline-none"
             placeholder="Introduce yourself to make a strong impression."
           />
           <p className="mt-2 text-right text-xs text-gray-400">{(profileData.bio?.length || 0)}/{BIO_MAX_LENGTH}</p>
@@ -308,6 +356,6 @@ const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps
       </div>
     </div>
   );
-}
+};
 
 export default BasicInfoSection;

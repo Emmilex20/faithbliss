@@ -29,10 +29,11 @@ export interface OnboardingData {
   favoriteVerse: string;
   height?: string;
   language?: string;
+  languageSpoken?: string[];
   personalPromptQuestion?: string;
   personalPromptAnswer?: string;
-  communicationStyle?: string;
-  loveStyle?: string;
+  communicationStyle?: string[];
+  loveStyle?: string[];
   educationLevel?: string;
   zodiacSign?: string;
   drinkingHabit?: string;
@@ -48,6 +49,7 @@ export interface OnboardingData {
   minAge?: number | null;
   maxAge?: number | null;
   maxDistance?: number | null;
+  preferredMinHeight?: number | null;
 
   photos: File[];
 }

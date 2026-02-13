@@ -69,12 +69,14 @@ interface OnboardingData {
     petPreference?: string; // Added
     height?: string; // Added
     language?: string; // Added
+    languageSpoken?: string[]; // Added
     personalPromptQuestion?: string; // Added
     personalPromptAnswer?: string; // Added
-    communicationStyle?: string; // Added
-    loveStyle?: string; // Added
+    communicationStyle?: string[]; // Added
+    loveStyle?: string[]; // Added
     educationLevel?: string; // Added
     zodiacSign?: string; // Added
+    preferredMinHeight?: number; // Added
     profilePhoto1?: string; // Expecting the final Cloud Storage URL
     profilePhoto2?: string;
     profilePhoto3?: string;
@@ -123,8 +125,6 @@ const sanitizeOnboardingPayload = (payload: OnboardingData): Record<string, any>
         ["language", 60],
         ["personalPromptQuestion", 120],
         ["personalPromptAnswer", 280],
-        ["communicationStyle", 80],
-        ["loveStyle", 80],
         ["educationLevel", 80],
         ["zodiacSign", 40],
         ["faithJourney", 40],
@@ -145,6 +145,9 @@ const sanitizeOnboardingPayload = (payload: OnboardingData): Record<string, any>
         "hobbies",
         "values",
         "interests",
+        "languageSpoken",
+        "communicationStyle",
+        "loveStyle",
         "spiritualGifts",
         "preferredFaithJourney",
         "preferredChurchAttendance",
@@ -172,6 +175,7 @@ const sanitizeOnboardingPayload = (payload: OnboardingData): Record<string, any>
         ["minAge", 18, 99, true],
         ["maxAge", 18, 99, true],
         ["maxDistance", 1, 500, true],
+        ["preferredMinHeight", 120, 220, true],
     ];
 
     numericBounds.forEach(([field, min, max, integer]) => {
@@ -251,12 +255,14 @@ const fetchUserDataFromFirestore = async (fbUser: FirebaseAuthUser): Promise<Use
         petPreference: backendData.petPreference,
         height: backendData.height,
         language: backendData.language,
+        languageSpoken: backendData.languageSpoken,
         personalPromptQuestion: backendData.personalPromptQuestion,
         personalPromptAnswer: backendData.personalPromptAnswer,
         communicationStyle: backendData.communicationStyle,
         loveStyle: backendData.loveStyle,
         educationLevel: backendData.educationLevel,
         zodiacSign: backendData.zodiacSign,
+        preferredMinHeight: backendData.preferredMinHeight,
         
         // Photo URLs
         profilePhoto1: backendData.profilePhoto1,
@@ -790,12 +796,14 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
             petPreference: data.petPreference,
             height: data.height,
             language: data.language,
+            languageSpoken: data.languageSpoken,
             personalPromptQuestion: data.personalPromptQuestion,
             personalPromptAnswer: data.personalPromptAnswer,
             communicationStyle: data.communicationStyle,
             loveStyle: data.loveStyle,
             educationLevel: data.educationLevel,
             zodiacSign: data.zodiacSign,
+            preferredMinHeight: data.preferredMinHeight,
 
             // Photos
             profilePhoto1: data.profilePhoto1,

@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { ChevronDown, Search } from 'lucide-react';
 import type { OnboardingData } from './types';
 import SelectableCard from './SelectableCard';
 import { CountryCodeSelect, countries, defaultCountry } from '@/components/CountryCodeSelect';
@@ -40,59 +41,247 @@ const denominationOptions = [
 ];
 
 const occupationOptions = [
-  'Software Engineer',
-  'Doctor',
-  'Teacher',
+  'Software Developer',
+  'Data Analyst',
+  'Product Manager',
+  'UI/UX Designer',
+  'Civil Engineer',
+  'Mechanical Engineer',
+  'Electrical Engineer',
+  'Architect',
+  'Medical Doctor',
+  'Pharmacist',
+  'Dentist',
   'Nurse',
+  'Physiotherapist',
+  'Teacher',
+  'Lecturer',
+  'Lawyer',
+  'Judge',
   'Accountant',
-  'Marketing Specialist',
-  'Graphic Designer',
+  'Financial Analyst',
+  'Banker',
+  'Auditor',
+  'Entrepreneur',
+  'Business Owner',
+  'Sales Manager',
+  'Marketing Manager',
+  'Customer Success Manager',
+  'HR Manager',
   'Project Manager',
-  'Sales Representative',
-  'Customer Service',
+  'Operations Manager',
+  'Consultant',
+  'Content Creator',
+  'Social Media Manager',
+  'Journalist',
+  'Photographer',
+  'Videographer',
+  'Musician',
+  'Fashion Designer',
+  'Chef',
+  'Caterer',
+  'Real Estate Agent',
+  'Pilot',
+  'Cabin Crew',
   'Student',
-  'Unemployed',
+  'Graduate Trainee',
+  'Researcher',
+  'Clergy',
+  'Missionary',
+  'Public Servant',
+  'Not currently working',
 ];
 
 const fieldOfStudyOptions = [
   'Computer Science',
+  'Software Engineering',
+  'Information Technology',
+  'Cybersecurity',
+  'Data Science',
+  'Artificial Intelligence',
   'Medicine',
-  'Education',
   'Nursing',
+  'Pharmacy',
+  'Public Health',
+  'Law',
   'Business Administration',
+  'Accounting',
+  'Finance',
+  'Economics',
   'Marketing',
-  'Graphic Design',
-  'Engineering',
+  'Mass Communication',
   'Psychology',
+  'Sociology',
+  'Political Science',
+  'International Relations',
+  'Theology',
+  'Religious Studies',
+  'Education',
+  'English',
+  'History',
+  'Linguistics',
   'Biology',
+  'Biochemistry',
   'Chemistry',
   'Physics',
   'Mathematics',
-  'History',
-  'English',
-  'Art',
+  'Statistics',
+  'Architecture',
+  'Civil Engineering',
+  'Electrical Engineering',
+  'Mechanical Engineering',
+  'Chemical Engineering',
+  'Agriculture',
+  'Food Science',
+  'Graphic Design',
+  'Fine Arts',
+  'Music',
+  'N/A',
 ];
 const languageOptions = [
   'English',
-  'Spanish',
   'French',
+  'Spanish',
   'Portuguese',
   'German',
+  'Italian',
+  'Dutch',
+  'Arabic',
+  'Mandarin Chinese',
+  'Hindi',
+  'Bengali',
+  'Urdu',
+  'Swahili',
   'Yoruba',
   'Igbo',
   'Hausa',
+  'Amharic',
+  'Zulu',
+  'Shona',
+  'Tamil',
+  'Tagalog',
+  'Japanese',
+  'Korean',
+  'Turkish',
+  'Russian',
 ];
 
 const personalityOptions = ['Adventurous', 'Outgoing', 'Creative', 'Reserved', 'Analytical', 'Charismatic'];
 const hobbiesOptions = ['Reading', 'Hiking', 'Photography', 'Cooking', 'Gaming', 'Traveling', 'Sports', 'Music'];
 const valuesOptions = ['Love', 'Faith', 'Hope', 'Honesty', 'Kindness', 'Compassion', 'Family', 'Friendship'];
 const spiritualGiftsOptions = ['Serving', 'Teaching', 'Encouragement', 'Giving', 'Leadership', 'Mercy', 'Wisdom', 'Faith'];
+const baptismStatusOptions = [
+  { value: 'BAPTIZED', label: 'Baptized' },
+  { value: 'NOT_BAPTIZED', label: 'Not Baptized' },
+  { value: 'PLANNING_TO', label: 'Planning To' },
+];
 
 const RequiredLabel = ({ children }: { children: React.ReactNode }) => (
   <h3 className="text-xl font-semibold text-white">
     {children} <span className="text-red-400">*</span>
   </h3>
 );
+
+const SingleSelectDropdown = ({
+  id,
+  value,
+  options,
+  onChange,
+  placeholder,
+}: {
+  id: string;
+  value?: string;
+  options: Array<{ value: string; label: string }>;
+  onChange: (next: string) => void;
+  placeholder: string;
+}) => {
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [searchTerm, setSearchTerm] = React.useState('');
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!dropdownRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  React.useEffect(() => {
+    if (!isOpen) {
+      setSearchTerm('');
+      return;
+    }
+    searchInputRef.current?.focus();
+  }, [isOpen]);
+
+  const filteredOptions = React.useMemo(
+    () => options.filter((option) => option.label.toLowerCase().includes(searchTerm.toLowerCase())),
+    [options, searchTerm]
+  );
+
+  const selectedLabel = options.find((option) => option.value === value)?.label;
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <button
+        id={id}
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="input-style flex w-full items-center justify-between gap-3 text-left"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+      >
+        <span className={selectedLabel ? 'text-white' : 'text-slate-400'}>{selectedLabel || placeholder}</span>
+        <ChevronDown className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-2xl border border-slate-600/60 bg-slate-900/98 shadow-2xl backdrop-blur-md">
+          <div className="border-b border-slate-700/70 p-3">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search status..."
+                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 py-2 pl-9 pr-3 text-sm text-white placeholder-slate-400 outline-none focus:border-pink-500"
+              />
+            </div>
+          </div>
+
+          <div className="max-h-56 overflow-y-auto py-1">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(option.value);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full px-4 py-2.5 text-left text-sm transition sm:text-base ${
+                    option.value === value ? 'bg-pink-500/20 text-pink-100' : 'text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))
+            ) : (
+              <p className="px-4 py-3 text-sm text-slate-400">No matching status.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: ProfileBuilderSlideProps) => {
   const [selectedCountry, setSelectedCountry] = React.useState<Country>(defaultCountry);
@@ -102,8 +291,6 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
     const match = countries.find((country) => country.dialCode === onboardingData.countryCode);
     if (match) setSelectedCountry(match);
   }, [onboardingData.countryCode]);
-
-  if (!isVisible) return null;
 
   const calculateAgeFromBirthday = (birthday: string): number | undefined => {
     if (!birthday) return undefined;
@@ -152,6 +339,42 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
   const handlePhoneChange = (phone: string) => {
     setOnboardingData((prev) => ({ ...prev, phoneNumber: phone }));
   };
+
+  const parsedHeight = React.useMemo(() => {
+    if (!onboardingData.height) return 170;
+    const rawHeight = String(onboardingData.height).trim();
+    const cmMatch = rawHeight.match(/(\d+)\s*cm/i);
+    const numeric = cmMatch ? parseInt(cmMatch[1], 10) : parseInt(rawHeight, 10);
+    if (Number.isNaN(numeric)) return 170;
+    return Math.min(220, Math.max(120, numeric));
+  }, [onboardingData.height]);
+  const heightProgress = ((parsedHeight - 120) / (220 - 120)) * 100;
+
+  const handleHeightChange = (value: number) => {
+    const inches = Math.round(value / 2.54);
+    const feet = Math.floor(inches / 12);
+    const remInches = inches % 12;
+    setOnboardingData((prev) => ({
+      ...prev,
+      height: `${value} cm (${feet}'${remInches}")`,
+    }));
+  };
+
+  const toggleLanguage = (language: string) => {
+    setOnboardingData((prev) => {
+      const current = Array.isArray(prev.languageSpoken) ? prev.languageSpoken : [];
+      const next = current.includes(language)
+        ? current.filter((item) => item !== language)
+        : [...current, language];
+      return {
+        ...prev,
+        languageSpoken: next,
+        language: next[0] || '',
+      };
+    });
+  };
+
+  if (!isVisible) return null;
 
   return (
     <motion.div
@@ -217,14 +440,13 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
             <label className="mb-2 block text-sm font-medium text-gray-300">
               Baptism Status <span className="text-red-400">*</span>
             </label>
-            <select name="baptismStatus" value={onboardingData.baptismStatus} onChange={handleChange} className="input-style">
-              <option value="" disabled>
-                Baptism Status
-              </option>
-              <option value="BAPTIZED">Baptized</option>
-              <option value="NOT_BAPTIZED">Not Baptized</option>
-              <option value="PLANNING_TO">Planning To</option>
-            </select>
+            <SingleSelectDropdown
+              id="baptismStatus"
+              value={onboardingData.baptismStatus}
+              options={baptismStatusOptions}
+              onChange={(next) => setOnboardingData((prev) => ({ ...prev, baptismStatus: next }))}
+              placeholder="Baptism Status"
+            />
           </div>
 
           <div>
@@ -287,28 +509,49 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
             />
           </div>
 
-          <div>
+          <div className="sm:col-span-2">
             <label className="mb-2 block text-sm font-medium text-gray-300">Height</label>
-            <input
-              type="text"
-              name="height"
-              value={onboardingData.height || ''}
-              onChange={handleChange}
-              placeholder={`e.g., 5'9" or 175 cm`}
-              className="input-style"
-            />
+            <div className="rounded-xl border border-white/15 bg-slate-900/40 px-4 py-4">
+              <div className="mb-3 flex items-center justify-between text-sm text-slate-300">
+                <span>120 cm</span>
+                <span className="font-semibold text-white">{onboardingData.height || `${parsedHeight} cm`}</span>
+                <span>220 cm</span>
+              </div>
+              <input
+                type="range"
+                min={120}
+                max={220}
+                step={1}
+                value={parsedHeight}
+                onChange={(e) => handleHeightChange(Number(e.target.value))}
+                className="height-slider"
+                style={
+                  {
+                    '--progress': `${heightProgress}%`,
+                  } as React.CSSProperties
+                }
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-300">Language</label>
-            <SelectWithOtherInput
-              label=""
-              name="language"
-              options={languageOptions}
-              selectedValue={onboardingData.language || ''}
-              onChange={handleSelectWithOtherChange}
-              placeholder="Select your primary language"
-            />
+          <div className="sm:col-span-2">
+            <label className="mb-2 block text-sm font-medium text-gray-300">Languages spoken</label>
+            <p className="mb-3 text-xs text-slate-400">Select all that apply.</p>
+            <div className="flex flex-wrap gap-2">
+              {languageOptions.map((option) => {
+                const isSelected = onboardingData.languageSpoken?.includes(option);
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => toggleLanguage(option)}
+                    className={`chip ${isSelected ? 'chip-selected' : ''}`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -449,6 +692,66 @@ const styles = `
   }
   input[type="date"] {
     color-scheme: dark;
+  }
+  .height-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 10px;
+    border-radius: 9999px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    background:
+      linear-gradient(90deg, rgba(236, 72, 153, 0.95) var(--progress), rgba(51, 65, 85, 0.95) var(--progress));
+    outline: none;
+    cursor: pointer;
+    touch-action: pan-y;
+    transition: box-shadow 0.2s ease, filter 0.2s ease;
+  }
+  .height-slider:hover {
+    filter: brightness(1.05);
+  }
+  .height-slider:focus-visible {
+    box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.35);
+  }
+  .height-slider::-webkit-slider-runnable-track {
+    height: 10px;
+    border-radius: 9999px;
+    background: transparent;
+  }
+  .height-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    margin-top: -8px;
+    border-radius: 9999px;
+    border: 3px solid rgba(255, 255, 255, 0.95);
+    background: radial-gradient(circle at 30% 30%, #f9a8d4 0%, #ec4899 55%, #be185d 100%);
+    box-shadow: 0 8px 24px rgba(236, 72, 153, 0.45);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .height-slider:active::-webkit-slider-thumb {
+    transform: scale(1.08);
+    box-shadow: 0 10px 28px rgba(236, 72, 153, 0.55);
+  }
+  .height-slider::-moz-range-track {
+    height: 10px;
+    border-radius: 9999px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    background: rgba(51, 65, 85, 0.95);
+  }
+  .height-slider::-moz-range-progress {
+    height: 10px;
+    border-radius: 9999px;
+    background: rgba(236, 72, 153, 0.95);
+  }
+  .height-slider::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+    border-radius: 9999px;
+    border: 3px solid rgba(255, 255, 255, 0.95);
+    background: radial-gradient(circle at 30% 30%, #f9a8d4 0%, #ec4899 55%, #be185d 100%);
+    box-shadow: 0 8px 24px rgba(236, 72, 153, 0.45);
   }
 `;
 

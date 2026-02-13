@@ -8,6 +8,8 @@ import 'swiper/css';
 
 interface ProfileDisplayProps {
   currentProfile: User | null | undefined;
+  viewerLatitude?: number;
+  viewerLongitude?: number;
   onStartOver: () => void;
   onGoBack: () => void;
   onLike: () => void;
@@ -21,6 +23,8 @@ interface ProfileDisplayProps {
 
 export const ProfileDisplay = ({
   currentProfile,
+  viewerLatitude,
+  viewerLongitude,
   onStartOver,
   onGoBack,
   onLike,
@@ -109,7 +113,14 @@ export const ProfileDisplay = ({
         <SwiperSlide className="h-full">{edgeSlide}</SwiperSlide>
         <SwiperSlide className="h-full">
           <div className="mx-auto h-full w-full lg:max-w-[560px]">
-            <HingeStyleProfileCard profile={currentProfile as User} onGoBack={onGoBack} onLike={onLike} onPass={onPass} />
+            <HingeStyleProfileCard
+              profile={currentProfile as User}
+              viewerLatitude={viewerLatitude}
+              viewerLongitude={viewerLongitude}
+              onGoBack={onGoBack}
+              onLike={onLike}
+              onPass={onPass}
+            />
           </div>
         </SwiperSlide>
         <SwiperSlide className="h-full">{edgeSlide}</SwiperSlide>

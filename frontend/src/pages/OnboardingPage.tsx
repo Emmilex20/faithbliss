@@ -13,10 +13,8 @@ import {
 import ImageUploadSlide from '../components/onboarding/ImageUploadSlide';
 import ProfileBuilderSlide from '../components/onboarding/ProfileBuilderSlide';
 import LocationPermissionSlide from '../components/onboarding/LocationPermissionSlide';
-import MatchingPreferencesSlide from '../components/onboarding/MatchingPreferencesSlide';
 import PartnerPreferencesSlide from '../components/onboarding/PartnerPreferencesSlide';
 import RelationshipGoalsSlide from '../components/onboarding/RelationshipGoalsSlide';
-import LifestyleHabitsSlide from '../components/onboarding/LifestyleHabitsSlide';
 import PersonalEssenceSlide from '../components/onboarding/PersonalEssenceSlide';
 import InterestsSelectionSlide from '../components/onboarding/InterestsSelectionSlide';
 import ShareMoreAboutYouSlide from '../components/onboarding/ShareMoreAboutYouSlide';
@@ -54,29 +52,10 @@ const getStepValidationError = (step: number, data: OnboardingData): string | nu
     return 'Please select your relationship goal.';
   }
 
-  if (step === 4 && (!data.drinkingHabit || !data.smokingHabit || !data.workoutHabit || !data.petPreference)) {
-    return 'Please complete all lifestyle habits.';
-  }
-
-  if (step === 5 && (!data.communicationStyle || !data.loveStyle || !data.educationLevel || !data.zodiacSign)) {
-    return 'Please complete all personal style fields.';
-  }
-
-  if (step === 6 && (!data.bio?.trim() || !data.personalPromptQuestion?.trim() || !data.personalPromptAnswer?.trim())) {
-    return 'Please add your bio, choose a prompt, and provide your answer.';
-  }
-
-  if (step === 7 && (!Array.isArray(data.interests) || data.interests.length === 0)) {
-    return 'Please select at least one interest.';
-  }
-
-  if (step === 8 && !data.preferredFaithJourney) {
-    return 'Please complete your partner preferences.';
-  }
-
   if (
-    step === 9 &&
+    step === 4 &&
     (
+      !data.preferredFaithJourney ||
       !data.preferredGender ||
       data.minAge === null ||
       data.minAge === undefined ||
@@ -86,7 +65,28 @@ const getStepValidationError = (step: number, data: OnboardingData): string | nu
       data.maxDistance === undefined
     )
   ) {
-    return 'Please fill out all matching preferences.';
+    return 'Please complete your partner preferences.';
+  }
+
+  if (
+    step === 5 &&
+    (
+      !Array.isArray(data.communicationStyle) ||
+      data.communicationStyle.length === 0 ||
+      !Array.isArray(data.loveStyle) ||
+      data.loveStyle.length === 0 ||
+      !data.educationLevel
+    )
+  ) {
+    return 'Please complete all personal style fields.';
+  }
+
+  if (step === 6 && (!data.bio?.trim() || !data.personalPromptQuestion?.trim() || !data.personalPromptAnswer?.trim())) {
+    return 'Please add your bio, choose a prompt, and provide your answer.';
+  }
+
+  if (step === 7 && (!Array.isArray(data.interests) || data.interests.length === 0)) {
+    return 'Please select at least one interest.';
   }
 
   return null;
@@ -103,7 +103,7 @@ const OnboardingPage = () => {
 
   const [currentStep, setCurrentStep] = useState(0);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const totalSteps = 10;
+  const totalSteps = 8;
 
   const [onboardingData, setOnboardingData] = useState<OnboardingData>({
     age: undefined,
@@ -124,10 +124,11 @@ const OnboardingPage = () => {
     favoriteVerse: '',
     height: '',
     language: '',
+    languageSpoken: [],
     personalPromptQuestion: '',
     personalPromptAnswer: '',
-    communicationStyle: '',
-    loveStyle: '',
+    communicationStyle: [],
+    loveStyle: [],
     educationLevel: '',
     zodiacSign: '',
     drinkingHabit: '',
@@ -139,6 +140,7 @@ const OnboardingPage = () => {
     minAge: 18,
     maxAge: 35,
     maxDistance: 50,
+    preferredMinHeight: 160,
     phoneNumber: '',
     countryCode: '+1',
     education: '',
@@ -191,6 +193,7 @@ const OnboardingPage = () => {
         // Keep legacy keys and persist canonical profile keys used across the app.
         profession: onboardingData.occupation,
         fieldOfStudy: onboardingData.education,
+        language: onboardingData.languageSpoken?.[0] || onboardingData.language || '',
       } as Record<string, any>;
 
       // Assign Cloudinary URLs to profilePhoto1,2,3,4
@@ -266,11 +269,6 @@ const OnboardingPage = () => {
             onboardingData={onboardingData}
             setOnboardingData={setOnboardingData}
           />
-          <LifestyleHabitsSlide
-            isVisible={currentStep === 4}
-            onboardingData={onboardingData}
-            setOnboardingData={setOnboardingData}
-          />
           <PersonalEssenceSlide
             isVisible={currentStep === 5}
             onboardingData={onboardingData}
@@ -287,12 +285,7 @@ const OnboardingPage = () => {
             setOnboardingData={setOnboardingData}
           />
           <PartnerPreferencesSlide
-            isVisible={currentStep === 8}
-            onboardingData={onboardingData}
-            setOnboardingData={setOnboardingData}
-          />
-          <MatchingPreferencesSlide
-            isVisible={currentStep === 9}
+            isVisible={currentStep === 4}
             onboardingData={onboardingData}
             setOnboardingData={setOnboardingData}
           />

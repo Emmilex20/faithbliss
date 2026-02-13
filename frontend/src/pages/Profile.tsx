@@ -33,6 +33,12 @@ const ProfilePage: React.FC = () => {
   const [saveMessage, setSaveMessage] = useState('');
   const [showSidePanel, setShowSidePanel] = useState(false);
 
+  const toArray = (value: unknown): string[] => {
+    if (Array.isArray(value)) return value.filter((item) => typeof item === 'string' && item.trim().length > 0);
+    if (typeof value === 'string' && value.trim()) return [value.trim()];
+    return [];
+  };
+
   useEffect(() => {
     let resolved = userData as any;
 
@@ -99,11 +105,12 @@ const ProfilePage: React.FC = () => {
       workoutHabit: user.workoutHabit || '',
       petPreference: user.petPreference || '',
       height: user.height || '',
-      language: user.language || '',
+      language: user.language || (Array.isArray(user.languageSpoken) ? user.languageSpoken[0] : '') || '',
+      languageSpoken: toArray(user.languageSpoken),
       personalPromptQuestion: user.personalPromptQuestion || '',
       personalPromptAnswer: user.personalPromptAnswer || '',
-      communicationStyle: user.communicationStyle || '',
-      loveStyle: user.loveStyle || '',
+      communicationStyle: toArray(user.communicationStyle),
+      loveStyle: toArray(user.loveStyle),
       educationLevel: user.educationLevel || '',
       zodiacSign: user.zodiacSign || '',
       photos: [
@@ -146,7 +153,8 @@ const ProfilePage: React.FC = () => {
         workoutHabit: profileData.workoutHabit,
         petPreference: profileData.petPreference,
         height: profileData.height,
-        language: profileData.language,
+        language: profileData.language || (Array.isArray(profileData.languageSpoken) ? profileData.languageSpoken[0] : ''),
+        languageSpoken: Array.isArray(profileData.languageSpoken) ? profileData.languageSpoken : [],
         personalPromptQuestion: profileData.personalPromptQuestion,
         personalPromptAnswer: profileData.personalPromptAnswer,
         communicationStyle: profileData.communicationStyle,
