@@ -98,6 +98,11 @@ interface Message {
       resourceType?: string;
     } | null;
   } | null;
+  reactions?: Array<{
+    userId: string;
+    emoji: string;
+    createdAt?: string;
+  }>;
   isRead: boolean;
   createdAt: string;
   sender?: User;

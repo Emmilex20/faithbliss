@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { io, Socket } from 'socket.io-client';
-import type { Message } from '@/types/chat';
+import type { Message, MessageReaction } from '@/types/chat';
 
 export interface UnreadCountPayload {
   count: number;
@@ -76,6 +76,12 @@ export interface UserPresencePayload {
   userId: string;
   isOnline: boolean;
   lastSeenAt?: string;
+}
+
+export interface MessageReactionUpdatePayload {
+  messageId: string;
+  matchId: string;
+  reactions: MessageReaction[];
 }
 
 class WebSocketService {
@@ -187,6 +193,16 @@ class WebSocketService {
     this.emitTyping(receiverId, isTyping);
   }
 
+  public sendMessageReaction(
+    messageId: string,
+    payload: { matchId?: string; emoji: string }
+  ): void {
+    this.socket?.emit('message:reaction', {
+      messageId,
+      ...payload,
+    });
+  }
+
   public sendCallOffer(
     targetUserId: string,
     payload: { matchId?: string; callType: CallType; sdp: RTCSessionDescriptionInit }
@@ -259,6 +275,10 @@ class WebSocketService {
 
   public onUserPresence(callback: (payload: UserPresencePayload) => void): void {
     this.socket?.on('user:presence', callback);
+  }
+
+  public onMessageReaction(callback: (payload: MessageReactionUpdatePayload) => void): void {
+    this.socket?.on('message:reaction', callback);
   }
 
   public requestPresence(userIds: string[]): Promise<UserPresencePayload[]> {

@@ -32,6 +32,11 @@ export interface Message {
       resourceType?: string;
     } | null;
   } | null;
+  reactions?: Array<{
+    userId: string;
+    emoji: string;
+    createdAt?: string;
+  }>;
   isRead: boolean;
   createdAt: string; // ISO date string
   updatedAt: string; // ISO date string

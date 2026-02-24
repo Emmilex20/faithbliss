@@ -18,6 +18,12 @@ export interface MessageReplyPreview {
   } | null;
 }
 
+export interface MessageReaction {
+  userId: string;
+  emoji: string;
+  createdAt?: string;
+}
+
 export interface Message {
   id: string;
   matchId: string;
@@ -36,6 +42,7 @@ export interface Message {
     resourceType?: string;
   } | null;
   replyTo?: MessageReplyPreview | null;
+  reactions?: MessageReaction[];
   
   // FIX: Make server-generated/redundant properties optional (?)
   updatedAt?: string; // <-- Server-generated/Updated

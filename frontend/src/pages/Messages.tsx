@@ -26,6 +26,7 @@ import type {
   CallOfferPayload,
   CallRejectPayload,
   CallType,
+  MessageReactionUpdatePayload,
   UserPresencePayload,
 } from '@/services/WebSocketService';
 import {
@@ -236,6 +237,8 @@ const QUICK_EMOJIS = [
   '🙏', '❤️', '🔥', '👍', '👏', '🎉', '💯', '🤝', '😇', '🤗',
   '🌟', '💖', '💬', '🎶', '😴', '😅', '🙌', '🤍', '🥳', '✨',
 ];
+
+const QUICK_MESSAGE_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
 const getAttachmentKind = (
   messageType?: Message['type'],
@@ -509,6 +512,7 @@ const MessagesContent = () => {
   const [mediaLibraryError, setMediaLibraryError] = useState<string | null>(null);
   const [isImportingMediaItem, setIsImportingMediaItem] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [activeReactionMessageId, setActiveReactionMessageId] = useState<string | null>(null);
   const [incomingCall, setIncomingCall] = useState<{
     fromUserId: string;
     matchId?: string;
@@ -1532,6 +1536,7 @@ const MessagesContent = () => {
 
   useEffect(() => {
     setReplyingTo(null);
+    setActiveReactionMessageId(null);
   }, [selectedChat]);
 
   // 1. Join/Leave WebSocket Room
@@ -1620,6 +1625,60 @@ const MessagesContent = () => {
     scheduleScrollToBottom('auto');
   }, [localConversations, refetch, selectedChat, currentUserId]);
 
+  const applyMessageReactionsUpdate = useCallback(
+    (messageId: string, reactions: Message['reactions'], matchId?: string) => {
+      setLocalMessagesData((prev) => {
+        if (!prev?.messages?.length) return prev;
+        if (matchId && prev.match?.id && prev.match.id !== matchId) return prev;
+
+        let changed = false;
+        const nextMessages = prev.messages.map((msg) => {
+          if (msg.id !== messageId) return msg;
+          changed = true;
+          return {
+            ...msg,
+            reactions: Array.isArray(reactions) ? reactions : [],
+          };
+        });
+
+        if (!changed) return prev;
+        return {
+          ...prev,
+          messages: nextMessages,
+        };
+      });
+    },
+    []
+  );
+
+  const toggleMessageReaction = useCallback(
+    (message: Message, emoji: string) => {
+      if (!currentUserId || !webSocketService || !currentConversation?.id) return;
+      if (!emoji.trim()) return;
+
+      const currentReactions = Array.isArray(message.reactions) ? message.reactions : [];
+      const nextReactions = [...currentReactions];
+      const existingIndex = nextReactions.findIndex((reaction) => reaction.userId === currentUserId);
+      const nowIso = new Date().toISOString();
+
+      if (existingIndex === -1) {
+        nextReactions.push({ userId: currentUserId, emoji, createdAt: nowIso });
+      } else if (nextReactions[existingIndex].emoji === emoji) {
+        nextReactions.splice(existingIndex, 1);
+      } else {
+        nextReactions[existingIndex] = { userId: currentUserId, emoji, createdAt: nowIso };
+      }
+
+      applyMessageReactionsUpdate(message.id, nextReactions, currentConversation.id);
+      webSocketService.sendMessageReaction(message.id, {
+        matchId: currentConversation.id,
+        emoji,
+      });
+      setActiveReactionMessageId(null);
+    },
+    [applyMessageReactionsUpdate, currentConversation?.id, currentUserId, webSocketService]
+  );
+
 
   useEffect(() => {
     if (webSocketService) {
@@ -1630,6 +1689,20 @@ const MessagesContent = () => {
       };
     }
   }, [webSocketService, handleNewMessage]);
+
+  useEffect(() => {
+    if (!webSocketService) return;
+
+    const handleMessageReaction = (payload: MessageReactionUpdatePayload) => {
+      if (!payload?.messageId) return;
+      applyMessageReactionsUpdate(payload.messageId, payload.reactions, payload.matchId);
+    };
+
+    webSocketService.onMessageReaction(handleMessageReaction);
+    return () => {
+      webSocketService.off('message:reaction', handleMessageReaction);
+    };
+  }, [applyMessageReactionsUpdate, webSocketService]);
 
   useEffect(() => {
     if (!webSocketService) return;
@@ -1944,6 +2017,7 @@ const MessagesContent = () => {
       type: resolvedType,
       attachment: attachment || null,
       replyTo: replyPreview,
+      reactions: [],
     };
 
     setLocalMessagesData(prev => {
@@ -3202,81 +3276,169 @@ const MessagesContent = () => {
                   <HeartBeatLoader message="Loading messages..." />
                 </div>
               ) : (
-                localMessagesData?.messages && localMessagesData.messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.senderId === currentUserId ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div className={`max-w-[82%] md:max-w-xl lg:max-w-2xl px-3.5 py-2.5 rounded-2xl ${
-                      message.senderId === currentUserId
-                        ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-br-md'
-                        : 'bg-white/10 backdrop-blur-xl border border-white/20 text-white rounded-bl-md'
-                      }`}>
-                      {message.replyTo ? (
-                        <div className={`mb-2 rounded-xl border-l-4 px-2.5 py-1.5 ${
-                          message.senderId === currentUserId
-                            ? 'bg-white/20 border-white/80'
-                            : 'bg-black/25 border-pink-300/80'
+                localMessagesData?.messages && localMessagesData.messages.map((message) => {
+                  const messageReactions = Array.isArray(message.reactions) ? message.reactions : [];
+                  const myReactionEmoji = messageReactions.find(
+                    (reaction) => reaction.userId === currentUserId
+                  )?.emoji;
+                  const groupedReactionsMap = new Map<
+                    string,
+                    { emoji: string; count: number; reactedByMe: boolean }
+                  >();
+                  messageReactions.forEach((reaction) => {
+                    if (!reaction?.emoji) return;
+                    const current = groupedReactionsMap.get(reaction.emoji) || {
+                      emoji: reaction.emoji,
+                      count: 0,
+                      reactedByMe: false,
+                    };
+                    current.count += 1;
+                    if (reaction.userId === currentUserId) {
+                      current.reactedByMe = true;
+                    }
+                    groupedReactionsMap.set(reaction.emoji, current);
+                  });
+                  const groupedReactions = Array.from(groupedReactionsMap.values());
+                  const isReactionPickerOpen = activeReactionMessageId === message.id;
+
+                  return (
+                    <div
+                      key={message.id}
+                      className={`flex ${message.senderId === currentUserId ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div className={`max-w-[82%] md:max-w-xl lg:max-w-2xl px-3.5 py-2.5 rounded-2xl ${
+                        message.senderId === currentUserId
+                          ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-br-md'
+                          : 'bg-white/10 backdrop-blur-xl border border-white/20 text-white rounded-bl-md'
                         }`}>
-                          <p className={`text-[10px] font-semibold ${
-                            message.senderId === currentUserId ? 'text-white' : 'text-pink-200'
-                          }`}>
-                            {getMessageAuthorLabel(message.replyTo.senderId)}
-                          </p>
-                          <p className={`text-xs truncate ${
-                            message.senderId === currentUserId ? 'text-white/90' : 'text-white/80'
-                          }`}>
-                            {getMessagePreviewText(
-                              message.replyTo.content || '',
-                              message.replyTo.attachment || null,
-                              message.replyTo.type
-                            ) || 'Message'}
-                          </p>
-                        </div>
-                      ) : null}
-                      {message.attachment ? (
-                        <div>
-                          {renderMessageAttachment(message)}
-                        </div>
-                      ) : null}
-                      {message.content?.trim() ? (
-                        <p className={`text-sm whitespace-pre-wrap break-words ${message.attachment ? 'mt-2' : ''}`}>
-                          {message.content}
-                        </p>
-                      ) : null}
-                      <div className={`flex items-center mt-1 gap-2 ${
-                        message.senderId === currentUserId ? 'justify-end' : 'justify-start'
-                        }`}>
-                        <button
-                          type="button"
-                          onClick={() => handleReplyToMessage(message)}
-                          className={`inline-flex items-center justify-center w-6 h-6 rounded-md transition-colors ${
+                        {message.replyTo ? (
+                          <div className={`mb-2 rounded-xl border-l-4 px-2.5 py-1.5 ${
                             message.senderId === currentUserId
-                              ? 'hover:bg-white/20 text-white/80'
-                              : 'hover:bg-white/10 text-white/70'
-                          }`}
-                          aria-label="Reply to message"
-                        >
-                          <Reply className="w-3.5 h-3.5" />
-                        </button>
-                        <span className={`text-xs ${
-                          message.senderId === currentUserId ? 'text-white/70' : 'text-gray-400'
+                              ? 'bg-white/20 border-white/80'
+                              : 'bg-black/25 border-pink-300/80'
                           }`}>
-                          {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        {message.senderId === currentUserId && (
-                          <div className="ml-2">
-                            {message.isRead ? (
-                              <CheckCheck className="w-3 h-3 text-white/70" />
-                            ) : (
-                              <Check className="w-3 h-3 text-white/50" />
-                            )}
+                            <p className={`text-[10px] font-semibold ${
+                              message.senderId === currentUserId ? 'text-white' : 'text-pink-200'
+                            }`}>
+                              {getMessageAuthorLabel(message.replyTo.senderId)}
+                            </p>
+                            <p className={`text-xs truncate ${
+                              message.senderId === currentUserId ? 'text-white/90' : 'text-white/80'
+                            }`}>
+                              {getMessagePreviewText(
+                                message.replyTo.content || '',
+                                message.replyTo.attachment || null,
+                                message.replyTo.type
+                              ) || 'Message'}
+                            </p>
+                          </div>
+                        ) : null}
+                        {message.attachment ? (
+                          <div>
+                            {renderMessageAttachment(message)}
+                          </div>
+                        ) : null}
+                        {message.content?.trim() ? (
+                          <p className={`text-sm whitespace-pre-wrap break-words ${message.attachment ? 'mt-2' : ''}`}>
+                            {message.content}
+                          </p>
+                        ) : null}
+
+                        {groupedReactions.length > 0 && (
+                          <div className={`mt-2 flex flex-wrap gap-1.5 ${
+                            message.senderId === currentUserId ? 'justify-end' : 'justify-start'
+                          }`}>
+                            {groupedReactions.map((reaction) => (
+                              <button
+                                key={`${message.id}-${reaction.emoji}`}
+                                type="button"
+                                onClick={() => toggleMessageReaction(message, reaction.emoji)}
+                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 border text-xs transition-colors ${
+                                  reaction.reactedByMe
+                                    ? 'bg-white/90 text-gray-900 border-white'
+                                    : message.senderId === currentUserId
+                                      ? 'bg-white/20 text-white border-white/40 hover:bg-white/30'
+                                      : 'bg-white/10 text-white border-white/25 hover:bg-white/20'
+                                }`}
+                              >
+                                <span>{reaction.emoji}</span>
+                                <span>{reaction.count}</span>
+                              </button>
+                            ))}
                           </div>
                         )}
+
+                        <div className={`flex items-center mt-1 gap-2 ${
+                          message.senderId === currentUserId ? 'justify-end' : 'justify-start'
+                          }`}>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveReactionMessageId((prev) => (prev === message.id ? null : message.id));
+                              }}
+                              className={`inline-flex items-center justify-center w-6 h-6 rounded-md transition-colors ${
+                                message.senderId === currentUserId
+                                  ? 'hover:bg-white/20 text-white/80'
+                                  : 'hover:bg-white/10 text-white/70'
+                              }`}
+                              aria-label="React to message"
+                            >
+                              <Smile className="w-3.5 h-3.5" />
+                            </button>
+                            {isReactionPickerOpen && (
+                              <div className={`absolute bottom-[calc(100%+8px)] z-20 flex items-center gap-1.5 rounded-full border border-white/25 bg-black/75 backdrop-blur-xl px-2 py-1.5 shadow-xl ${
+                                message.senderId === currentUserId ? 'right-0' : 'left-0'
+                              }`}>
+                                {QUICK_MESSAGE_REACTIONS.map((emoji) => (
+                                  <button
+                                    key={`${message.id}-${emoji}`}
+                                    type="button"
+                                    onClick={() => toggleMessageReaction(message, emoji)}
+                                    className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm transition-colors ${
+                                      myReactionEmoji === emoji
+                                        ? 'bg-white text-gray-900'
+                                        : 'hover:bg-white/20 text-white'
+                                    }`}
+                                    aria-label={`React with ${emoji}`}
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleReplyToMessage(message)}
+                            className={`inline-flex items-center justify-center w-6 h-6 rounded-md transition-colors ${
+                              message.senderId === currentUserId
+                                ? 'hover:bg-white/20 text-white/80'
+                                : 'hover:bg-white/10 text-white/70'
+                            }`}
+                            aria-label="Reply to message"
+                          >
+                            <Reply className="w-3.5 h-3.5" />
+                          </button>
+                          <span className={`text-xs ${
+                            message.senderId === currentUserId ? 'text-white/70' : 'text-gray-400'
+                            }`}>
+                            {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {message.senderId === currentUserId && (
+                            <div className="ml-2">
+                              {message.isRead ? (
+                                <CheckCheck className="w-3 h-3 text-white/70" />
+                              ) : (
+                                <Check className="w-3 h-3 text-white/50" />
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
 
               <div ref={messagesEndRef} />

@@ -50,6 +50,12 @@ interface IMessageReply extends DocumentData {
   attachment?: IMessageAttachment | null;
 }
 
+interface IMessageReaction extends DocumentData {
+  userId: string;
+  emoji: string;
+  createdAt?: Timestamp;
+}
+
 interface IMessage extends DocumentData {
   id: string;
   matchId: string;
@@ -59,6 +65,7 @@ interface IMessage extends DocumentData {
   type?: MessageType;
   attachment?: IMessageAttachment | null;
   replyTo?: IMessageReply | null;
+  reactions?: IMessageReaction[];
   unreadBy?: string[];
   createdAt: Timestamp;
   updatedAt?: Timestamp;
@@ -140,6 +147,32 @@ const normalizeReplyPreview = (replyTo: unknown): {
     type,
     attachment,
   };
+};
+
+const normalizeMessageReactions = (reactions: unknown): Array<{
+  userId: string;
+  emoji: string;
+  createdAt?: string;
+}> => {
+  if (!Array.isArray(reactions)) return [];
+
+  const deduped = new Map<string, { userId: string; emoji: string; createdAt?: string }>();
+  reactions.forEach((entry) => {
+    if (!entry || typeof entry !== 'object') return;
+    const candidate = entry as Record<string, unknown>;
+    const userId = typeof candidate.userId === 'string' ? candidate.userId.trim() : '';
+    const emoji = typeof candidate.emoji === 'string' ? candidate.emoji.trim() : '';
+    if (!userId || !emoji) return;
+
+    const createdAt = (candidate.createdAt && typeof candidate.createdAt === 'object'
+      && 'toDate' in (candidate.createdAt as Record<string, unknown>))
+      ? ((candidate.createdAt as Timestamp).toDate().toISOString())
+      : undefined;
+
+    deduped.set(userId, { userId, emoji, createdAt });
+  });
+
+  return Array.from(deduped.values());
 };
 
 const resolveMediaApiKey = (
@@ -663,6 +696,7 @@ const getMatchMessages = async (req: Request, res: Response) => {
         type: m.type || (m.attachment?.mimeType ? getMessageTypeFromMimeType(m.attachment.mimeType) : 'TEXT'),
         attachment: m.attachment || null,
         replyTo: normalizeReplyPreview(m.replyTo),
+        reactions: normalizeMessageReactions(m.reactions),
         createdAt: m.createdAt.toDate().toISOString(),
         updatedAt: m.updatedAt?.toDate?.().toISOString?.() || m.createdAt.toDate().toISOString(),
         isRead,

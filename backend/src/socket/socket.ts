@@ -25,6 +25,18 @@ interface MessageReplyPayload {
     attachment: MessageAttachmentPayload | null;
 }
 
+interface MessageReactionPayload {
+    userId: string;
+    emoji: string;
+    createdAt?: string;
+}
+
+interface StoredMessageReaction {
+    userId: string;
+    emoji: string;
+    createdAt?: FirebaseFirestore.Timestamp;
+}
+
 // Helper interface extending Socket to include the authenticated user ID
 interface AuthenticatedSocket extends Socket {
     user?: { id: string }; 
@@ -89,6 +101,49 @@ const sanitizeOptionalString = (value: unknown): string | undefined => {
     if (typeof value !== 'string') return undefined;
     const normalized = value.trim();
     return normalized || undefined;
+};
+
+const sanitizeRequiredString = (value: unknown): string | null => {
+    if (typeof value !== 'string') return null;
+    const normalized = value.trim();
+    return normalized || null;
+};
+
+const sanitizeReactionEmoji = (value: unknown): string | null => {
+    const normalized = sanitizeRequiredString(value);
+    if (!normalized) return null;
+    if (normalized.length > 16) return null;
+    return normalized;
+};
+
+const normalizeStoredMessageReactions = (value: unknown): StoredMessageReaction[] => {
+    if (!Array.isArray(value)) return [];
+
+    const dedupedByUser = new Map<string, StoredMessageReaction>();
+    value.forEach((entry) => {
+        if (!entry || typeof entry !== 'object') return;
+        const candidate = entry as Record<string, unknown>;
+        const userId = sanitizeRequiredString(candidate.userId);
+        const emoji = sanitizeReactionEmoji(candidate.emoji);
+        if (!userId || !emoji) return;
+
+        const createdAt =
+            candidate.createdAt && typeof candidate.createdAt === 'object'
+                ? (candidate.createdAt as FirebaseFirestore.Timestamp)
+                : undefined;
+
+        dedupedByUser.set(userId, { userId, emoji, createdAt });
+    });
+
+    return Array.from(dedupedByUser.values());
+};
+
+const serializeMessageReactions = (reactions: StoredMessageReaction[]): MessageReactionPayload[] => {
+    return reactions.map((reaction) => ({
+        userId: reaction.userId,
+        emoji: reaction.emoji,
+        createdAt: reaction.createdAt?.toDate?.().toISOString?.() || new Date().toISOString(),
+    }));
 };
 
 const normalizeTimestampToIso = (value: unknown): string | undefined => {
@@ -312,6 +367,7 @@ export const initializeSocketIO = (io: Server) => {
                     type: messageType,
                     attachment: attachment || null,
                     replyTo: replyTo || null,
+                    reactions: [],
                     isRead: false,
                     unreadBy: [receiverId],
                     createdAt: admin.firestore.Timestamp.now(),
@@ -327,6 +383,7 @@ export const initializeSocketIO = (io: Server) => {
                     type: messageType,
                     attachment: attachment || null,
                     replyTo: replyTo || null,
+                    reactions: [],
                     isRead: false,
                     unreadBy: [receiverId],
                     createdAt: new Date().toISOString(),
@@ -361,6 +418,93 @@ export const initializeSocketIO = (io: Server) => {
                 userId: userId, 
                 isTyping: data.isTyping 
             });
+        });
+
+        socket.on('message:reaction', async (payload: unknown) => {
+            const data = sanitizeRecord(payload);
+            if (!data) {
+                return socket.emit('error', 'Invalid message reaction payload.');
+            }
+
+            const messageId = sanitizeRequiredString(data.messageId);
+            const providedMatchId = sanitizeOptionalString(data.matchId);
+            const emoji = sanitizeReactionEmoji(data.emoji);
+            if (!messageId || !emoji) {
+                return socket.emit('error', 'Invalid message reaction payload.');
+            }
+
+            try {
+                const mutation = await db.runTransaction(async (transaction) => {
+                    const messageRef = db.collection('messages').doc(messageId);
+                    const messageDoc = await transaction.get(messageRef);
+                    if (!messageDoc.exists) {
+                        throw new Error('Message not found.');
+                    }
+
+                    const messageData = messageDoc.data() as {
+                        matchId?: string;
+                        reactions?: unknown;
+                    } | undefined;
+                    const messageMatchId = sanitizeOptionalString(messageData?.matchId);
+                    const resolvedMatchId = providedMatchId || messageMatchId;
+                    if (!resolvedMatchId) {
+                        throw new Error('Match id missing for reaction.');
+                    }
+                    if (messageMatchId && messageMatchId !== resolvedMatchId) {
+                        throw new Error('Message does not belong to the provided match.');
+                    }
+
+                    const matchRef = db.collection('matches').doc(resolvedMatchId);
+                    const matchDoc = await transaction.get(matchRef);
+                    if (!matchDoc.exists) {
+                        throw new Error('Match not found.');
+                    }
+
+                    const matchUsersRaw = matchDoc.data()?.users;
+                    const matchUsers = Array.isArray(matchUsersRaw)
+                        ? matchUsersRaw.filter((value): value is string => typeof value === 'string')
+                        : [];
+                    if (!matchUsers.includes(userId)) {
+                        throw new Error('Cannot react to messages outside your match.');
+                    }
+
+                    const now = admin.firestore.Timestamp.now();
+                    const reactions = normalizeStoredMessageReactions(messageData?.reactions);
+                    const existingIndex = reactions.findIndex((reaction) => reaction.userId === userId);
+
+                    if (existingIndex === -1) {
+                        reactions.push({ userId, emoji, createdAt: now });
+                    } else if (reactions[existingIndex].emoji === emoji) {
+                        reactions.splice(existingIndex, 1);
+                    } else {
+                        reactions[existingIndex] = { userId, emoji, createdAt: now };
+                    }
+
+                    transaction.update(messageRef, {
+                        reactions,
+                        updatedAt: now,
+                    });
+
+                    return {
+                        matchId: resolvedMatchId,
+                        participants: matchUsers,
+                        reactions,
+                    };
+                });
+
+                const reactionPayload = {
+                    messageId,
+                    matchId: mutation.matchId,
+                    reactions: serializeMessageReactions(mutation.reactions),
+                };
+
+                mutation.participants.forEach((participantId) => {
+                    io.to(participantId).emit('message:reaction', reactionPayload);
+                });
+            } catch (error) {
+                console.error('Error applying message reaction:', error);
+                socket.emit('error', 'Failed to react to message.');
+            }
         });
 
         socket.on(
