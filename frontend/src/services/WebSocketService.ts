@@ -21,6 +21,57 @@ export interface UserTypingPayload {
   isTyping: boolean;
 }
 
+export interface MessageAttachmentPayload {
+  url: string;
+  publicId: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  resourceType?: string;
+}
+
+export interface MessageReplyPayload {
+  id: string;
+  senderId: string;
+  content: string;
+  type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'SYSTEM';
+  attachment?: MessageAttachmentPayload | null;
+}
+
+export type CallType = 'audio' | 'video';
+
+export interface CallOfferPayload {
+  fromUserId: string;
+  matchId?: string;
+  callType: CallType;
+  sdp: RTCSessionDescriptionInit;
+}
+
+export interface CallAnswerPayload {
+  fromUserId: string;
+  matchId?: string;
+  callType: CallType;
+  sdp: RTCSessionDescriptionInit;
+}
+
+export interface CallIceCandidatePayload {
+  fromUserId: string;
+  matchId?: string;
+  candidate: RTCIceCandidateInit;
+}
+
+export interface CallRejectPayload {
+  fromUserId: string;
+  matchId?: string;
+  reason?: string;
+}
+
+export interface CallEndPayload {
+  fromUserId: string;
+  matchId?: string;
+  reason?: string;
+}
+
 class WebSocketService {
   private socket: Socket | null = null;
   private readonly WEBSOCKET_URL: string;
@@ -104,8 +155,22 @@ class WebSocketService {
    * Emits the message to the server. The server should process the message,
    * save it, and then broadcast the full Message object back via 'newMessage'.
    */
-  public sendMessage(receiverId: string, content: string, matchId?: string): void {
-    this.socket?.emit('sendMessage', { receiverId, content, matchId });
+  public sendMessage(
+    receiverId: string,
+    content: string,
+    matchId?: string,
+    attachment?: MessageAttachmentPayload | null,
+    clientTempId?: string,
+    replyToMessageId?: string | null
+  ): void {
+    this.socket?.emit('sendMessage', {
+      receiverId,
+      content,
+      matchId,
+      attachment,
+      clientTempId,
+      replyToMessageId,
+    });
   }
 
   public emitTyping(receiverId: string, isTyping: boolean): void {
@@ -114,6 +179,76 @@ class WebSocketService {
 
   public sendTyping(receiverId: string, isTyping: boolean): void {
     this.emitTyping(receiverId, isTyping);
+  }
+
+  public sendCallOffer(
+    targetUserId: string,
+    payload: { matchId?: string; callType: CallType; sdp: RTCSessionDescriptionInit }
+  ): void {
+    this.socket?.emit('call:offer', {
+      targetUserId,
+      ...payload,
+    });
+  }
+
+  public sendCallAnswer(
+    targetUserId: string,
+    payload: { matchId?: string; callType: CallType; sdp: RTCSessionDescriptionInit }
+  ): void {
+    this.socket?.emit('call:answer', {
+      targetUserId,
+      ...payload,
+    });
+  }
+
+  public sendCallIceCandidate(
+    targetUserId: string,
+    payload: { matchId?: string; candidate: RTCIceCandidateInit }
+  ): void {
+    this.socket?.emit('call:ice-candidate', {
+      targetUserId,
+      ...payload,
+    });
+  }
+
+  public sendCallReject(
+    targetUserId: string,
+    payload: { matchId?: string; reason?: string }
+  ): void {
+    this.socket?.emit('call:reject', {
+      targetUserId,
+      ...payload,
+    });
+  }
+
+  public sendCallEnd(
+    targetUserId: string,
+    payload: { matchId?: string; reason?: string }
+  ): void {
+    this.socket?.emit('call:end', {
+      targetUserId,
+      ...payload,
+    });
+  }
+
+  public onCallOffer(callback: (payload: CallOfferPayload) => void): void {
+    this.socket?.on('call:offer', callback);
+  }
+
+  public onCallAnswer(callback: (payload: CallAnswerPayload) => void): void {
+    this.socket?.on('call:answer', callback);
+  }
+
+  public onCallIceCandidate(callback: (payload: CallIceCandidatePayload) => void): void {
+    this.socket?.on('call:ice-candidate', callback);
+  }
+
+  public onCallReject(callback: (payload: CallRejectPayload) => void): void {
+    this.socket?.on('call:reject', callback);
+  }
+
+  public onCallEnd(callback: (payload: CallEndPayload) => void): void {
+    this.socket?.on('call:end', callback);
   }
 
   public isConnected(): boolean {

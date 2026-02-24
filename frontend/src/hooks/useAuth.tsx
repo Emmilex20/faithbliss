@@ -86,6 +86,16 @@ interface OnboardingData {
     [key: string]: any; // Allow for dynamic fields to be passed
 }
 
+const isFirebaseNetworkError = (error: unknown): boolean => {
+    const code = (error as { code?: unknown })?.code;
+    return typeof code === "string" && code === "auth/network-request-failed";
+};
+
+const getAuthErrorMessage = (error: unknown, fallback: string): string => {
+    const message = (error as { message?: unknown })?.message;
+    return typeof message === "string" && message.trim() ? message : fallback;
+};
+
 const sanitizeText = (value: unknown, maxLen: number): string | undefined => {
     if (typeof value !== "string") return undefined;
     const cleaned = value.trim();
@@ -325,7 +335,7 @@ export function useAuth() {
 
     const syncUserFromFirebase = useCallback(async (fbUser: FirebaseAuthUser) => {
         // 1. Get the current, secure ID Token (still needed for any future custom backend calls)
-        const token = await fbUser.getIdToken(true); 
+        const token = await fbUser.getIdToken(); 
         setAccessToken(token);
         localStorage.setItem("accessToken", token);
         
@@ -396,11 +406,15 @@ export function useAuth() {
 
                     await syncUserFromFirebase(fbUser);
                 } catch (e: any) {
-                    // If token fetch or Firestore sync fails, force logout
-                    console.error("Firebase/Firestore sync failed:", e);
-                    await signOut(auth);
-                    setUser(null);
-                    setAccessToken(null);
+                    if (isFirebaseNetworkError(e)) {
+                        console.warn("Firebase sync skipped due to temporary network issue.");
+                    } else {
+                        // If token fetch or Firestore sync fails for non-network reasons, force logout
+                        console.error("Firebase/Firestore sync failed:", e);
+                        await signOut(auth);
+                        setUser(null);
+                        setAccessToken(null);
+                    }
                 }
             } else {
                 // Logged out state
@@ -437,7 +451,7 @@ export function useAuth() {
                 
             } catch (error: any) {
                 console.error("D. Login failed with error:", error);
-                showError(error.message || "Login failed", "Authentication Error");
+                showError(getAuthErrorMessage(error, "Login failed"), "Authentication Error");
                 throw error;
             } finally {
                 setIsLoggingIn(false);
@@ -464,7 +478,7 @@ export function useAuth() {
                     credentials.password
                 );
                 const fbUser = userCredential.user;
-                const token = await fbUser.getIdToken(true);
+                const token = await fbUser.getIdToken();
 
                 // 2.  NEW: Create user profile document directly in Firestore
                 const userDocRef = doc(db, "users", fbUser.uid);
@@ -516,7 +530,7 @@ export function useAuth() {
                 if (auth.currentUser) {
                     await signOut(auth); 
                 }
-                showError(error.message || "Registration failed", "Registration Error");
+                showError(getAuthErrorMessage(error, "Registration failed"), "Registration Error");
                 throw error;
             } finally {
                 setIsRegistering(false);
@@ -575,7 +589,7 @@ export function useAuth() {
                 return true;
             } catch (error: any) {
                 console.error("Firestore Onboarding failed:", error);
-                showError(error.message || "Failed to complete onboarding.", "Onboarding Error");
+                showError(getAuthErrorMessage(error, "Failed to complete onboarding."), "Onboarding Error");
                 throw error;
             } finally {
                 setIsCompletingOnboarding(false);
@@ -620,7 +634,7 @@ export function useAuth() {
             const userToStore = await fetchUserDataFromFirestore(fbUser);
             if (!userToStore) throw new Error("User profile not found in Firestore during refetch.");
 
-            const freshToken = await fbUser.getIdToken(true);
+            const freshToken = await fbUser.getIdToken();
 
             setUser(userToStore);
             setAccessToken(freshToken);
@@ -650,7 +664,11 @@ export function useAuth() {
                     setIsLoading(false);
                 }
             } catch (error: any) {
-                console.error("Google redirect handling failed:", error);
+                if (isFirebaseNetworkError(error)) {
+                    console.warn("Google redirect check deferred due to network issue.");
+                } else {
+                    console.error("Google redirect handling failed:", error);
+                }
                 setIsLoading(false);
             }
         };
@@ -695,7 +713,14 @@ export function useAuth() {
                 }
             } catch (error: any) {
                 console.error("Google sign-in failed:", error);
-                showError(error.message || "Google sign-in failed", "Authentication Error");
+                if (isFirebaseNetworkError(error)) {
+                    showError(
+                        "Network error while contacting Google/Firebase. Check your connection and try again.",
+                        "Authentication Error"
+                    );
+                    return;
+                }
+                showError(getAuthErrorMessage(error, "Google sign-in failed"), "Authentication Error");
                 throw error;
             } finally {
                 if (mode === "signup") {

@@ -3,7 +3,10 @@
 import { Request, Response } from 'express';
 import { admin, usersCollection } from '../config/firebase-admin';
 import { DocumentData, CollectionReference, Timestamp } from 'firebase-admin/firestore';
+import multer from 'multer';
+import { Readable } from 'stream';
 import { createNotification } from '../services/notificationService';
+import { cloudinaryUploader } from '../config/cloudinaryConfig';
 
 // --- FIRESTORE DATA STRUCTURES ---
 
@@ -28,20 +31,165 @@ interface IMatch extends DocumentData {
   createdAt: Timestamp;
 }
 
+type MessageType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'SYSTEM';
+
+interface IMessageAttachment extends DocumentData {
+  url: string;
+  publicId: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  resourceType?: string;
+}
+
+interface IMessageReply extends DocumentData {
+  id: string;
+  senderId: string;
+  content?: string;
+  type?: MessageType;
+  attachment?: IMessageAttachment | null;
+}
+
 interface IMessage extends DocumentData {
   id: string;
   matchId: string;
   senderId: string;
   receiverId?: string;
   content: string;
+  type?: MessageType;
+  attachment?: IMessageAttachment | null;
+  replyTo?: IMessageReply | null;
   unreadBy?: string[];
   createdAt: Timestamp;
+  updatedAt?: Timestamp;
 }
 
 // Firestore references
 const db = admin.firestore();
 const matchesCollection: CollectionReference = db.collection('matches');
 const messagesCollection: CollectionReference = db.collection('messages');
+
+const messageAttachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+});
+
+const getMessageTypeFromMimeType = (mimeType: string): MessageType => {
+  if (mimeType.startsWith('image/')) return 'IMAGE';
+  if (mimeType.startsWith('video/')) return 'VIDEO';
+  if (mimeType.startsWith('audio/')) return 'AUDIO';
+  return 'FILE';
+};
+
+const getAttachmentLabel = (message: Pick<IMessage, 'type' | 'attachment'>): string => {
+  if (message.type === 'IMAGE') return 'Image';
+  if (message.type === 'VIDEO') return 'Video';
+  if (message.type === 'AUDIO') return 'Audio';
+  if (message.attachment?.mimeType.startsWith('image/')) return 'Image';
+  if (message.attachment?.mimeType.startsWith('video/')) return 'Video';
+  if (message.attachment?.mimeType.startsWith('audio/')) return 'Audio';
+  return 'File';
+};
+
+const getMessagePreviewContent = (message: Pick<IMessage, 'content' | 'attachment' | 'type'>): string => {
+  if (message.attachment) return getAttachmentLabel(message);
+
+  const text = typeof message.content === 'string' ? message.content.trim() : '';
+  if (text) return text;
+
+  return '';
+};
+
+const normalizeReplyPreview = (replyTo: unknown): {
+  id: string;
+  senderId: string;
+  content: string;
+  type: MessageType;
+  attachment: IMessageAttachment | null;
+} | null => {
+  if (!replyTo || typeof replyTo !== 'object') return null;
+  const candidate = replyTo as Record<string, unknown>;
+
+  const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
+  const senderId = typeof candidate.senderId === 'string' ? candidate.senderId.trim() : '';
+  if (!id || !senderId) return null;
+
+  const content = typeof candidate.content === 'string' ? candidate.content : '';
+  const attachmentCandidate = (candidate.attachment && typeof candidate.attachment === 'object')
+    ? candidate.attachment as IMessageAttachment
+    : null;
+
+  const attachment = attachmentCandidate && typeof attachmentCandidate.url === 'string'
+    ? {
+      url: attachmentCandidate.url,
+      publicId: attachmentCandidate.publicId,
+      fileName: attachmentCandidate.fileName,
+      mimeType: attachmentCandidate.mimeType,
+      fileSize: attachmentCandidate.fileSize,
+      resourceType: attachmentCandidate.resourceType,
+    }
+    : null;
+
+  const typeCandidate = typeof candidate.type === 'string' ? candidate.type as MessageType : undefined;
+  const type = typeCandidate || (attachment?.mimeType ? getMessageTypeFromMimeType(attachment.mimeType) : 'TEXT');
+
+  return {
+    id,
+    senderId,
+    content,
+    type,
+    attachment,
+  };
+};
+
+const resolveMediaApiKey = (
+  provider: 'giphy' | 'tenor',
+  fallbackFromClient?: string
+): string => {
+  if (provider === 'giphy') {
+    return process.env.GIPHY_API_KEY
+      || process.env.VITE_GIPHY_API_KEY
+      || fallbackFromClient
+      || '';
+  }
+  return process.env.TENOR_API_KEY
+    || process.env.VITE_TENOR_API_KEY
+    || fallbackFromClient
+    || '';
+};
+
+const uploadMessageAttachmentToCloudinary = (
+  file: Express.Multer.File
+): Promise<IMessageAttachment> => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinaryUploader.uploader.upload_stream(
+      {
+        folder: 'faithbliss_messages',
+        resource_type: 'auto',
+        use_filename: true,
+        unique_filename: true,
+        overwrite: false,
+      },
+      (error, result) => {
+        if (error || !result?.secure_url || !result.public_id) {
+          reject(error || new Error('Message attachment upload failed'));
+          return;
+        }
+
+        resolve({
+          url: result.secure_url,
+          publicId: result.public_id,
+          fileName: file.originalname,
+          mimeType: file.mimetype,
+          fileSize: file.size,
+          resourceType: result.resource_type || 'raw',
+        });
+      }
+    );
+
+    Readable.from(file.buffer).pipe(uploadStream);
+  });
+};
 
 // Helper: safely extract message from unknown error
 function isErrorWithMessage(error: unknown): error is { message: string } {
@@ -81,6 +229,30 @@ const fetchCurrentUser = async (req: Request, res: Response): Promise<IUserProfi
     console.error('?? Database fetch error:', errorMessage);
     res.status(500).json({ message: `Server Error fetching user profile: ${errorMessage}` });
     return null;
+  }
+};
+
+const uploadMessageAttachmentMiddleware = messageAttachmentUpload.single('file');
+
+const uploadMessageAttachment = async (req: Request, res: Response) => {
+  const currentUser = await fetchCurrentUser(req, res);
+  if (!currentUser) return;
+
+  if (!req.file) {
+    return res.status(400).json({ message: 'No file uploaded.' });
+  }
+
+  try {
+    const attachment = await uploadMessageAttachmentToCloudinary(req.file);
+
+    return res.status(201).json({
+      attachment,
+      type: getMessageTypeFromMimeType(attachment.mimeType),
+    });
+  } catch (error) {
+    const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
+    console.error('Error uploading message attachment:', error);
+    return res.status(500).json({ message: `Server Error: ${msg}` });
   }
 };
 
@@ -396,7 +568,12 @@ const getMatchConversations = async (req: Request, res: Response) => {
           id: match.id,
           otherUser: otherUser || null,
           lastMessage: lastMsg
-            ? { content: lastMsg.content, createdAt: lastMsg.createdAt.toDate().toISOString() }
+            ? {
+                content: getMessagePreviewContent(lastMsg),
+                createdAt: lastMsg.createdAt.toDate().toISOString(),
+                type: lastMsg.type || 'TEXT',
+                attachment: lastMsg.attachment || null,
+              }
             : null,
           unreadCount: unreadCountByMatch.get(match.id) || 0,
           updatedAt,
@@ -482,8 +659,12 @@ const getMatchMessages = async (req: Request, res: Response) => {
         matchId: m.matchId,
         senderId: m.senderId,
         receiverId: m.receiverId || (m.senderId === currentUid ? otherUser.id : currentUser.id),
-        content: m.content,
+        content: typeof m.content === 'string' ? m.content : '',
+        type: m.type || (m.attachment?.mimeType ? getMessageTypeFromMimeType(m.attachment.mimeType) : 'TEXT'),
+        attachment: m.attachment || null,
+        replyTo: normalizeReplyPreview(m.replyTo),
         createdAt: m.createdAt.toDate().toISOString(),
+        updatedAt: m.updatedAt?.toDate?.().toISOString?.() || m.createdAt.toDate().toISOString(),
         isRead,
       };
     });
@@ -506,6 +687,97 @@ const getMatchMessages = async (req: Request, res: Response) => {
     const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
     console.error('Error fetching messages:', error);
     res.status(500).json({ message: `Server Error: ${msg}` });
+  }
+};
+
+// =======================================================
+// 6.5 GET /api/messages/media/library
+// =======================================================
+const getMediaLibrary = async (req: Request, res: Response) => {
+  const currentUser = await fetchCurrentUser(req, res);
+  if (!currentUser) return;
+
+  const provider = req.query.provider === 'tenor' ? 'tenor' : 'giphy';
+  const tab = req.query.tab === 'gif' ? 'gif' : 'sticker';
+  const rawQuery = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  const requestedLimit = Number(req.query.limit);
+  const safeLimit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.floor(requestedLimit), 1), 50)
+    : 28;
+
+  const fallbackApiKey = typeof req.query.apiKey === 'string'
+    ? req.query.apiKey.trim()
+    : '';
+  const apiKey = resolveMediaApiKey(provider, fallbackApiKey);
+
+  if (!apiKey) {
+    return res.status(400).json({
+      message: provider === 'tenor'
+        ? 'TENOR_API_KEY is not configured.'
+        : 'GIPHY_API_KEY is not configured.',
+    });
+  }
+
+  try {
+    let upstreamUrl = '';
+
+    if (provider === 'tenor') {
+      const clientKey = typeof req.query.clientKey === 'string' && req.query.clientKey.trim()
+        ? req.query.clientKey.trim()
+        : (process.env.TENOR_CLIENT_KEY || process.env.VITE_TENOR_CLIENT_KEY || 'faithbliss-chat');
+
+      const params = new URLSearchParams({
+        key: apiKey,
+        client_key: clientKey,
+        limit: String(safeLimit),
+        media_filter: 'gif,tinygif,webp,tinywebp',
+        contentfilter: 'medium',
+      });
+
+      if (tab === 'sticker') {
+        params.set('searchfilter', 'sticker');
+      }
+
+      if (rawQuery) {
+        params.set('q', rawQuery);
+        upstreamUrl = `https://tenor.googleapis.com/v2/search?${params.toString()}`;
+      } else {
+        upstreamUrl = `https://tenor.googleapis.com/v2/featured?${params.toString()}`;
+      }
+    } else {
+      const endpoint = tab === 'gif' ? 'gifs' : 'stickers';
+      const action = rawQuery ? 'search' : 'trending';
+      const params = new URLSearchParams({
+        api_key: apiKey,
+        limit: String(safeLimit),
+        rating: 'pg-13',
+      });
+
+      if (rawQuery) {
+        params.set('q', rawQuery);
+        params.set('lang', 'en');
+      }
+
+      upstreamUrl = `https://api.giphy.com/v1/${endpoint}/${action}?${params.toString()}`;
+    }
+
+    const upstreamResponse = await fetch(upstreamUrl);
+    const payload = await upstreamResponse.json().catch(() => ({}));
+
+    if (!upstreamResponse.ok) {
+      return res.status(upstreamResponse.status).json({
+        message: 'Media provider request failed.',
+        provider,
+        status: upstreamResponse.status,
+        payload,
+      });
+    }
+
+    return res.status(200).json(payload);
+  } catch (error) {
+    const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
+    console.error('Error fetching media library:', msg);
+    return res.status(502).json({ message: `Failed to fetch media library: ${msg}` });
   }
 };
 
@@ -665,11 +937,14 @@ const getReceivedMatches = async (req: Request, res: Response) => {
 // EXPORTS
 // =======================================================
 export {
+  uploadMessageAttachmentMiddleware,
+  uploadMessageAttachment,
   getPotentialMatches,
   likeUser,
   passUser,
   getMatchConversations,
   getMatchMessages,
+  getMediaLibrary,
   getUnreadCount,
   markMessageAsRead,
   getMutualMatches,

@@ -5,6 +5,17 @@ import type { GetUsersResponse, UpdateProfileDto, User } from '@/services/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+export type MessageType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'SYSTEM';
+
+export interface MessageAttachment {
+  url: string;
+  publicId: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  resourceType?: string;
+}
+
 // Generic API request function for the client
 const apiClientRequest = async <T>(
   endpoint: string,
@@ -98,10 +109,16 @@ export const getApiClient = (accessToken: string | null) => ({
   },
 
   Message: {
-    sendMessage: (matchId: string, content: string) =>
+    sendMessage: (matchId: string, content: string, attachment?: MessageAttachment | null) =>
       apiClientRequest<any>(
         '/api/messages',
-        { method: 'POST', body: JSON.stringify({ matchId, content }) },
+        { method: 'POST', body: JSON.stringify({ matchId, content, attachment }) },
+        accessToken
+      ),
+    uploadAttachment: (payload: FormData) =>
+      apiClientRequest<{ attachment: MessageAttachment; type: MessageType }>(
+        '/api/messages/attachments',
+        { method: 'POST', body: payload },
         accessToken
       ),
     getCreateMatchMessages: (matchId: string, otherUserId?: string, page = 1, limit = 50) =>

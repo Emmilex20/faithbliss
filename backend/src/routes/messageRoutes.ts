@@ -2,12 +2,14 @@
 import { Router } from 'express';
 import { protect } from '../middleware/authMiddleware'; 
 import { 
-    // Importing the real Mongoose implementations from matchController
+    uploadMessageAttachment,
+    uploadMessageAttachmentMiddleware,
     getMatchConversations,
+    getMediaLibrary,
     getUnreadCount,
     markMessageAsRead,
-    getMatchMessages as getConversationMessages // Renaming on import for clarity
-} from '../controllers/matchController'; // <-- Pulling real logic from matchController
+    getMatchMessages as getConversationMessages
+} from '../controllers/matchController';
 
 const router = Router();
 
@@ -30,6 +32,14 @@ router.route('/unread-count').get(getUnreadCount);
 // GET /api/messages/:matchId 
 // We use the root path here, as /messages is the base in server.ts
 router.route('/match/:matchId').get(getConversationMessages);
+
+// Proxy media library requests (Giphy/Tenor) to avoid browser CORS issues.
+// GET /api/messages/media/library
+router.route('/media/library').get(getMediaLibrary);
+
+// Upload a message attachment to Cloudinary
+// POST /api/messages/attachments
+router.route('/attachments').post(uploadMessageAttachmentMiddleware, uploadMessageAttachment);
 
 // Mark a message as read
 // PATCH /api/messages/:messageId/read

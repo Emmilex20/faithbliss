@@ -163,6 +163,8 @@ export const getConversationMessages = async (
                 senderId: data.senderId,
                 receiverId: data.receiverId,
                 content: data.content,
+                type: data.type || 'TEXT',
+                attachment: data.attachment || null,
                 isRead: data.isRead || false,
                 createdAt: data.createdAt?.toDate().toISOString() || new Date().toISOString(),
                 updatedAt: data.updatedAt?.toDate().toISOString() || new Date().toISOString(),

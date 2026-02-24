@@ -9,6 +9,29 @@ export interface Message {
   senderId: string;
   receiverId: string;
   content: string;
+  type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'SYSTEM';
+  attachment?: {
+    url: string;
+    publicId: string;
+    fileName: string;
+    mimeType: string;
+    fileSize: number;
+    resourceType?: string;
+  } | null;
+  replyTo?: {
+    id: string;
+    senderId: string;
+    content: string;
+    type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'SYSTEM';
+    attachment?: {
+      url: string;
+      publicId: string;
+      fileName: string;
+      mimeType: string;
+      fileSize: number;
+      resourceType?: string;
+    } | null;
+  } | null;
   isRead: boolean;
   createdAt: string; // ISO date string
   updatedAt: string; // ISO date string

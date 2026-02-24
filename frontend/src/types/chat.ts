@@ -3,6 +3,21 @@
 /**
  * Interface for a single message object.
  */
+export interface MessageReplyPreview {
+  id: string;
+  senderId: string;
+  content: string;
+  type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'SYSTEM';
+  attachment?: {
+    url: string;
+    publicId: string;
+    fileName: string;
+    mimeType: string;
+    fileSize: number;
+    resourceType?: string;
+  } | null;
+}
+
 export interface Message {
   id: string;
   matchId: string;
@@ -11,6 +26,16 @@ export interface Message {
   content: string;
   isRead: boolean;
   createdAt: string; // ISO date string
+  clientTempId?: string;
+  attachment?: {
+    url: string;
+    publicId: string;
+    fileName: string;
+    mimeType: string;
+    fileSize: number;
+    resourceType?: string;
+  } | null;
+  replyTo?: MessageReplyPreview | null;
   
   // FIX: Make server-generated/redundant properties optional (?)
   updatedAt?: string; // <-- Server-generated/Updated
@@ -18,7 +43,7 @@ export interface Message {
     id: string;
     name: string;
   };
-  type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'SYSTEM';
+  type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'SYSTEM';
 }
 /**
  * Interface for the response structure returned by useConversationMessages.
@@ -40,7 +65,12 @@ export interface ConversationSummary {
     avatarUrl?: string;
     profilePhoto1?: string; // Used in the component logic
   };
-  lastMessage: { content: string, createdAt: string } | null;
+  lastMessage: {
+    content: string;
+    createdAt: string;
+    type?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'SYSTEM';
+    attachment?: Message['attachment'];
+  } | null;
   unreadCount: number;
   updatedAt: string;
 }

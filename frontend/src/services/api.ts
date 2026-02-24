@@ -70,14 +70,37 @@ interface Match {
 }
 
 interface Message {
-  id: string;
-  senderId: string;
-  receiverId: string;
-  matchId: string;
-  content: string;
-  isRead: boolean;
-  createdAt: string;
-  sender?: User;
+  id: string;
+  senderId: string;
+  receiverId: string;
+  matchId: string;
+  content: string;
+  type?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'SYSTEM';
+  attachment?: {
+    url: string;
+    publicId: string;
+    fileName: string;
+    mimeType: string;
+    fileSize: number;
+    resourceType?: string;
+  } | null;
+  replyTo?: {
+    id: string;
+    senderId: string;
+    content: string;
+    type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'SYSTEM';
+    attachment?: {
+      url: string;
+      publicId: string;
+      fileName: string;
+      mimeType: string;
+      fileSize: number;
+      resourceType?: string;
+    } | null;
+  } | null;
+  isRead: boolean;
+  createdAt: string;
+  sender?: User;
 }
 
 interface Conversation {

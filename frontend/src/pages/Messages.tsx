@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // src/pages/Messages.tsx
 
-import { useState, useRef, useEffect, Suspense, useMemo, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, Suspense, useMemo, useCallback, type ChangeEvent } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 
@@ -17,9 +17,19 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { TopBar } from '@/components/dashboard/TopBar';
 import { SidePanel } from '@/components/dashboard/SidePanel';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
+import { getApiClient, type MessageAttachment, type MessageType } from '@/services/api-client';
+import type {
+  CallAnswerPayload,
+  CallEndPayload,
+  CallIceCandidatePayload,
+  CallOfferPayload,
+  CallRejectPayload,
+  CallType,
+} from '@/services/WebSocketService';
 import {
   MessageCircle, ArrowLeft, Search, Send, Phone, Video,
-  Smile, Paperclip, Info, Check, CheckCheck
+  Smile, Paperclip, Info, Check, CheckCheck, Download, FileText, Loader2, Eye, X, Mic, Square, Play, Pause, Image as ImageIcon, Sticker, Reply, PhoneOff, MicOff, VideoOff
 } from 'lucide-react';
 
 // Assuming these imports are correct for your Vite project structure
@@ -53,6 +63,282 @@ const OptimizedImage = ({ src, alt, width, height, className }: OptimizedImagePr
   />
 );
 
+const getAttachmentPreviewText = (
+  messageType?: Message['type'],
+  attachment?: Message['attachment']
+) => {
+  if (messageType === 'IMAGE') return 'Image';
+  if (messageType === 'VIDEO') return 'Video';
+  if (messageType === 'AUDIO') return 'Audio';
+  if (attachment?.mimeType.startsWith('image/')) return 'Image';
+  if (attachment?.mimeType.startsWith('video/')) return 'Video';
+  if (attachment?.mimeType.startsWith('audio/')) return 'Audio';
+  return 'File';
+};
+
+const getMessagePreviewText = (
+  content: string,
+  attachment?: Message['attachment'],
+  messageType?: Message['type']
+) => {
+  if (attachment) {
+    return getAttachmentPreviewText(messageType, attachment);
+  }
+
+  const trimmed = content.trim();
+  if (trimmed) return trimmed;
+  return '';
+};
+
+const getReplyPreviewFromMessage = (message: Message): NonNullable<Message['replyTo']> => ({
+  id: message.id,
+  senderId: message.senderId,
+  content: message.content || '',
+  type: message.type || 'TEXT',
+  attachment: message.attachment || null,
+});
+
+const formatBytes = (bytes: number) => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let idx = 0;
+  while (value >= 1024 && idx < units.length - 1) {
+    value /= 1024;
+    idx += 1;
+  }
+  return `${value.toFixed(value >= 10 || idx === 0 ? 0 : 1)} ${units[idx]}`;
+};
+
+const formatRecordingTime = (totalSeconds: number) => {
+  const mins = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+  const secs = Math.floor(totalSeconds % 60).toString().padStart(2, '0');
+  return `${mins}:${secs}`;
+};
+
+const formatCallDuration = (totalSeconds: number) => {
+  const hrs = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+  const secs = Math.floor(totalSeconds % 60).toString().padStart(2, '0');
+  if (hrs > 0) {
+    return `${hrs.toString().padStart(2, '0')}:${mins}:${secs}`;
+  }
+  return `${mins}:${secs}`;
+};
+
+const QUICK_EMOJIS = [
+  '😀', '😂', '😍', '😘', '🥰', '😊', '😉', '😎', '😭', '😡',
+  '🙏', '❤️', '🔥', '👍', '👏', '🎉', '💯', '🤝', '😇', '🤗',
+  '🌟', '💖', '💬', '🎶', '😴', '😅', '🙌', '🤍', '🥳', '✨',
+];
+
+const getAttachmentKind = (
+  messageType?: Message['type'],
+  attachment?: Message['attachment']
+): 'image' | 'video' | 'audio' | 'pdf' | 'file' => {
+  if (messageType === 'IMAGE' || attachment?.mimeType.startsWith('image/')) return 'image';
+  if (messageType === 'VIDEO' || attachment?.mimeType.startsWith('video/')) return 'video';
+  if (messageType === 'AUDIO' || attachment?.mimeType.startsWith('audio/')) return 'audio';
+  if (attachment?.mimeType === 'application/pdf') return 'pdf';
+  return 'file';
+};
+
+const isGifAttachment = (attachment?: Message['attachment']) => {
+  if (!attachment) return false;
+  const mime = attachment.mimeType.toLowerCase();
+  const fileName = attachment.fileName.toLowerCase();
+  return mime === 'image/gif' || fileName.endsWith('.gif') || fileName.startsWith('gif-');
+};
+
+const isStickerAttachment = (attachment?: Message['attachment']) => {
+  if (!attachment) return false;
+  const fileName = attachment.fileName.toLowerCase();
+  return fileName.startsWith('sticker-') || fileName.includes('sticker');
+};
+
+type MediaLibraryTab = 'gif' | 'sticker';
+
+interface MediaLibraryItem {
+  id: string;
+  previewUrl: string;
+  mediaUrl: string;
+  title: string;
+  mimeType: string;
+}
+
+const isMediaLibraryItem = (value: MediaLibraryItem | null): value is MediaLibraryItem => Boolean(value);
+
+interface VoiceNoteAttachmentProps {
+  attachment: MessageAttachment;
+  isSender: boolean;
+}
+
+const VoiceNoteAttachment = ({ attachment, isSender }: VoiceNoteAttachmentProps) => {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const progressRafRef = useRef<number | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  const resolveDuration = (audio: HTMLAudioElement) => {
+    if (Number.isFinite(audio.duration) && audio.duration > 0) {
+      return audio.duration;
+    }
+    if (audio.seekable && audio.seekable.length > 0) {
+      const seekableEnd = audio.seekable.end(audio.seekable.length - 1);
+      if (Number.isFinite(seekableEnd) && seekableEnd > 0) {
+        return seekableEnd;
+      }
+    }
+    return 0;
+  };
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const stopProgressLoop = () => {
+      if (progressRafRef.current !== null) {
+        cancelAnimationFrame(progressRafRef.current);
+        progressRafRef.current = null;
+      }
+    };
+
+    const syncProgress = () => {
+      setCurrentTime(audio.currentTime || 0);
+      const resolved = resolveDuration(audio);
+      if (resolved > 0) {
+        setDuration(resolved);
+      }
+    };
+
+    const startProgressLoop = () => {
+      stopProgressLoop();
+      const tick = () => {
+        if (!audio || audio.paused) return;
+        syncProgress();
+        progressRafRef.current = requestAnimationFrame(tick);
+      };
+      progressRafRef.current = requestAnimationFrame(tick);
+    };
+
+    const onLoaded = () => {
+      syncProgress();
+    };
+    const onDurationChange = () => {
+      syncProgress();
+    };
+    const onTimeUpdate = () => {
+      syncProgress();
+    };
+    const onProgress = () => {
+      syncProgress();
+    };
+    const onPlay = () => {
+      setIsPlaying(true);
+      startProgressLoop();
+    };
+    const onPause = () => {
+      setIsPlaying(false);
+      stopProgressLoop();
+      setCurrentTime(audio.currentTime || 0);
+    };
+    const onEnded = () => {
+      setIsPlaying(false);
+      stopProgressLoop();
+      setCurrentTime(0);
+    };
+
+    audio.addEventListener('loadedmetadata', onLoaded);
+    audio.addEventListener('durationchange', onDurationChange);
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    audio.addEventListener('progress', onProgress);
+    audio.addEventListener('play', onPlay);
+    audio.addEventListener('pause', onPause);
+    audio.addEventListener('ended', onEnded);
+
+    return () => {
+      stopProgressLoop();
+      audio.pause();
+      audio.removeEventListener('loadedmetadata', onLoaded);
+      audio.removeEventListener('durationchange', onDurationChange);
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+      audio.removeEventListener('progress', onProgress);
+      audio.removeEventListener('play', onPlay);
+      audio.removeEventListener('pause', onPause);
+      audio.removeEventListener('ended', onEnded);
+    };
+  }, []);
+
+  const togglePlayback = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      audio.pause();
+      return;
+    }
+
+    try {
+      await audio.play();
+    } catch {
+      setIsPlaying(false);
+    }
+  };
+
+  const handleSeek = (value: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = value;
+    setCurrentTime(value);
+  };
+
+  const shownTotal = duration > 0 ? duration : currentTime;
+  const progressPercent = duration > 0 ? Math.min((currentTime / duration) * 100, 100) : 0;
+
+  return (
+    <div
+      className={`w-[220px] sm:w-[240px] rounded-2xl border px-3 py-2.5 ${
+        isSender
+          ? 'bg-white/15 border-white/25'
+          : 'bg-black/35 border-white/20'
+      }`}
+    >
+      <audio ref={audioRef} src={attachment.url} preload="metadata" />
+      <div className="flex items-center gap-2.5">
+        <button
+          type="button"
+          onClick={togglePlayback}
+          className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white text-gray-900 hover:bg-gray-100 transition-colors flex-shrink-0"
+          aria-label={isPlaying ? 'Pause voice note' : 'Play voice note'}
+        >
+          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+        </button>
+        <div className="flex-1 min-w-0">
+          <input
+            type="range"
+            min={0}
+            max={duration > 0 ? duration : 1}
+            value={duration > 0 ? Math.min(currentTime, duration) : 0}
+            onChange={(e) => handleSeek(Number(e.target.value))}
+            step={0.01}
+            disabled={duration <= 0}
+            style={{
+              background: `linear-gradient(to right, #f472b6 0%, #f472b6 ${progressPercent}%, rgba(255,255,255,0.25) ${progressPercent}%, rgba(255,255,255,0.25) 100%)`,
+            }}
+            className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+          />
+          <div className="mt-1.5 flex items-center justify-between text-[10px] text-white/75">
+            <span className="font-mono">{formatRecordingTime(currentTime)}</span>
+            <span className="truncate">Voice note</span>
+            <span className="font-mono">{formatRecordingTime(shownTotal)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const MessagesContent = () => {
   const searchParams = useViteSearchParams();
   const didAutoSelect = useRef(false);
@@ -67,15 +353,706 @@ const MessagesContent = () => {
   const conversationsListRef = useRef<HTMLDivElement | null>(null);
   const messagesListRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const composerInputRef = useRef<HTMLInputElement | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const localCallVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteCallVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteCallAudioRef = useRef<HTMLAudioElement | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const localCallStreamRef = useRef<MediaStream | null>(null);
+  const remoteCallStreamRef = useRef<MediaStream | null>(null);
+  const pendingIncomingOfferRef = useRef<CallOfferPayload | null>(null);
+  const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const isCleaningUpCallRef = useRef(false);
+  const callTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const callStartedAtRef = useRef<number | null>(null);
+  const activeCallPeerIdRef = useRef<string | null>(null);
+  const activeCallMatchIdRef = useRef<string | null>(null);
+  const callStatusRef = useRef<'idle' | 'dialing' | 'ringing' | 'connecting' | 'active'>('idle');
+  const currentConversationRef = useRef<ConversationSummary | null>(null);
+  const ringtoneAudioContextRef = useRef<AudioContext | null>(null);
+  const ringtoneIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const incomingCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRefetchedMatchId = useRef<string | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingChunksRef = useRef<BlobPart[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [typingStatus, setTypingStatus] = useState<Record<string, boolean>>({});
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [viewerMessage, setViewerMessage] = useState<Message | null>(null);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  const [mediaLibraryTab, setMediaLibraryTab] = useState<MediaLibraryTab>('gif');
+  const [mediaLibraryQuery, setMediaLibraryQuery] = useState('');
+  const [mediaLibraryItems, setMediaLibraryItems] = useState<MediaLibraryItem[]>([]);
+  const [mediaLibraryLoading, setMediaLibraryLoading] = useState(false);
+  const [mediaLibraryError, setMediaLibraryError] = useState<string | null>(null);
+  const [isImportingMediaItem, setIsImportingMediaItem] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [incomingCall, setIncomingCall] = useState<{
+    fromUserId: string;
+    matchId?: string;
+    callType: CallType;
+  } | null>(null);
+  const [callStatus, setCallStatus] = useState<'idle' | 'dialing' | 'ringing' | 'connecting' | 'active'>('idle');
+  const [callMode, setCallMode] = useState<CallType | null>(null);
+  const [activeCallPeerId, setActiveCallPeerId] = useState<string | null>(null);
+  const [activeCallMatchId, setActiveCallMatchId] = useState<string | null>(null);
+  const [localCallStream, setLocalCallStream] = useState<MediaStream | null>(null);
+  const [remoteCallStream, setRemoteCallStream] = useState<MediaStream | null>(null);
+  const [callDurationSeconds, setCallDurationSeconds] = useState(0);
+  const [isCallMicMuted, setIsCallMicMuted] = useState(false);
+  const [isCallCameraOff, setIsCallCameraOff] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<{
+    attachment: MessageAttachment;
+    type: MessageType;
+  } | null>(null);
 
-  const { user: layoutUser } = useAuthContext();
+  const { user: layoutUser, accessToken } = useAuthContext();
+  const { showError } = useToast();
+  const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
+  const tenorApiKey = (import.meta.env.VITE_TENOR_API_KEY as string | undefined)?.trim() || '';
+  const tenorClientKey = (import.meta.env.VITE_TENOR_CLIENT_KEY as string | undefined)?.trim() || 'faithbliss-chat';
+  const giphyApiKey = (import.meta.env.VITE_GIPHY_API_KEY as string | undefined)?.trim() || '';
+  const mediaLibraryProvider: 'tenor' | 'giphy' | null = tenorApiKey
+    ? 'tenor'
+    : giphyApiKey
+      ? 'giphy'
+      : null;
   const [showSidePanel, setShowSidePanel] = useState(false);
+  const [isDesktopLayout, setIsDesktopLayout] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return window.innerWidth >= 1024;
+  });
   const layoutName = layoutUser?.name || 'User';
   const layoutImage = layoutUser?.profilePhoto1 || undefined;
   const currentUserId = layoutUser?.id;
+  const webSocketService = useWebSocket();
+
+  useEffect(() => {
+    callStatusRef.current = callStatus;
+  }, [callStatus]);
+
+  useEffect(() => {
+    activeCallPeerIdRef.current = activeCallPeerId;
+  }, [activeCallPeerId]);
+
+  useEffect(() => {
+    activeCallMatchIdRef.current = activeCallMatchId;
+  }, [activeCallMatchId]);
+
+  useEffect(() => {
+    const localVideo = localCallVideoRef.current;
+    if (!localVideo) return;
+    localVideo.srcObject = localCallStream;
+  }, [localCallStream]);
+
+  useEffect(() => {
+    const remoteVideo = remoteCallVideoRef.current;
+    if (remoteVideo) {
+      remoteVideo.srcObject = remoteCallStream;
+    }
+
+    const remoteAudio = remoteCallAudioRef.current;
+    if (remoteAudio) {
+      remoteAudio.srcObject = remoteCallStream;
+    }
+  }, [remoteCallStream]);
+
+  const stopCallTimer = useCallback(() => {
+    if (callTimerRef.current) {
+      clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    }
+    callStartedAtRef.current = null;
+  }, []);
+
+  const startCallTimer = useCallback(() => {
+    stopCallTimer();
+    callStartedAtRef.current = Date.now();
+    setCallDurationSeconds(0);
+    callTimerRef.current = setInterval(() => {
+      if (!callStartedAtRef.current) return;
+      setCallDurationSeconds(Math.floor((Date.now() - callStartedAtRef.current) / 1000));
+    }, 1000);
+  }, [stopCallTimer]);
+
+  const clearIncomingCallTimeout = useCallback(() => {
+    if (incomingCallTimeoutRef.current) {
+      clearTimeout(incomingCallTimeoutRef.current);
+      incomingCallTimeoutRef.current = null;
+    }
+  }, []);
+
+  const stopRingtone = useCallback(() => {
+    if (ringtoneIntervalRef.current) {
+      clearInterval(ringtoneIntervalRef.current);
+      ringtoneIntervalRef.current = null;
+    }
+
+    const audioContext = ringtoneAudioContextRef.current;
+    ringtoneAudioContextRef.current = null;
+    if (audioContext && audioContext.state !== 'closed') {
+      void audioContext.close().catch(() => {
+        // noop
+      });
+    }
+  }, []);
+
+  const startRingtone = useCallback((toneType: 'incoming' | 'outgoing') => {
+    const AudioContextCtor =
+      window.AudioContext
+      || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) return;
+
+    stopRingtone();
+    const audioContext = new AudioContextCtor();
+    ringtoneAudioContextRef.current = audioContext;
+
+    const playTone = (frequency: number, durationSec: number, delaySec = 0) => {
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.0001, audioContext.currentTime + delaySec);
+      gain.gain.exponentialRampToValueAtTime(0.08, audioContext.currentTime + delaySec + 0.02);
+      gain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        audioContext.currentTime + delaySec + durationSec
+      );
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start(audioContext.currentTime + delaySec);
+      oscillator.stop(audioContext.currentTime + delaySec + durationSec + 0.02);
+    };
+
+    const playPattern = () => {
+      if (audioContext.state === 'suspended') {
+        void audioContext.resume().catch(() => {
+          // noop
+        });
+      }
+      if (toneType === 'incoming') {
+        playTone(760, 0.15, 0);
+        playTone(640, 0.15, 0.23);
+        return;
+      }
+      playTone(520, 0.14, 0);
+      playTone(520, 0.14, 0.2);
+    };
+
+    playPattern();
+    ringtoneIntervalRef.current = setInterval(playPattern, toneType === 'incoming' ? 1500 : 1200);
+  }, [stopRingtone]);
+
+  const sendMissedCallMessage = useCallback((targetUserId: string, matchId?: string, callType?: CallType) => {
+    if (!webSocketService || !targetUserId || !matchId) return;
+    const kind = callType === 'video' ? 'video' : 'audio';
+    const clientTempId = `temp-call-${Date.now()}-${Math.random()}`;
+    webSocketService.sendMessage(
+      targetUserId,
+      `Missed ${kind} call`,
+      matchId,
+      null,
+      clientTempId,
+      null
+    );
+  }, [webSocketService]);
+
+  const resetCallState = useCallback(() => {
+    setIncomingCall(null);
+    setCallStatus('idle');
+    setCallMode(null);
+    setActiveCallPeerId(null);
+    setActiveCallMatchId(null);
+    setLocalCallStream(null);
+    setRemoteCallStream(null);
+    setCallDurationSeconds(0);
+    setIsCallMicMuted(false);
+    setIsCallCameraOff(false);
+  }, []);
+
+  const teardownCallResources = useCallback(() => {
+    stopCallTimer();
+    clearIncomingCallTimeout();
+    stopRingtone();
+    pendingIncomingOfferRef.current = null;
+    pendingIceCandidatesRef.current = [];
+
+    const peerConnection = peerConnectionRef.current;
+    if (peerConnection) {
+      peerConnection.onicecandidate = null;
+      peerConnection.ontrack = null;
+      peerConnection.onconnectionstatechange = null;
+      try {
+        peerConnection.close();
+      } catch {
+        // noop
+      }
+    }
+    peerConnectionRef.current = null;
+
+    if (localCallStreamRef.current) {
+      localCallStreamRef.current.getTracks().forEach((track) => track.stop());
+    }
+    localCallStreamRef.current = null;
+    remoteCallStreamRef.current = null;
+  }, [clearIncomingCallTimeout, stopCallTimer, stopRingtone]);
+
+  const cleanupCallSession = useCallback((resetUi = true) => {
+    isCleaningUpCallRef.current = true;
+    teardownCallResources();
+    activeCallPeerIdRef.current = null;
+    activeCallMatchIdRef.current = null;
+    if (resetUi) {
+      resetCallState();
+    }
+    window.setTimeout(() => {
+      isCleaningUpCallRef.current = false;
+    }, 0);
+  }, [resetCallState, teardownCallResources]);
+
+  const endActiveCall = useCallback((options?: { notifyPeer?: boolean; reason?: string }) => {
+    const shouldNotifyPeer = options?.notifyPeer ?? true;
+    const peerId = activeCallPeerIdRef.current;
+    const matchId = activeCallMatchIdRef.current || undefined;
+    const statusAtEnd = callStatusRef.current;
+    if (shouldNotifyPeer && peerId && webSocketService) {
+      webSocketService.sendCallEnd(peerId, {
+        matchId,
+        reason: options?.reason,
+      });
+      if (statusAtEnd !== 'active') {
+        sendMissedCallMessage(peerId, matchId, callMode || undefined);
+      }
+    }
+    cleanupCallSession();
+  }, [callMode, cleanupCallSession, sendMissedCallMessage, webSocketService]);
+
+  const flushPendingIceCandidates = useCallback(async (peerConnection: RTCPeerConnection) => {
+    if (!pendingIceCandidatesRef.current.length) return;
+
+    const queuedCandidates = [...pendingIceCandidatesRef.current];
+    pendingIceCandidatesRef.current = [];
+    for (const candidate of queuedCandidates) {
+      try {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (error) {
+        console.warn('Failed to add queued ICE candidate:', error);
+      }
+    }
+  }, []);
+
+  const createPeerConnection = useCallback((targetUserId: string, matchId?: string) => {
+    const peerConnection = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+      ],
+    });
+
+    peerConnection.onicecandidate = (event) => {
+      if (!event.candidate || !webSocketService) return;
+      webSocketService.sendCallIceCandidate(targetUserId, {
+        matchId,
+        candidate: event.candidate.toJSON(),
+      });
+    };
+
+    peerConnection.ontrack = (event) => {
+      const [incomingStream] = event.streams;
+      if (incomingStream) {
+        remoteCallStreamRef.current = incomingStream;
+        setRemoteCallStream(incomingStream);
+      } else {
+        const fallbackStream = remoteCallStreamRef.current || new MediaStream();
+        fallbackStream.addTrack(event.track);
+        remoteCallStreamRef.current = fallbackStream;
+        setRemoteCallStream(fallbackStream);
+      }
+
+      if (!callStartedAtRef.current) {
+        startCallTimer();
+      }
+      setCallStatus('active');
+    };
+
+    peerConnection.onconnectionstatechange = () => {
+      if (peerConnection.connectionState === 'connected') {
+        if (!callStartedAtRef.current) {
+          startCallTimer();
+        }
+        setCallStatus('active');
+      }
+
+      if (
+        !isCleaningUpCallRef.current
+        && (
+          peerConnection.connectionState === 'failed'
+          || peerConnection.connectionState === 'disconnected'
+          || peerConnection.connectionState === 'closed'
+        )
+      ) {
+        cleanupCallSession();
+      }
+    };
+
+    peerConnectionRef.current = peerConnection;
+    return peerConnection;
+  }, [cleanupCallSession, startCallTimer, webSocketService]);
+
+  const getCallUserMedia = useCallback(async (mode: CallType) => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('getUserMedia is unavailable in this browser.');
+    }
+
+    return navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: mode === 'video',
+    });
+  }, []);
+
+  const startOutgoingCall = useCallback(async (mode: CallType) => {
+    const activeConversation = currentConversationRef.current;
+    if (!webSocketService || !activeConversation?.otherUser?.id) return;
+    if (callStatusRef.current !== 'idle') return;
+
+    const targetUserId = activeConversation.otherUser.id;
+    const matchId = activeConversation.id;
+    try {
+      setShowEmojiPicker(false);
+      setShowMediaLibrary(false);
+      setCallStatus('dialing');
+      setCallMode(mode);
+      setIncomingCall(null);
+      setActiveCallPeerId(targetUserId);
+      activeCallPeerIdRef.current = targetUserId;
+      setActiveCallMatchId(matchId);
+      activeCallMatchIdRef.current = matchId;
+
+      const stream = await getCallUserMedia(mode);
+      localCallStreamRef.current = stream;
+      setLocalCallStream(stream);
+      setIsCallMicMuted(false);
+      setIsCallCameraOff(false);
+
+      const peerConnection = createPeerConnection(targetUserId, matchId);
+      stream.getTracks().forEach((track) => {
+        peerConnection.addTrack(track, stream);
+      });
+
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+      webSocketService.sendCallOffer(targetUserId, {
+        matchId,
+        callType: mode,
+        sdp: offer,
+      });
+      setCallStatus('connecting');
+    } catch (error) {
+      console.error('Failed to start outgoing call:', error);
+      cleanupCallSession();
+      showError('Unable to start call. Please check permissions and try again.', 'Call Error');
+    }
+  }, [cleanupCallSession, createPeerConnection, getCallUserMedia, showError, webSocketService]);
+
+  const acceptIncomingCall = useCallback(async () => {
+    if (!webSocketService) return;
+
+    const offerPayload = pendingIncomingOfferRef.current;
+    if (!offerPayload) return;
+
+    try {
+      setIncomingCall(null);
+      setCallStatus('connecting');
+      setCallMode(offerPayload.callType);
+      setActiveCallPeerId(offerPayload.fromUserId);
+      activeCallPeerIdRef.current = offerPayload.fromUserId;
+      setActiveCallMatchId(offerPayload.matchId || null);
+      activeCallMatchIdRef.current = offerPayload.matchId || null;
+
+      if (offerPayload.matchId) {
+        setSelectedChat(offerPayload.matchId);
+      }
+
+      const stream = await getCallUserMedia(offerPayload.callType);
+      localCallStreamRef.current = stream;
+      setLocalCallStream(stream);
+      setIsCallMicMuted(false);
+      setIsCallCameraOff(false);
+
+      const peerConnection = createPeerConnection(offerPayload.fromUserId, offerPayload.matchId);
+      stream.getTracks().forEach((track) => {
+        peerConnection.addTrack(track, stream);
+      });
+
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(offerPayload.sdp));
+      await flushPendingIceCandidates(peerConnection);
+
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      webSocketService.sendCallAnswer(offerPayload.fromUserId, {
+        matchId: offerPayload.matchId,
+        callType: offerPayload.callType,
+        sdp: answer,
+      });
+    } catch (error) {
+      const fallbackOffer = pendingIncomingOfferRef.current;
+      console.error('Failed to accept call:', error);
+      cleanupCallSession();
+      if (fallbackOffer?.fromUserId) {
+        webSocketService.sendCallReject(fallbackOffer.fromUserId, {
+          matchId: fallbackOffer.matchId,
+          reason: 'failed',
+        });
+      }
+      showError('Unable to answer this call right now.', 'Call Error');
+    }
+  }, [cleanupCallSession, createPeerConnection, flushPendingIceCandidates, getCallUserMedia, showError, webSocketService]);
+
+  const declineIncomingCall = useCallback((reason: 'declined' | 'missed' = 'declined') => {
+    const offerPayload = pendingIncomingOfferRef.current;
+    if (offerPayload?.fromUserId && webSocketService) {
+      webSocketService.sendCallReject(offerPayload.fromUserId, {
+        matchId: offerPayload.matchId,
+        reason,
+      });
+      sendMissedCallMessage(offerPayload.fromUserId, offerPayload.matchId, offerPayload.callType);
+    }
+    cleanupCallSession();
+  }, [cleanupCallSession, sendMissedCallMessage, webSocketService]);
+
+  const toggleCallMic = useCallback(() => {
+    setIsCallMicMuted((prev) => {
+      const next = !prev;
+      localCallStreamRef.current?.getAudioTracks().forEach((track) => {
+        track.enabled = !next;
+      });
+      return next;
+    });
+  }, []);
+
+  const toggleCallCamera = useCallback(() => {
+    setIsCallCameraOff((prev) => {
+      const next = !prev;
+      localCallStreamRef.current?.getVideoTracks().forEach((track) => {
+        track.enabled = !next;
+      });
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (callStatus === 'ringing') {
+      startRingtone('incoming');
+      return;
+    }
+    if (callStatus === 'dialing' || callStatus === 'connecting') {
+      startRingtone('outgoing');
+      return;
+    }
+    stopRingtone();
+  }, [callStatus, startRingtone, stopRingtone]);
+
+  useEffect(() => {
+    clearIncomingCallTimeout();
+    if (callStatus !== 'ringing' || !incomingCall) return;
+
+    incomingCallTimeoutRef.current = setTimeout(() => {
+      declineIncomingCall('missed');
+    }, 30000);
+
+    return () => {
+      clearIncomingCallTimeout();
+    };
+  }, [callStatus, clearIncomingCallTimeout, declineIncomingCall, incomingCall]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+    const onChange = (event: MediaQueryListEvent) => {
+      setIsDesktopLayout(event.matches);
+    };
+
+    setIsDesktopLayout(mediaQuery.matches);
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', onChange);
+      return () => mediaQuery.removeEventListener('change', onChange);
+    }
+
+    mediaQuery.addListener(onChange);
+    return () => mediaQuery.removeListener(onChange);
+  }, []);
+
+  useEffect(() => {
+    if (isDesktopLayout && showSidePanel) {
+      setShowSidePanel(false);
+    }
+  }, [isDesktopLayout, showSidePanel]);
+
+  useEffect(() => {
+    if (!viewerMessage) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setViewerMessage(null);
+      }
+    };
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [viewerMessage]);
+
+  useEffect(() => {
+    if (!showMediaLibrary) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowMediaLibrary(false);
+      }
+    };
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [showMediaLibrary]);
+
+  useEffect(() => {
+    if (!showMediaLibrary) return;
+
+    if (!mediaLibraryProvider) {
+      setMediaLibraryItems([]);
+      setMediaLibraryError('Add VITE_TENOR_API_KEY or VITE_GIPHY_API_KEY in frontend/.env.');
+      return;
+    }
+
+    const query = mediaLibraryQuery.trim();
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      setMediaLibraryLoading(true);
+      setMediaLibraryError(null);
+      try {
+        let requestUrl = '';
+        const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+        const params = new URLSearchParams({
+          provider: mediaLibraryProvider,
+          tab: mediaLibraryTab,
+          limit: '28',
+        });
+        if (query) {
+          params.set('q', query);
+        }
+        // Optional client fallback keys if backend env keys are not configured yet.
+        if (mediaLibraryProvider === 'giphy' && giphyApiKey) {
+          params.set('apiKey', giphyApiKey);
+        }
+        if (mediaLibraryProvider === 'tenor' && tenorApiKey) {
+          params.set('apiKey', tenorApiKey);
+          params.set('clientKey', tenorClientKey);
+        }
+        requestUrl = `${apiBaseUrl}/api/messages/media/library?${params.toString()}`;
+
+        const response = await fetch(requestUrl, {
+          signal: controller.signal,
+          credentials: 'include',
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        });
+        if (!response.ok) {
+          throw new Error(`Media request failed with ${response.status}`);
+        }
+        const payload = await response.json();
+
+        let items: MediaLibraryItem[] = [];
+        if (mediaLibraryProvider === 'tenor') {
+          const results = Array.isArray(payload?.results) ? payload.results : [];
+          items = results
+            .map((entry: any): MediaLibraryItem | null => {
+              const formats = entry?.media_formats || {};
+              const gif = formats.gif || formats.mediumgif || formats.tinygif;
+              const webp = formats.webp || formats.tinywebp;
+              const tinyGif = formats.tinygif || formats.nanogif;
+
+              const previewUrl = webp?.url || tinyGif?.url || gif?.preview || gif?.url;
+              const mediaUrl = gif?.url || webp?.url || tinyGif?.url;
+              if (!previewUrl || !mediaUrl) return null;
+
+              return {
+                id: String(entry?.id || mediaUrl),
+                previewUrl,
+                mediaUrl,
+                title: entry?.content_description || entry?.title || (mediaLibraryTab === 'gif' ? 'GIF' : 'Sticker'),
+                mimeType: mediaUrl.includes('.webp') ? 'image/webp' : 'image/gif',
+              };
+            })
+            .filter(isMediaLibraryItem);
+        } else {
+          const results = Array.isArray(payload?.data) ? payload.data : [];
+          items = results
+            .map((entry: any): MediaLibraryItem | null => {
+              const images = entry?.images || {};
+              const previewUrl = images?.fixed_width?.webp
+                || images?.fixed_width?.url
+                || images?.downsized_still?.url
+                || images?.original_still?.url;
+              const mediaUrl = images?.original?.url
+                || images?.downsized_large?.url
+                || images?.downsized?.url
+                || previewUrl;
+              if (!previewUrl || !mediaUrl) return null;
+
+              return {
+                id: String(entry?.id || mediaUrl),
+                previewUrl,
+                mediaUrl,
+                title: entry?.title || (mediaLibraryTab === 'gif' ? 'GIF' : 'Sticker'),
+                mimeType: mediaUrl.includes('.webp') ? 'image/webp' : 'image/gif',
+              };
+            })
+            .filter(isMediaLibraryItem);
+        }
+
+        setMediaLibraryItems(items);
+      } catch (error) {
+        if ((error as Error)?.name === 'AbortError') return;
+        console.error('Failed to load media library:', error);
+        setMediaLibraryItems([]);
+        setMediaLibraryError('Could not load GIFs/stickers right now. Try another search.');
+      } finally {
+        setMediaLibraryLoading(false);
+      }
+    }, query ? 250 : 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [
+    showMediaLibrary,
+    mediaLibraryProvider,
+    mediaLibraryQuery,
+    mediaLibraryTab,
+    accessToken,
+    tenorApiKey,
+    tenorClientKey,
+    giphyApiKey,
+  ]);
 
   // Use a local state for messages to allow real-time updates without immediate refetch
   const [localMessagesData, setLocalMessagesData] = useState<ConversationMessagesResponse | null>(null);
@@ -86,10 +1063,9 @@ const MessagesContent = () => {
   const {
     data: fetchedMessages,
     loading: conversationLoading,
-    refetch: refetchMessages
   } = useConversationMessages(
     effectiveMatchId, profileIdParam || ''
-  ) as { data: ConversationMessagesResponse | null, loading: boolean, refetch: () => void };
+  ) as { data: ConversationMessagesResponse | null, loading: boolean };
 
   // Sync fetched messages with local state
   useEffect(() => {
@@ -112,8 +1088,6 @@ const MessagesContent = () => {
     loadMore: () => void;
   };
 
-  const webSocketService = useWebSocket();
-
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
     const container = messagesListRef.current;
     if (container) {
@@ -125,6 +1099,92 @@ const MessagesContent = () => {
       return;
     }
     messagesEndRef.current?.scrollIntoView({ behavior });
+  }, []);
+
+  const scheduleScrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
+    let raf1 = 0;
+    let raf2 = 0;
+    let timeout1: ReturnType<typeof setTimeout> | null = null;
+    let timeout2: ReturnType<typeof setTimeout> | null = null;
+
+    scrollToBottom(behavior);
+    raf1 = requestAnimationFrame(() => {
+      scrollToBottom(behavior);
+      raf2 = requestAnimationFrame(() => {
+        scrollToBottom(behavior);
+      });
+    });
+    timeout1 = setTimeout(() => {
+      scrollToBottom(behavior);
+    }, 80);
+    timeout2 = setTimeout(() => {
+      scrollToBottom(behavior);
+    }, 220);
+
+    return () => {
+      if (raf1) cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+      if (timeout1) clearTimeout(timeout1);
+      if (timeout2) clearTimeout(timeout2);
+    };
+  }, [scrollToBottom]);
+
+  const stopRecordingTimer = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  };
+
+  const stopRecordingStream = () => {
+    if (recordingStreamRef.current) {
+      recordingStreamRef.current.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current = null;
+    }
+  };
+
+  const uploadPendingAttachment = async (file: File) => {
+    if (!accessToken) {
+      showError('Please sign in again before sending attachments.', 'Authentication Error');
+      return;
+    }
+
+    if (!webSocketService?.connected) {
+      showError('Chat is offline. Reconnect and try again.', 'Connection Error');
+      return;
+    }
+
+    try {
+      setIsUploadingAttachment(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      const uploadResponse = await apiClient.Message.uploadAttachment(formData);
+      setPendingAttachment({
+        attachment: uploadResponse.attachment,
+        type: uploadResponse.type,
+      });
+    } catch (error) {
+      console.error('Failed to upload attachment:', error);
+      showError('Unable to upload attachment.', 'Upload Error');
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      stopRecordingTimer();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try {
+          mediaRecorderRef.current.onstop = null;
+          mediaRecorderRef.current.stop();
+        } catch {
+          // noop
+        }
+      }
+      mediaRecorderRef.current = null;
+      stopRecordingStream();
+    };
   }, []);
 
   const realConversations: ConversationSummary[] = Array.isArray(rawConversations) ? rawConversations : [];
@@ -196,6 +1256,14 @@ const MessagesContent = () => {
     return null;
   }, [selectedChat, localConversations, profileIdParam, profileNameParam]);
 
+  useEffect(() => {
+    currentConversationRef.current = currentConversation;
+  }, [currentConversation]);
+
+  useEffect(() => {
+    setReplyingTo(null);
+  }, [selectedChat]);
+
   // 1. Join/Leave WebSocket Room
   useEffect(() => {
     if (webSocketService && effectiveMatchId) {
@@ -216,12 +1284,13 @@ const MessagesContent = () => {
 
       // Only proceed if the message belongs to the current chat
       if (prev.match.id === matchId) {
-        // Find if an optimistic message with the same content exists
-        const tempIndex = prev.messages.findIndex(m => 
-            m.content === message.content && 
-            m.senderId === message.senderId &&
-            m.id.startsWith('temp-')
-        );
+        const tempIndex = message.clientTempId
+          ? prev.messages.findIndex((m) => m.id === message.clientTempId)
+          : prev.messages.findIndex((m) =>
+              m.content === message.content &&
+              m.senderId === message.senderId &&
+              m.id.startsWith('temp-')
+            );
 
         let newMessages = [...prev.messages];
 
@@ -261,8 +1330,10 @@ const MessagesContent = () => {
         return {
           ...conv,
           lastMessage: {
-            content: message.content,
+            content: getMessagePreviewText(message.content, message.attachment, message.type),
             createdAt: message.createdAt,
+            type: message.type,
+            attachment: message.attachment || null,
           },
           unreadCount:
             message.senderId !== currentUserId
@@ -276,7 +1347,7 @@ const MessagesContent = () => {
       );
     });
 
-    setTimeout(scrollToBottom, 50);
+    scheduleScrollToBottom('auto');
   }, [localConversations, refetch, selectedChat, currentUserId]);
 
 
@@ -304,114 +1375,476 @@ const MessagesContent = () => {
     };
   }, [webSocketService]);
 
+  useEffect(() => {
+    if (!webSocketService) return;
+
+    const handleCallOffer = (payload: CallOfferPayload) => {
+      if (!payload?.fromUserId || payload.fromUserId === currentUserId) return;
+
+      const busy =
+        callStatusRef.current !== 'idle'
+        || Boolean(activeCallPeerIdRef.current)
+        || Boolean(peerConnectionRef.current);
+      if (busy) {
+        webSocketService.sendCallReject(payload.fromUserId, {
+          matchId: payload.matchId,
+          reason: 'busy',
+        });
+        return;
+      }
+
+      pendingIncomingOfferRef.current = payload;
+      pendingIceCandidatesRef.current = [];
+      setIncomingCall({
+        fromUserId: payload.fromUserId,
+        matchId: payload.matchId,
+        callType: payload.callType,
+      });
+      setCallMode(payload.callType);
+      setActiveCallPeerId(payload.fromUserId);
+      activeCallPeerIdRef.current = payload.fromUserId;
+      setActiveCallMatchId(payload.matchId || null);
+      activeCallMatchIdRef.current = payload.matchId || null;
+      setCallStatus('ringing');
+    };
+
+    const handleCallAnswer = async (payload: CallAnswerPayload) => {
+      if (!payload?.fromUserId) return;
+      if (payload.fromUserId !== activeCallPeerIdRef.current) return;
+
+      const peerConnection = peerConnectionRef.current;
+      if (!peerConnection) return;
+
+      try {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+        await flushPendingIceCandidates(peerConnection);
+        setCallMode(payload.callType);
+        setCallStatus('connecting');
+      } catch (error) {
+        console.error('Failed to apply call answer:', error);
+        cleanupCallSession();
+      }
+    };
+
+    const handleCallIceCandidate = async (payload: CallIceCandidatePayload) => {
+      if (!payload?.fromUserId || !payload.candidate) return;
+      if (payload.fromUserId !== activeCallPeerIdRef.current) return;
+
+      const peerConnection = peerConnectionRef.current;
+      if (!peerConnection || !peerConnection.remoteDescription) {
+        pendingIceCandidatesRef.current.push(payload.candidate);
+        return;
+      }
+
+      try {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(payload.candidate));
+      } catch (error) {
+        console.warn('Failed to add ICE candidate:', error);
+      }
+    };
+
+    const handleCallReject = (payload: CallRejectPayload) => {
+      if (!payload?.fromUserId) return;
+      if (payload.fromUserId !== activeCallPeerIdRef.current) return;
+
+      if (payload.reason === 'busy') {
+        showError('User is currently busy on another call.', 'Call Busy');
+      } else if (payload.reason === 'missed') {
+        showError('Call was not answered.', 'Missed Call');
+      } else if (payload.reason !== 'ended-by-user') {
+        showError('Call was declined.', 'Call Declined');
+      }
+      cleanupCallSession();
+    };
+
+    const handleCallEnd = (payload: CallEndPayload) => {
+      if (!payload?.fromUserId) return;
+      if (payload.fromUserId !== activeCallPeerIdRef.current) return;
+      cleanupCallSession();
+    };
+
+    webSocketService.onCallOffer(handleCallOffer);
+    webSocketService.onCallAnswer(handleCallAnswer);
+    webSocketService.onCallIceCandidate(handleCallIceCandidate);
+    webSocketService.onCallReject(handleCallReject);
+    webSocketService.onCallEnd(handleCallEnd);
+
+    return () => {
+      webSocketService.off('call:offer', handleCallOffer);
+      webSocketService.off('call:answer', handleCallAnswer);
+      webSocketService.off('call:ice-candidate', handleCallIceCandidate);
+      webSocketService.off('call:reject', handleCallReject);
+      webSocketService.off('call:end', handleCallEnd);
+    };
+  }, [cleanupCallSession, currentUserId, flushPendingIceCandidates, showError, webSocketService]);
+
+  useEffect(() => {
+    return () => {
+      teardownCallResources();
+    };
+  }, [teardownCallResources]);
+
+  useEffect(() => {
+    if (!webSocketService && callStatusRef.current !== 'idle') {
+      cleanupCallSession();
+    }
+  }, [cleanupCallSession, webSocketService]);
+
   // Scroll to bottom when opening/switching a conversation and once messages finish loading.
   useEffect(() => {
     if (!selectedChat) return;
     if (conversationLoading) return;
-    if (localMessagesData?.match?.id !== selectedChat) return;
+    if (!localMessagesData) return;
+    if (effectiveMatchId && localMessagesData.match?.id && localMessagesData.match.id !== effectiveMatchId) return;
 
-    let raf2 = 0;
-    let t: ReturnType<typeof setTimeout> | null = null;
-    const raf1 = requestAnimationFrame(() => {
-      scrollToBottom('auto');
-      raf2 = requestAnimationFrame(() => {
-        scrollToBottom('auto');
-      });
-      t = setTimeout(() => {
-        scrollToBottom('auto');
-      }, 60);
+    const cleanupScroll = scheduleScrollToBottom('auto');
+    const container = messagesListRef.current;
+    if (!container) return cleanupScroll;
+
+    const cleanupMediaListeners: Array<() => void> = [];
+    const mediaNodes = Array.from(container.querySelectorAll('img,video'));
+
+    mediaNodes.forEach((node) => {
+      if (node instanceof HTMLImageElement) {
+        if (node.complete) return;
+        const onImageReady = () => scheduleScrollToBottom('auto');
+        node.addEventListener('load', onImageReady);
+        node.addEventListener('error', onImageReady);
+        cleanupMediaListeners.push(() => {
+          node.removeEventListener('load', onImageReady);
+          node.removeEventListener('error', onImageReady);
+        });
+        return;
+      }
+
+      if (node instanceof HTMLVideoElement) {
+        if (node.readyState >= 1) return;
+        const onVideoReady = () => scheduleScrollToBottom('auto');
+        node.addEventListener('loadedmetadata', onVideoReady);
+        node.addEventListener('error', onVideoReady);
+        cleanupMediaListeners.push(() => {
+          node.removeEventListener('loadedmetadata', onVideoReady);
+          node.removeEventListener('error', onVideoReady);
+        });
+      }
     });
 
     return () => {
-      cancelAnimationFrame(raf1);
-      if (raf2) cancelAnimationFrame(raf2);
-      if (t) clearTimeout(t);
+      cleanupScroll();
+      cleanupMediaListeners.forEach((cleanup) => cleanup());
     };
   }, [
     selectedChat,
+    effectiveMatchId,
     conversationLoading,
     localMessagesData?.match?.id,
     localMessagesData?.messages.length,
-    scrollToBottom
+    scheduleScrollToBottom
   ]);
 
+  useLayoutEffect(() => {
+    if (!selectedChat) return;
+    if (conversationLoading) return;
+    if (!localMessagesData) return;
+    if (effectiveMatchId && localMessagesData.match?.id && localMessagesData.match.id !== effectiveMatchId) return;
+
+    const container = messagesListRef.current;
+    if (!container) return;
+    container.scrollTop = container.scrollHeight;
+  }, [
+    selectedChat,
+    effectiveMatchId,
+    conversationLoading,
+    localMessagesData?.match?.id,
+    localMessagesData?.messages.length
+  ]);
+
+  const sendOutgoingMessage = async ({
+    messageContent,
+    attachment,
+    messageType,
+    replyToMessage,
+  }: {
+    messageContent: string;
+    attachment?: MessageAttachment | null;
+    messageType?: MessageType;
+    replyToMessage?: Message | null;
+  }): Promise<boolean> => {
+    if (!currentConversation || !webSocketService || !currentUserId) return false;
+
+    if (!messageContent.trim() && !attachment) return false;
+
+    if (profileIdParam && currentConversation.id === profileIdParam) {
+      console.warn('Cannot send message: no mutual match exists for this user yet.');
+      return false;
+    }
+
+    const actualMatchId = currentConversation.id;
+    const clientTempId = `temp-${Date.now()}-${Math.random()}`;
+    const normalizedContent = messageContent.trim();
+    const resolvedType: Message['type'] = messageType
+      || (attachment?.mimeType.startsWith('image/')
+        ? 'IMAGE'
+        : attachment?.mimeType.startsWith('video/')
+          ? 'VIDEO'
+          : attachment?.mimeType.startsWith('audio/')
+            ? 'AUDIO'
+            : attachment
+              ? 'FILE'
+              : 'TEXT');
+    const nowIso = new Date().toISOString();
+    const replyPreview = replyToMessage ? getReplyPreviewFromMessage(replyToMessage) : null;
+
+    const tempMessage: Message = {
+      id: clientTempId,
+      clientTempId,
+      senderId: currentUserId,
+      receiverId: currentConversation.otherUser.id,
+      content: normalizedContent,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      isRead: false,
+      matchId: actualMatchId,
+      type: resolvedType,
+      attachment: attachment || null,
+      replyTo: replyPreview,
+    };
+
+    setLocalMessagesData(prev => {
+      if (!prev) {
+        return {
+          match: { id: actualMatchId },
+          messages: [tempMessage],
+        } as ConversationMessagesResponse;
+      }
+      return {
+        ...prev,
+        messages: [...prev.messages, tempMessage],
+      };
+    });
+
+    setLocalConversations(prev => {
+      const updated = prev.map(conv => {
+        if (conv.id !== actualMatchId) return conv;
+        return {
+          ...conv,
+          lastMessage: {
+            content: getMessagePreviewText(normalizedContent, attachment || null, resolvedType),
+            createdAt: nowIso,
+            type: resolvedType,
+            attachment: attachment || null,
+          },
+          updatedAt: nowIso,
+        };
+      });
+      return updated.sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+    });
+
+    webSocketService.sendMessage(
+      currentConversation.otherUser.id,
+      normalizedContent,
+      actualMatchId,
+      attachment || null,
+      clientTempId,
+      replyPreview?.id || null
+    );
+
+    scheduleScrollToBottom('auto');
+    return true;
+  };
 
   const handleSendMessage = async () => {
-    if (newMessage.trim() && currentConversation && webSocketService && currentUserId) {
-      try {
-        const actualMatchId = currentConversation.id;
-        const messageContent = newMessage.trim();
+    if (!newMessage.trim() && !pendingAttachment) return;
 
-        if (profileIdParam && currentConversation.id === profileIdParam) {
-          console.warn('Cannot send message: no mutual match exists for this user yet.');
+    const receiverId = currentConversation?.otherUser?.id;
+    try {
+      const sent = await sendOutgoingMessage({
+        messageContent: newMessage,
+        attachment: pendingAttachment?.attachment || null,
+        messageType: pendingAttachment?.type,
+        replyToMessage: replyingTo,
+      });
+      if (!sent) return;
+
+      setNewMessage('');
+      setPendingAttachment(null);
+      setReplyingTo(null);
+      setShowEmojiPicker(false);
+      if (receiverId && webSocketService) {
+        webSocketService.sendTyping(receiverId, false);
+      }
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      showError('Unable to send message.', 'Message Error');
+    }
+  };
+
+  const handleAttachmentButtonClick = () => {
+    setShowEmojiPicker(false);
+    openAttachmentPicker();
+  };
+
+  const openAttachmentPicker = () => {
+    attachmentInputRef.current?.click();
+  };
+
+  const handleAttachmentChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    await uploadPendingAttachment(file);
+  };
+
+  const openMediaLibrary = (tab: MediaLibraryTab) => {
+    setShowEmojiPicker(false);
+    setMediaLibraryTab(tab);
+    setShowMediaLibrary(true);
+  };
+
+  const handleStickerButtonClick = () => {
+    openMediaLibrary('sticker');
+  };
+
+  const handleMediaLibraryItemSelect = async (item: MediaLibraryItem) => {
+    if (isImportingMediaItem || isUploadingAttachment) return;
+
+    try {
+      setIsImportingMediaItem(true);
+      const response = await fetch(item.mediaUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to download media: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const mimeType = blob.type || item.mimeType || 'image/gif';
+      const extension = mimeType.includes('webp')
+        ? 'webp'
+        : mimeType.includes('png')
+          ? 'png'
+          : mimeType.includes('jpeg') || mimeType.includes('jpg')
+            ? 'jpg'
+            : 'gif';
+      const fileNameBase = mediaLibraryTab === 'gif' ? 'gif' : 'sticker';
+      const file = new File(
+        [blob],
+        `${fileNameBase}-${Date.now()}-${Math.floor(Math.random() * 10000)}.${extension}`,
+        { type: mimeType }
+      );
+
+      await uploadPendingAttachment(file);
+      setShowMediaLibrary(false);
+    } catch (error) {
+      console.error('Failed to import media item:', error);
+      showError('Unable to add this GIF/sticker right now.', 'Media Error');
+    } finally {
+      setIsImportingMediaItem(false);
+    }
+  };
+
+  const handleInsertEmoji = (emoji: string) => {
+    const next = `${newMessage}${emoji}`;
+    handleTypingChange(next);
+    setShowEmojiPicker(false);
+    setTimeout(() => composerInputRef.current?.focus(), 0);
+  };
+
+  const handleVoiceRecordingStart = async () => {
+    if (isRecordingVoice || isUploadingAttachment) return;
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      showError('Voice recording is not supported on this device/browser.', 'Unsupported');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
+        .find((candidate) => {
+          try {
+            return MediaRecorder.isTypeSupported(candidate);
+          } catch {
+            return false;
+          }
+        });
+
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+
+      recordingStreamRef.current = stream;
+      recordingChunksRef.current = [];
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          recordingChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onerror = () => {
+        setIsRecordingVoice(false);
+        stopRecordingTimer();
+        stopRecordingStream();
+        mediaRecorderRef.current = null;
+        showError('Could not capture voice note. Please try again.', 'Recording Error');
+      };
+
+      recorder.onstop = async () => {
+        setIsRecordingVoice(false);
+        stopRecordingTimer();
+        const chunks = recordingChunksRef.current;
+        recordingChunksRef.current = [];
+
+        const blobType = recorder.mimeType || 'audio/webm';
+        const voiceBlob = new Blob(chunks, { type: blobType });
+        mediaRecorderRef.current = null;
+        stopRecordingStream();
+
+        if (!voiceBlob.size) {
+          showError('Voice note is empty. Please record again.', 'Recording Error');
           return;
         }
 
-        // --- OPTIMISTIC MESSAGE UPDATE ---
-        const tempMessage: Message = {
-          id: `temp-${Date.now()}-${Math.random()}`,
-          senderId: currentUserId,
-          receiverId: currentConversation.otherUser.id,
-          content: messageContent,
-          createdAt: new Date().toISOString(),
-          isRead: false,
-          matchId: actualMatchId,
-          type: 'TEXT',
-        };
+        const fileExtension = blobType.includes('mp4')
+          ? 'm4a'
+          : blobType.includes('ogg')
+            ? 'ogg'
+            : 'webm';
 
-        setLocalMessagesData(prev => {
-          if (!prev) {
-            return {
-              match: { id: actualMatchId },
-              messages: [tempMessage],
-            } as ConversationMessagesResponse;
-          }
-          return {
-            ...prev,
-            messages: [...prev.messages, tempMessage],
-          };
-        });
-        // --- END OPTIMISTIC UPDATE ---
-
-        setLocalConversations(prev => {
-          const updated = prev.map(conv => {
-            if (conv.id !== actualMatchId) return conv;
-            return {
-              ...conv,
-              lastMessage: {
-                content: messageContent,
-                createdAt: tempMessage.createdAt,
-              },
-              updatedAt: tempMessage.createdAt,
-            };
-          });
-          return updated.sort(
-            (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-          );
-        });
-
-        // Notify other user in real-time (and persist via server)
-        webSocketService.sendMessage(
-          currentConversation.otherUser.id,
-          messageContent,
-          actualMatchId
+        const voiceFile = new File(
+          [voiceBlob],
+          `voice-note-${Date.now()}.${fileExtension}`,
+          { type: blobType }
         );
 
-        // 2. Cleanup and scroll
-        setNewMessage('');
-        // Stop typing indicator after sending
-        webSocketService.sendTyping(currentConversation.otherUser.id, false);
-        setTimeout(scrollToBottom, 50);
+        await uploadPendingAttachment(voiceFile);
+      };
 
-        // 3. Handle conversation list refetch if a new match was created
-        if (actualMatchId !== currentConversation.id) {
-          refetchMessages(); // Fetch the match details + existing messages (if any)
-          refetch(); // Refetch conversation list
-        }
-      } catch (error) {
-        console.error('Failed to send message:', error);
-      }
+      setRecordingSeconds(0);
+      setIsRecordingVoice(true);
+      stopRecordingTimer();
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
+      recorder.start(250);
+    } catch {
+      stopRecordingTimer();
+      stopRecordingStream();
+      mediaRecorderRef.current = null;
+      setIsRecordingVoice(false);
+      showError('Microphone access was denied or unavailable.', 'Recording Error');
     }
+  };
+
+  const handleVoiceRecordingStop = () => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) return;
+    if (recorder.state !== 'inactive') {
+      recorder.stop();
+    }
+    setIsRecordingVoice(false);
+    stopRecordingTimer();
   };
 
   const handleTypingChange = (value: string) => {
@@ -427,11 +1860,24 @@ const MessagesContent = () => {
 
   const handleSelectChat = (id: string) => {
     setSelectedChat(id);
+    setReplyingTo(null);
     setLocalConversations(prev =>
       prev.map(conv =>
         conv.id === id ? { ...conv, unreadCount: 0 } : conv
       )
     );
+  };
+
+  const getMessageAuthorLabel = useCallback((senderId: string) => {
+    if (senderId === currentUserId) return 'You';
+    return currentConversation?.otherUser?.name || 'Matched user';
+  }, [currentConversation?.otherUser?.name, currentUserId]);
+
+  const handleReplyToMessage = (message: Message) => {
+    setReplyingTo(message);
+    setShowEmojiPicker(false);
+    setShowMediaLibrary(false);
+    setTimeout(() => composerInputRef.current?.focus(), 0);
   };
 
   // Auto select logic
@@ -509,10 +1955,524 @@ const MessagesContent = () => {
     return matchedUser?.name?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
+  const callPeerId = incomingCall?.fromUserId || activeCallPeerId;
+  const matchedCallConversation = callPeerId
+    ? localConversations.find((conversation) => conversation.otherUser?.id === callPeerId)
+    : null;
+  const callPeerUser = matchedCallConversation?.otherUser
+    || (currentConversation?.otherUser?.id === callPeerId ? currentConversation.otherUser : null);
+
+  const callPeerName = callPeerUser?.name || 'Matched user';
+  const callPeerAvatar = callPeerUser?.profilePhoto1 || '/default-avatar.png';
+  const callStatusLabel = callStatus === 'dialing'
+    ? 'Calling...'
+    : callStatus === 'connecting'
+      ? 'Connecting...'
+      : callStatus === 'ringing'
+        ? 'Incoming call'
+        : callStatus === 'active'
+          ? formatCallDuration(callDurationSeconds)
+          : '';
+
+  const renderCallLayer = () => {
+    const shouldShowCallWindow = callStatus !== 'idle' && Boolean(activeCallPeerId);
+    if (!shouldShowCallWindow) return null;
+
+    return (
+      <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/70 backdrop-blur-md p-3 md:p-5">
+        <div className="relative w-full h-full max-h-[92vh] max-w-5xl rounded-3xl overflow-hidden border border-white/15 bg-gradient-to-br from-[#07121d] via-[#0b1b2b] to-[#10263a] shadow-[0_30px_120px_rgba(0,0,0,0.6)]">
+          <audio ref={remoteCallAudioRef} autoPlay playsInline />
+
+          <div className="absolute inset-0">
+            {callMode === 'video' ? (
+              remoteCallStream ? (
+                <video
+                  ref={remoteCallVideoRef}
+                  autoPlay
+                  playsInline
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="h-full w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
+              )
+            ) : (
+              <div className="h-full w-full bg-[radial-gradient(circle_at_20%_20%,rgba(244,114,182,0.2),transparent_40%),radial-gradient(circle_at_80%_75%,rgba(99,102,241,0.22),transparent_45%),linear-gradient(135deg,#07121d,#0d1d2d,#132b3f)]" />
+            )}
+          </div>
+
+          <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/55" />
+
+          <div className="absolute top-4 left-4 right-4 flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 rounded-2xl border border-white/15 bg-black/35 px-3 py-2 backdrop-blur-xl">
+              <OptimizedImage
+                src={callPeerAvatar}
+                alt={callPeerName}
+                width={44}
+                height={44}
+                className="w-11 h-11 rounded-full object-cover ring-2 ring-pink-400/50"
+              />
+              <div className="min-w-0">
+                <p className="text-white font-semibold truncate">{callPeerName}</p>
+                <p className="text-xs text-white/75">{callStatusLabel}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (callStatus === 'ringing') {
+                  declineIncomingCall();
+                  return;
+                }
+                endActiveCall({ notifyPeer: true, reason: 'ended-by-user' });
+              }}
+              className="inline-flex items-center justify-center h-11 w-11 rounded-2xl bg-rose-500/80 hover:bg-rose-500 text-white border border-rose-300/45 transition-colors"
+              aria-label="End call"
+            >
+              <PhoneOff className="w-4 h-4" />
+            </button>
+          </div>
+
+          {callMode === 'video' && localCallStream && (
+            <div className="absolute right-3 bottom-24 md:right-4 md:bottom-28 w-28 h-40 sm:w-32 sm:h-44 rounded-2xl overflow-hidden border border-white/25 bg-black/40 shadow-2xl">
+              <video
+                ref={localCallVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="h-full w-full object-cover"
+              />
+            </div>
+          )}
+
+          <div className="absolute inset-x-0 bottom-0 p-4 md:p-5">
+            {callStatus === 'ringing' && incomingCall ? (
+              <div className="mx-auto w-full max-w-md rounded-2xl border border-white/20 bg-black/45 backdrop-blur-xl p-4">
+                <p className="text-center text-sm text-white/85 mb-3">
+                  {incomingCall.callType === 'video' ? 'Incoming video call' : 'Incoming audio call'}
+                </p>
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => declineIncomingCall()}
+                    className="inline-flex items-center justify-center h-11 px-5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-semibold transition-colors"
+                  >
+                    Decline
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void acceptIncomingCall()}
+                    className="inline-flex items-center justify-center h-11 px-5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold transition-colors"
+                  >
+                    Accept
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mx-auto w-full max-w-md rounded-2xl border border-white/20 bg-black/45 backdrop-blur-xl px-4 py-3">
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={toggleCallMic}
+                    className={`inline-flex items-center justify-center h-11 w-11 rounded-xl border transition-colors ${
+                      isCallMicMuted
+                        ? 'bg-white/90 text-gray-900 border-white'
+                        : 'bg-white/10 text-white border-white/25 hover:bg-white/20'
+                    }`}
+                    aria-label={isCallMicMuted ? 'Unmute microphone' : 'Mute microphone'}
+                  >
+                    {isCallMicMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                  </button>
+                  {callMode === 'video' && (
+                    <button
+                      type="button"
+                      onClick={toggleCallCamera}
+                      className={`inline-flex items-center justify-center h-11 w-11 rounded-xl border transition-colors ${
+                        isCallCameraOff
+                          ? 'bg-white/90 text-gray-900 border-white'
+                          : 'bg-white/10 text-white border-white/25 hover:bg-white/20'
+                      }`}
+                      aria-label={isCallCameraOff ? 'Turn camera on' : 'Turn camera off'}
+                    >
+                      {isCallCameraOff ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => endActiveCall({ notifyPeer: true, reason: 'ended-by-user' })}
+                    className="inline-flex items-center justify-center h-11 w-14 rounded-xl bg-rose-500 hover:bg-rose-600 text-white transition-colors"
+                    aria-label="Hang up call"
+                  >
+                    <PhoneOff className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderMessageAttachment = (message: Message) => {
+    const attachment = message.attachment;
+    if (!attachment) return null;
+    const kind = getAttachmentKind(message.type, attachment);
+    const isDirectGifOrSticker = kind === 'image' && (isGifAttachment(attachment) || isStickerAttachment(attachment));
+    const label = getAttachmentPreviewText(message.type, attachment);
+    const isSender = message.senderId === currentUserId;
+
+    if (kind === 'audio') {
+      return <VoiceNoteAttachment attachment={attachment} isSender={isSender} />;
+    }
+
+    if (isDirectGifOrSticker) {
+      return (
+        <button
+          type="button"
+          onClick={() => setViewerMessage(message)}
+          className="block max-w-[170px] sm:max-w-[220px] rounded-2xl overflow-hidden border border-white/15 bg-black/20"
+        >
+          <img
+            src={attachment.url}
+            alt={attachment.fileName || 'Sticker or GIF'}
+            className="w-full max-h-[240px] h-auto object-contain"
+            loading="lazy"
+          />
+        </button>
+      );
+    }
+
+    const PreviewIcon = kind === 'image'
+      ? ImageIcon
+      : kind === 'video'
+        ? Video
+        : FileText;
+
+    return (
+      <div className="w-[200px] sm:w-[220px] rounded-2xl overflow-hidden border border-white/20 bg-black/35 shadow-lg shadow-black/30">
+        <button
+          type="button"
+          onClick={() => setViewerMessage(message)}
+          className="relative block w-full h-28 group"
+        >
+          {kind === 'image' ? (
+            <img
+              src={attachment.url}
+              alt={attachment.fileName || 'Image attachment'}
+              className={`w-full h-full object-cover scale-105 ${isSender ? 'blur-0 brightness-95' : 'blur-[6px] brightness-75'}`}
+              loading="lazy"
+            />
+          ) : kind === 'video' ? (
+            <video
+              src={attachment.url}
+              className={`w-full h-full object-cover scale-105 pointer-events-none ${isSender ? 'blur-0 brightness-95' : 'blur-[6px] brightness-75'}`}
+              muted
+              playsInline
+              preload="metadata"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-white/20 via-white/10 to-transparent flex items-center justify-center">
+              <PreviewIcon className="w-8 h-8 text-white/80" />
+            </div>
+          )}
+
+          <div className={`absolute inset-0 bg-gradient-to-t ${isSender ? 'from-black/55 via-black/25 to-black/5' : 'from-black/80 via-black/35 to-black/10'}`} />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/55 border border-white/20 text-xs font-medium text-white">
+              <PreviewIcon className="w-3.5 h-3.5" />
+              {label}
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 text-gray-900 text-xs font-semibold shadow-md">
+              <Eye className="w-3.5 h-3.5" />
+              View
+            </span>
+          </div>
+        </button>
+
+        <div className="p-2.5">
+          <p className="text-[11px] text-white truncate">{attachment.fileName}</p>
+          <div className="mt-1.5 flex items-center justify-between gap-2">
+            <span className="text-[10px] text-white/65">{formatBytes(attachment.fileSize)}</span>
+            {!isSender && (
+              <a
+                href={attachment.url}
+                download={attachment.fileName}
+                className="inline-flex items-center gap-1 rounded-lg bg-white/15 hover:bg-white/25 border border-white/20 px-2 py-1 text-[10px] font-medium text-white transition-colors"
+              >
+                <Download className="w-3 h-3" />
+                Download
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderAttachmentViewer = () => {
+    if (!viewerMessage?.attachment) return null;
+
+    const attachment = viewerMessage.attachment;
+    const kind = getAttachmentKind(viewerMessage.type, attachment);
+    const isDirectGifOrSticker = kind === 'image' && (isGifAttachment(attachment) || isStickerAttachment(attachment));
+    if (kind === 'audio') return null;
+    const label = getAttachmentPreviewText(viewerMessage.type, attachment);
+    const isSender = viewerMessage.senderId === currentUserId;
+
+    if (isDirectGifOrSticker) {
+      return (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center">
+          <button
+            type="button"
+            aria-label="Close viewer"
+            onClick={() => setViewerMessage(null)}
+            className="absolute inset-0 bg-black/90 backdrop-blur-sm"
+          />
+          <div className="relative z-10 w-full h-full p-3 md:p-6 flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => setViewerMessage(null)}
+              className="absolute top-3 right-3 md:top-5 md:right-5 inline-flex items-center justify-center w-10 h-10 rounded-xl bg-black/50 hover:bg-black/70 border border-white/25 text-white transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <img
+              src={attachment.url}
+              alt={attachment.fileName || 'Sticker or GIF'}
+              className="max-h-[86vh] max-w-[88vw] w-auto object-contain rounded-2xl shadow-[0_20px_80px_rgba(0,0,0,0.65)]"
+            />
+          </div>
+        </div>
+      );
+    }
+
+    const content = kind === 'image'
+      ? (
+        <img
+          src={attachment.url}
+          alt={attachment.fileName || 'Image attachment'}
+          className="max-h-[72vh] w-auto max-w-full object-contain rounded-2xl shadow-2xl shadow-black/60"
+        />
+      )
+      : kind === 'video'
+        ? (
+          <video
+            src={attachment.url}
+            controls
+            autoPlay
+            className="max-h-[72vh] w-auto max-w-full rounded-2xl bg-black shadow-2xl shadow-black/60"
+          />
+        )
+        : kind === 'pdf'
+            ? (
+              <iframe
+                title={attachment.fileName || 'PDF attachment'}
+                src={attachment.url}
+                className="w-full h-[72vh] rounded-2xl border border-white/15 bg-white"
+              />
+            )
+            : (
+              <div className="w-full max-w-xl rounded-3xl border border-white/20 bg-gradient-to-br from-white/20 via-white/10 to-transparent p-6 md:p-8 text-center">
+                <FileText className="w-12 h-12 text-white/90 mx-auto mb-4" />
+                <h4 className="text-white text-lg font-semibold mb-2">File Ready</h4>
+                <p className="text-white/70 text-sm mb-6 break-all">{attachment.fileName}</p>
+                {!isSender && (
+                  <a
+                    href={attachment.url}
+                    download={attachment.fileName}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white text-gray-900 font-semibold hover:bg-gray-100 transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download File
+                  </a>
+                )}
+              </div>
+            );
+
+    return (
+      <div className="fixed inset-0 z-[80] p-3 md:p-6 flex items-center justify-center">
+        <button
+          type="button"
+          aria-label="Close viewer"
+          onClick={() => setViewerMessage(null)}
+          className="absolute inset-0 bg-black/80 backdrop-blur-md"
+        />
+        <div className="relative z-10 w-full max-w-5xl max-h-[92vh] rounded-3xl overflow-hidden border border-white/20 bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 shadow-[0_20px_80px_rgba(0,0,0,0.65)]">
+          <div className="px-4 py-3 md:px-6 md:py-4 border-b border-white/10 bg-white/5 backdrop-blur-xl flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs uppercase tracking-[0.18em] text-pink-300/90">{label}</p>
+              <h3 className="text-white font-semibold truncate">{attachment.fileName}</h3>
+              <p className="text-[11px] text-white/60 mt-0.5">{formatBytes(attachment.fileSize)}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {!isSender && (
+                <a
+                  href={attachment.url}
+                  download={attachment.fileName}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-sm transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Download
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => setViewerMessage(null)}
+                className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <div className="p-3 md:p-6 overflow-auto max-h-[calc(92vh-82px)] flex items-center justify-center bg-gradient-to-b from-transparent to-black/25">
+            {content}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderMediaLibrary = () => {
+    if (!showMediaLibrary) return null;
+
+    const showConfigHint = !mediaLibraryProvider;
+    const isBusy = mediaLibraryLoading || isImportingMediaItem || isUploadingAttachment;
+
+    return (
+      <div className="fixed inset-0 z-[78] flex items-end justify-center md:items-center md:p-4">
+        <button
+          type="button"
+          aria-label="Close media library"
+          onClick={() => setShowMediaLibrary(false)}
+          className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        />
+        <div className="relative z-10 w-full h-[80vh] md:h-[86vh] md:max-w-6xl rounded-t-3xl md:rounded-3xl overflow-hidden border border-white/10 bg-[#081420] shadow-[0_24px_80px_rgba(0,0,0,0.55)] flex flex-col">
+          <div className="px-3 pt-2 pb-3 md:px-5 md:pt-4 md:pb-4 border-b border-white/10 bg-[#0a1928]/90 backdrop-blur-xl">
+            <div className="mx-auto mb-2 h-1.5 w-14 rounded-full bg-white/30 md:hidden" />
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-300 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={mediaLibraryQuery}
+                  onChange={(event) => setMediaLibraryQuery(event.target.value)}
+                  placeholder={`Search ${mediaLibraryTab === 'gif' ? 'GIFs' : 'stickers'}...`}
+                  className="w-full h-11 rounded-xl border border-white/15 bg-white/10 pl-9 pr-3 text-sm text-white placeholder-slate-300 focus:outline-none focus:border-pink-400/60"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMediaLibrary(false)}
+                className="inline-flex items-center justify-center h-11 w-11 rounded-xl border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="mt-3 inline-flex rounded-full border border-white/15 bg-white/5 p-1">
+              <button
+                type="button"
+                onClick={() => setMediaLibraryTab('gif')}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-colors ${
+                  mediaLibraryTab === 'gif'
+                    ? 'bg-white text-[#0b1a2a]'
+                    : 'text-white/80 hover:text-white'
+                }`}
+              >
+                GIF
+              </button>
+              <button
+                type="button"
+                onClick={() => setMediaLibraryTab('sticker')}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-colors ${
+                  mediaLibraryTab === 'sticker'
+                    ? 'bg-white text-[#0b1a2a]'
+                    : 'text-white/80 hover:text-white'
+                }`}
+              >
+                Sticker
+              </button>
+            </div>
+            {showConfigHint && (
+              <p className="mt-2 text-xs text-amber-200/90">
+                Configure `VITE_TENOR_API_KEY` or `VITE_GIPHY_API_KEY` in `frontend/.env` to enable in-app library.
+              </p>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-3 md:p-4">
+            {isBusy && (
+              <div className="h-full flex items-center justify-center text-slate-200">
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                <span className="text-sm">{isImportingMediaItem ? 'Adding to chat...' : 'Loading media...'}</span>
+              </div>
+            )}
+
+            {!isBusy && mediaLibraryError && (
+              <div className="h-full flex items-center justify-center text-center px-6">
+                <p className="text-sm text-rose-200">{mediaLibraryError}</p>
+              </div>
+            )}
+
+            {!isBusy && !mediaLibraryError && mediaLibraryItems.length === 0 && (
+              <div className="h-full flex items-center justify-center text-center px-6">
+                <p className="text-sm text-slate-300">
+                  {mediaLibraryQuery.trim()
+                    ? `No ${mediaLibraryTab} results found. Try another search.`
+                    : `No ${mediaLibraryTab}s available right now.`}
+                </p>
+              </div>
+            )}
+
+            {!isBusy && !mediaLibraryError && mediaLibraryItems.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+                {mediaLibraryItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleMediaLibraryItemSelect(item)}
+                    className="group relative rounded-2xl overflow-hidden border border-white/10 bg-black/25 hover:border-pink-300/60 transition-colors"
+                  >
+                    <img
+                      src={item.previewUrl}
+                      alt={item.title}
+                      loading="lazy"
+                      className="w-full aspect-[4/5] object-cover"
+                    />
+                    <span className="absolute inset-x-2 bottom-2 inline-flex items-center justify-center rounded-full bg-black/60 border border-white/20 py-1 text-[11px] font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                      Add
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
 
   if (!currentConversation && selectedChat) {
     return <HeartBeatLoader message="Initializing chat..." />;
   }
+
+  const hasComposerPayload = Boolean(newMessage.trim() || pendingAttachment);
+  const isComposerConnected = Boolean(webSocketService?.connected);
+  const primaryActionDisabled = isRecordingVoice ? false : (isUploadingAttachment || !isComposerConnected);
+
+  const handlePrimaryComposerAction = () => {
+    if (isRecordingVoice) {
+      handleVoiceRecordingStop();
+      return;
+    }
+
+    if (hasComposerPayload) {
+      void handleSendMessage();
+      return;
+    }
+
+    void handleVoiceRecordingStart();
+  };
 
   const mainContent = (
     <div className="h-[calc(100dvh-78px)] lg:h-[calc(100dvh-82px)] flex flex-col md:flex-row overflow-hidden max-w-full">
@@ -578,7 +2538,41 @@ const MessagesContent = () => {
                       <p className={`text-sm truncate ${
                         conversation.unreadCount > 0 ? 'text-white font-medium' : 'text-gray-400'
                         }`}>
-                        {conversation.lastMessage?.content || 'Start a conversation...'}
+                        {conversation.lastMessage ? (
+                          (() => {
+                            const previewText = getMessagePreviewText(
+                              conversation.lastMessage.content || '',
+                              conversation.lastMessage.attachment || null,
+                              conversation.lastMessage.type
+                            );
+
+                            const attachmentType = conversation.lastMessage.type;
+                            const showIcon = Boolean(
+                              conversation.lastMessage.attachment ||
+                              attachmentType === 'IMAGE' ||
+                              attachmentType === 'VIDEO' ||
+                              attachmentType === 'AUDIO' ||
+                              attachmentType === 'FILE'
+                            );
+
+                            const PreviewIcon = attachmentType === 'IMAGE'
+                              ? ImageIcon
+                              : attachmentType === 'VIDEO'
+                                ? Video
+                                : attachmentType === 'AUDIO'
+                                  ? FileText
+                                  : FileText;
+
+                            return showIcon ? (
+                              <span className="inline-flex items-center gap-1.5 truncate">
+                                <PreviewIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                                <span className="truncate">{previewText || 'File'}</span>
+                              </span>
+                            ) : (
+                              previewText || 'Start a conversation...'
+                            );
+                          })()
+                        ) : 'Start a conversation...'}
                       </p>
                     </div>
                   </div>
@@ -624,14 +2618,32 @@ const MessagesContent = () => {
                   </div>
                 </div>
 
-                <div className="hidden sm:flex items-center space-x-2">
-                  <button className="p-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 hover:border-white/30 rounded-2xl transition-all duration-300 hover:scale-105 group">
-                    <Phone className="w-5 h-5 text-white group-hover:scale-110 transition-transform duration-300" />
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => void startOutgoingCall('audio')}
+                    disabled={callStatus !== 'idle'}
+                    className={`p-2 md:p-2.5 backdrop-blur-xl border rounded-2xl transition-all duration-300 group ${
+                      callStatus === 'idle'
+                        ? 'bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/30 hover:scale-105'
+                        : 'bg-white/5 border-white/10 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <Phone className="w-4 h-4 md:w-5 md:h-5 text-white group-hover:scale-110 transition-transform duration-300" />
                   </button>
-                  <button className="p-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 hover:border-white/30 rounded-2xl transition-all duration-300 hover:scale-105 group">
-                    <Video className="w-5 h-5 text-white group-hover:scale-110 transition-transform duration-300" />
+                  <button
+                    type="button"
+                    onClick={() => void startOutgoingCall('video')}
+                    disabled={callStatus !== 'idle'}
+                    className={`p-2 md:p-2.5 backdrop-blur-xl border rounded-2xl transition-all duration-300 group ${
+                      callStatus === 'idle'
+                        ? 'bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/30 hover:scale-105'
+                        : 'bg-white/5 border-white/10 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <Video className="w-4 h-4 md:w-5 md:h-5 text-white group-hover:scale-110 transition-transform duration-300" />
                   </button>
-                  <button className="p-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 hover:border-white/30 rounded-2xl transition-all duration-300 hover:scale-105 group">
+                  <button className="hidden sm:inline-flex p-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 hover:border-white/30 rounded-2xl transition-all duration-300 hover:scale-105 group">
                     <Info className="w-5 h-5 text-white group-hover:scale-110 transition-transform duration-300" />
                   </button>
                 </div>
@@ -658,10 +2670,53 @@ const MessagesContent = () => {
                         ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-br-md'
                         : 'bg-white/10 backdrop-blur-xl border border-white/20 text-white rounded-bl-md'
                       }`}>
-                      <p className="text-sm">{message.content}</p>
-                      <div className={`flex items-center justify-between mt-1 ${
+                      {message.replyTo ? (
+                        <div className={`mb-2 rounded-xl border-l-4 px-2.5 py-1.5 ${
+                          message.senderId === currentUserId
+                            ? 'bg-white/20 border-white/80'
+                            : 'bg-black/25 border-pink-300/80'
+                        }`}>
+                          <p className={`text-[10px] font-semibold ${
+                            message.senderId === currentUserId ? 'text-white' : 'text-pink-200'
+                          }`}>
+                            {getMessageAuthorLabel(message.replyTo.senderId)}
+                          </p>
+                          <p className={`text-xs truncate ${
+                            message.senderId === currentUserId ? 'text-white/90' : 'text-white/80'
+                          }`}>
+                            {getMessagePreviewText(
+                              message.replyTo.content || '',
+                              message.replyTo.attachment || null,
+                              message.replyTo.type
+                            ) || 'Message'}
+                          </p>
+                        </div>
+                      ) : null}
+                      {message.attachment ? (
+                        <div>
+                          {renderMessageAttachment(message)}
+                        </div>
+                      ) : null}
+                      {message.content?.trim() ? (
+                        <p className={`text-sm whitespace-pre-wrap break-words ${message.attachment ? 'mt-2' : ''}`}>
+                          {message.content}
+                        </p>
+                      ) : null}
+                      <div className={`flex items-center mt-1 gap-2 ${
                         message.senderId === currentUserId ? 'justify-end' : 'justify-start'
                         }`}>
+                        <button
+                          type="button"
+                          onClick={() => handleReplyToMessage(message)}
+                          className={`inline-flex items-center justify-center w-6 h-6 rounded-md transition-colors ${
+                            message.senderId === currentUserId
+                              ? 'hover:bg-white/20 text-white/80'
+                              : 'hover:bg-white/10 text-white/70'
+                          }`}
+                          aria-label="Reply to message"
+                        >
+                          <Reply className="w-3.5 h-3.5" />
+                        </button>
                         <span className={`text-xs ${
                           message.senderId === currentUserId ? 'text-white/70' : 'text-gray-400'
                           }`}>
@@ -687,36 +2742,163 @@ const MessagesContent = () => {
 
             {/* Message Input */}
             <div className="bg-gray-900/85 backdrop-blur-xl border-t border-gray-700/50 px-3 py-2.5 md:p-4 flex-shrink-0" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 10px)' }}>
-              <div className="flex items-center space-x-2.5 md:space-x-3 min-w-0">
-                <button className="hidden md:inline-flex p-3 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/20 hover:border-white/30 rounded-2xl transition-all duration-300 hover:scale-105 group flex-shrink-0">
-                  <Paperclip className="w-5 h-5 text-white group-hover:scale-110 transition-transform duration-300" />
-                </button>
-
-                <div className="flex-1 relative min-w-0">
-                  <input
-                    type="text"
-                    placeholder="Type a message..."
-                    value={newMessage}
-                    onChange={(e) => handleTypingChange(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    className="w-full bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl px-4 py-2.5 pr-12 text-white placeholder-gray-400 focus:outline-none focus:border-pink-500/50 transition-all duration-300 min-w-0"
-                  />
-                  <button className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 hover:bg-white/10 rounded-xl transition-all duration-300 hidden sm:inline-flex">
-                    <Smile className="w-5 h-5 text-gray-400 hover:text-white" />
+              {replyingTo && (
+                <div className="mb-2.5 rounded-xl border border-pink-300/35 bg-pink-500/10 px-3 py-2 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold text-pink-200">
+                      Replying to {getMessageAuthorLabel(replyingTo.senderId)}
+                    </p>
+                    <p className="text-xs text-white/85 truncate">
+                      {getMessagePreviewText(
+                        replyingTo.content || '',
+                        replyingTo.attachment || null,
+                        replyingTo.type
+                      ) || 'Message'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyingTo(null)}
+                    className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-colors"
+                    aria-label="Cancel reply"
+                  >
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
+              )}
+              {pendingAttachment && (
+                <div className="mb-2.5 rounded-xl border border-white/20 bg-white/10 px-3 py-2 flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex items-center gap-2 text-white">
+                    <Paperclip className="w-4 h-4 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium truncate">{pendingAttachment.attachment.fileName}</p>
+                      <p className="text-[10px] text-white/70">
+                        {getAttachmentPreviewText(pendingAttachment.type, pendingAttachment.attachment)} • {formatBytes(pendingAttachment.attachment.fileSize)}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingAttachment(null);
+                    }}
+                    className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+              {isRecordingVoice && (
+                <div className="mb-2.5 rounded-xl border border-rose-400/40 bg-rose-500/10 px-3 py-2 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-rose-100">
+                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-rose-400 animate-pulse" />
+                    <span className="text-xs font-medium">Recording voice note...</span>
+                  </div>
+                  <span className="text-xs font-mono text-rose-100">{formatRecordingTime(recordingSeconds)}</span>
+                </div>
+              )}
+              <div className="flex items-end gap-2 min-w-0">
+                <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handleAttachmentChange}
+                />
 
-                {/* The disabled check should prevent running handleSendMessage when the socket is unavailable */}
+                <div className="flex-1 relative min-w-0">
+                  <div className="relative h-12 rounded-full border border-slate-600/70 bg-slate-900/85 backdrop-blur-xl pl-2.5 pr-2 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEmojiPicker((prev) => !prev);
+                      }}
+                      className="inline-flex items-center justify-center w-9 h-9 rounded-full text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+                    >
+                      <Smile className="w-5 h-5" />
+                    </button>
+
+                    <input
+                      ref={composerInputRef}
+                      type="text"
+                      placeholder="Message"
+                      value={newMessage}
+                      onChange={(e) => handleTypingChange(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && !isRecordingVoice && handleSendMessage()}
+                      className="flex-1 h-full bg-transparent text-white placeholder-slate-300 focus:outline-none min-w-0"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={handleAttachmentButtonClick}
+                      disabled={isUploadingAttachment || isRecordingVoice}
+                      className={`inline-flex items-center justify-center w-9 h-9 rounded-full transition-colors ${
+                        !isUploadingAttachment && !isRecordingVoice
+                          ? 'text-slate-300 hover:text-white hover:bg-white/10'
+                          : 'text-gray-500 cursor-not-allowed'
+                      }`}
+                      aria-label="Attach file"
+                    >
+                      {isUploadingAttachment ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Paperclip className="w-5 h-5" />
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleStickerButtonClick}
+                      disabled={isUploadingAttachment || isRecordingVoice}
+                      className={`inline-flex items-center justify-center w-9 h-9 rounded-full transition-colors ${
+                        !isUploadingAttachment && !isRecordingVoice
+                          ? 'text-slate-300 hover:text-white hover:bg-white/10'
+                          : 'text-gray-500 cursor-not-allowed'
+                      }`}
+                      aria-label="Open sticker library"
+                    >
+                      <Sticker className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {showEmojiPicker && (
+                    <div className="absolute bottom-[calc(100%+10px)] left-0 w-[300px] max-w-[92vw] rounded-2xl border border-slate-600/70 bg-slate-900/95 backdrop-blur-xl p-3 shadow-2xl z-30">
+                      <div className="grid grid-cols-8 gap-1.5">
+                        {QUICK_EMOJIS.map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => handleInsertEmoji(emoji)}
+                            className="h-8 w-8 rounded-lg hover:bg-white/10 text-lg leading-none transition-colors"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <button
-                  onClick={handleSendMessage}
-                  disabled={!newMessage.trim() || !webSocketService?.connected} 
-                  className={`p-2.5 md:p-3 rounded-2xl transition-all duration-300 hover:scale-105 flex-shrink-0 ${
-                    newMessage.trim() && webSocketService?.connected
-                      ? 'bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white shadow-lg shadow-pink-500/25'
-                      : 'bg-white/10 text-gray-400 cursor-not-allowed'
-                    }`}
+                  type="button"
+                  onClick={handlePrimaryComposerAction}
+                  disabled={primaryActionDisabled}
+                  className={`inline-flex items-center justify-center h-12 w-12 rounded-full border flex-shrink-0 transition-colors ${
+                    isRecordingVoice
+                      ? 'bg-rose-500/25 border-rose-400/50 text-rose-100 hover:bg-rose-500/35'
+                      : hasComposerPayload
+                        ? 'bg-gradient-to-r from-pink-500 to-purple-600 border-transparent text-white shadow-lg shadow-pink-500/25 hover:from-pink-400 hover:to-purple-500'
+                        : !primaryActionDisabled
+                          ? 'bg-[#F18668] border-transparent text-gray-900 hover:bg-[#f09a80]'
+                          : 'bg-slate-800/55 border-slate-700/60 text-gray-400 cursor-not-allowed'
+                  }`}
                 >
-                  <Send className="w-5 h-5" />
+                  {isRecordingVoice ? (
+                    <Square className="w-4 h-4 fill-current" />
+                  ) : hasComposerPayload ? (
+                    <Send className="w-5 h-5" />
+                  ) : (
+                    <Mic className="w-5 h-5" />
+                  )}
                 </button>
               </div>
             </div>
@@ -737,12 +2919,27 @@ const MessagesContent = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white overflow-x-hidden no-horizontal-scroll dashboard-main">
-      {/* Desktop Layout */}
-      <div className="hidden lg:flex min-h-screen">
-        <div className="w-80 flex-shrink-0">
-          <SidePanel userName={layoutName} userImage={layoutImage} user={layoutUser} onClose={() => setShowSidePanel(false)} />
+      {isDesktopLayout ? (
+        <div className="min-h-screen flex">
+          <div className="w-80 flex-shrink-0">
+            <SidePanel userName={layoutName} userImage={layoutImage} user={layoutUser} onClose={() => setShowSidePanel(false)} />
+          </div>
+          <div className="flex-1 flex flex-col min-h-screen min-w-0">
+            <TopBar
+              userName={layoutName}
+              userImage={layoutImage}
+              user={layoutUser}
+              showFilters={false}
+              showSidePanel={showSidePanel}
+              onToggleFilters={() => {}}
+              onToggleSidePanel={() => setShowSidePanel(false)}
+              title="Messages"
+            />
+            <div className="flex-1 min-h-0">{mainContent}</div>
+          </div>
         </div>
-        <div className="flex-1 flex flex-col min-h-screen min-w-0">
+      ) : (
+        <div className="min-h-screen flex flex-col">
           <TopBar
             userName={layoutName}
             userImage={layoutImage}
@@ -750,30 +2947,15 @@ const MessagesContent = () => {
             showFilters={false}
             showSidePanel={showSidePanel}
             onToggleFilters={() => {}}
-            onToggleSidePanel={() => setShowSidePanel(false)}
+            onToggleSidePanel={() => setShowSidePanel(true)}
             title="Messages"
           />
           <div className="flex-1 min-h-0">{mainContent}</div>
         </div>
-      </div>
+      )}
 
-      {/* Mobile Layout */}
-      <div className="lg:hidden min-h-screen flex flex-col">
-        <TopBar
-          userName={layoutName}
-          userImage={layoutImage}
-          user={layoutUser}
-          showFilters={false}
-          showSidePanel={showSidePanel}
-          onToggleFilters={() => {}}
-          onToggleSidePanel={() => setShowSidePanel(true)}
-          title="Messages"
-        />
-        <div className="flex-1 min-h-0">{mainContent}</div>
-      </div>
-
-      {showSidePanel && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+      {!isDesktopLayout && showSidePanel && (
+        <div className="fixed inset-0 z-50">
           <div
             className="absolute inset-0 bg-black/60"
             onClick={() => setShowSidePanel(false)}
@@ -788,6 +2970,10 @@ const MessagesContent = () => {
           </div>
         </div>
       )}
+
+      {renderAttachmentViewer()}
+      {renderMediaLibrary()}
+      {renderCallLayer()}
     </div>
   );
 };
