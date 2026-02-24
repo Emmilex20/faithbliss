@@ -30,7 +30,7 @@ import type {
 } from '@/services/WebSocketService';
 import {
   MessageCircle, ArrowLeft, Search, Send, Phone, Video,
-  Smile, Paperclip, Info, Check, CheckCheck, Download, FileText, Loader2, Eye, X, Mic, Square, Play, Pause, Image as ImageIcon, Sticker, Reply, PhoneOff, MicOff, VideoOff
+  Smile, Paperclip, Info, Check, CheckCheck, Download, FileText, Loader2, Eye, X, Mic, Square, Play, Pause, Image as ImageIcon, Sticker, Reply, PhoneOff, MicOff, VideoOff, Minimize2, Maximize2
 } from 'lucide-react';
 
 // Assuming these imports are correct for your Vite project structure
@@ -457,6 +457,7 @@ const MessagesContent = () => {
   const [callDurationSeconds, setCallDurationSeconds] = useState(0);
   const [isCallMicMuted, setIsCallMicMuted] = useState(false);
   const [isCallCameraOff, setIsCallCameraOff] = useState(false);
+  const [isCallMinimized, setIsCallMinimized] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState<{
     attachment: MessageAttachment;
     type: MessageType;
@@ -624,6 +625,7 @@ const MessagesContent = () => {
     setCallDurationSeconds(0);
     setIsCallMicMuted(false);
     setIsCallCameraOff(false);
+    setIsCallMinimized(false);
   }, []);
 
   const teardownCallResources = useCallback(() => {
@@ -778,6 +780,7 @@ const MessagesContent = () => {
       setShowMediaLibrary(false);
       setCallStatus('dialing');
       setCallMode(mode);
+      setIsCallMinimized(false);
       setIncomingCall(null);
       setActiveCallPeerId(targetUserId);
       activeCallPeerIdRef.current = targetUserId;
@@ -820,6 +823,7 @@ const MessagesContent = () => {
       setIncomingCall(null);
       setCallStatus('connecting');
       setCallMode(offerPayload.callType);
+      setIsCallMinimized(false);
       setActiveCallPeerId(offerPayload.fromUserId);
       activeCallPeerIdRef.current = offerPayload.fromUserId;
       setActiveCallMatchId(offerPayload.matchId || null);
@@ -1512,6 +1516,7 @@ const MessagesContent = () => {
         callType: payload.callType,
       });
       setCallMode(payload.callType);
+      setIsCallMinimized(false);
       setActiveCallPeerId(payload.fromUserId);
       activeCallPeerIdRef.current = payload.fromUserId;
       setActiveCallMatchId(payload.matchId || null);
@@ -1560,6 +1565,10 @@ const MessagesContent = () => {
 
       if (payload.reason === 'busy') {
         showError('User is currently busy on another call.', 'Call Busy');
+      } else if (payload.reason === 'offline') {
+        const matchId = payload.matchId || activeCallMatchIdRef.current || undefined;
+        sendMissedCallMessage(payload.fromUserId, matchId, callMode || undefined);
+        showError('User is offline. Missed call notification sent.', 'User Offline');
       } else if (payload.reason === 'missed') {
         showError('Call was not answered.', 'Missed Call');
       } else if (payload.reason !== 'ended-by-user') {
@@ -1587,7 +1596,7 @@ const MessagesContent = () => {
       webSocketService.off('call:reject', handleCallReject);
       webSocketService.off('call:end', handleCallEnd);
     };
-  }, [cleanupCallSession, currentUserId, flushPendingIceCandidates, showError, webSocketService]);
+  }, [callMode, cleanupCallSession, currentUserId, flushPendingIceCandidates, sendMissedCallMessage, showError, webSocketService]);
 
   useEffect(() => {
     return () => {
@@ -2094,11 +2103,126 @@ const MessagesContent = () => {
     const shouldShowCallWindow = callStatus !== 'idle' && Boolean(activeCallPeerId);
     if (!shouldShowCallWindow) return null;
 
+    if (isCallMinimized) {
+      return (
+        <div className="fixed right-3 bottom-4 z-[95] w-[240px] sm:w-[280px]">
+          <div className="relative overflow-hidden rounded-2xl border border-white/20 bg-[#07121d]/95 shadow-[0_18px_60px_rgba(0,0,0,0.5)]">
+            <div className="absolute inset-0">
+              {callMode === 'video' ? (
+                remoteCallStream ? (
+                  <video
+                    ref={remoteCallVideoRef}
+                    autoPlay
+                    playsInline
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="h-full w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
+                )
+              ) : (
+                <div className="h-full w-full bg-[radial-gradient(circle_at_20%_20%,rgba(244,114,182,0.18),transparent_40%),radial-gradient(circle_at_80%_75%,rgba(99,102,241,0.2),transparent_45%),linear-gradient(135deg,#07121d,#0d1d2d,#132b3f)]" />
+              )}
+            </div>
+            <div className="relative bg-black/35 backdrop-blur-sm">
+              <div className="flex items-start justify-between gap-2 p-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{callPeerName}</p>
+                  <p className="text-[11px] text-white/80 truncate">{callStatusLabel}</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsCallMinimized(false)}
+                    className="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-white/15 hover:bg-white/25 text-white border border-white/25 transition-colors"
+                    aria-label="Restore call window"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (callStatus === 'ringing') {
+                        declineIncomingCall();
+                        return;
+                      }
+                      endActiveCall({ notifyPeer: true, reason: 'ended-by-user' });
+                    }}
+                    className="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-rose-500/90 hover:bg-rose-500 text-white border border-rose-300/50 transition-colors"
+                    aria-label="End call"
+                  >
+                    <PhoneOff className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {callMode === 'video' && localCallStream && (
+                <div className="absolute right-2 top-12 w-16 h-24 rounded-xl overflow-hidden border border-white/30 bg-black/40">
+                  <video
+                    ref={localCallVideoRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              )}
+
+              {callStatus === 'ringing' && incomingCall ? (
+                <div className="flex items-center justify-center gap-2 px-3 pb-3">
+                  <button
+                    type="button"
+                    onClick={() => declineIncomingCall()}
+                    className="inline-flex items-center justify-center h-9 px-3 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold transition-colors"
+                  >
+                    Decline
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void acceptIncomingCall()}
+                    className="inline-flex items-center justify-center h-9 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold transition-colors"
+                  >
+                    Accept
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-2 px-3 pb-3">
+                  <button
+                    type="button"
+                    onClick={toggleCallMic}
+                    className={`inline-flex items-center justify-center h-8 w-8 rounded-lg border transition-colors ${
+                      isCallMicMuted
+                        ? 'bg-white/90 text-gray-900 border-white'
+                        : 'bg-white/10 text-white border-white/25 hover:bg-white/20'
+                    }`}
+                    aria-label={isCallMicMuted ? 'Unmute microphone' : 'Mute microphone'}
+                  >
+                    {isCallMicMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                  </button>
+                  {callMode === 'video' && (
+                    <button
+                      type="button"
+                      onClick={toggleCallCamera}
+                      className={`inline-flex items-center justify-center h-8 w-8 rounded-lg border transition-colors ${
+                        isCallCameraOff
+                          ? 'bg-white/90 text-gray-900 border-white'
+                          : 'bg-white/10 text-white border-white/25 hover:bg-white/20'
+                      }`}
+                      aria-label={isCallCameraOff ? 'Turn camera on' : 'Turn camera off'}
+                    >
+                      {isCallCameraOff ? <VideoOff className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/70 backdrop-blur-md p-3 md:p-5">
         <div className="relative w-full h-full max-h-[92vh] max-w-5xl rounded-3xl overflow-hidden border border-white/15 bg-gradient-to-br from-[#07121d] via-[#0b1b2b] to-[#10263a] shadow-[0_30px_120px_rgba(0,0,0,0.6)]">
-          <audio ref={remoteCallAudioRef} autoPlay playsInline />
-
           <div className="absolute inset-0">
             {callMode === 'video' ? (
               remoteCallStream ? (
@@ -2132,20 +2256,30 @@ const MessagesContent = () => {
                 <p className="text-xs text-white/75">{callStatusLabel}</p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                if (callStatus === 'ringing') {
-                  declineIncomingCall();
-                  return;
-                }
-                endActiveCall({ notifyPeer: true, reason: 'ended-by-user' });
-              }}
-              className="inline-flex items-center justify-center h-11 w-11 rounded-2xl bg-rose-500/80 hover:bg-rose-500 text-white border border-rose-300/45 transition-colors"
-              aria-label="End call"
-            >
-              <PhoneOff className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsCallMinimized(true)}
+                className="inline-flex items-center justify-center h-11 w-11 rounded-2xl bg-white/15 hover:bg-white/25 text-white border border-white/25 transition-colors"
+                aria-label="Minimize call"
+              >
+                <Minimize2 className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (callStatus === 'ringing') {
+                    declineIncomingCall();
+                    return;
+                  }
+                  endActiveCall({ notifyPeer: true, reason: 'ended-by-user' });
+                }}
+                className="inline-flex items-center justify-center h-11 w-11 rounded-2xl bg-rose-500/80 hover:bg-rose-500 text-white border border-rose-300/45 transition-colors"
+                aria-label="End call"
+              >
+                <PhoneOff className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {callMode === 'video' && localCallStream && (
@@ -3099,6 +3233,7 @@ const MessagesContent = () => {
         </div>
       )}
 
+      <audio ref={remoteCallAudioRef} autoPlay playsInline className="hidden" />
       {renderAttachmentViewer()}
       {renderMediaLibrary()}
       {renderCallLayer()}

@@ -397,13 +397,36 @@ export const initializeSocketIO = (io: Server) => {
             const targetUserId = sanitizeTargetUserId(data.targetUserId);
             const callType = sanitizeCallType(data.callType);
             const sdp = sanitizeRecord(data.sdp);
+            const matchId = sanitizeOptionalString(data.matchId);
             if (!targetUserId || !callType || !sdp) {
                 return socket.emit('error', 'Invalid call offer payload.');
             }
 
+            if (!isUserOnlineInMemory(targetUserId)) {
+                io.to(userId).emit('call:reject', {
+                    fromUserId: targetUserId,
+                    matchId,
+                    reason: 'offline',
+                });
+
+                if (matchId && targetUserId !== userId) {
+                    void createNotification({
+                        userId: targetUserId,
+                        type: 'NEW_MESSAGE',
+                        message: `Missed ${callType} call`,
+                        data: {
+                            matchId,
+                            senderId: userId,
+                            reason: 'offline-call',
+                        },
+                    });
+                }
+                return;
+            }
+
             io.to(targetUserId).emit('call:offer', {
                 fromUserId: userId,
-                matchId: sanitizeOptionalString(data.matchId),
+                matchId,
                 callType,
                 sdp,
             });
