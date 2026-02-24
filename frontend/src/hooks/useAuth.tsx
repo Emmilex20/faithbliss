@@ -4,7 +4,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useNavigate, useLocation } from "react-router-dom";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useToast } from "@/contexts/ToastContext";
 import { useAuthContext } from "../contexts/AuthContext";
 import type { User } from "@/types/User";
@@ -89,6 +89,11 @@ interface OnboardingData {
 const isFirebaseNetworkError = (error: unknown): boolean => {
     const code = (error as { code?: unknown })?.code;
     return typeof code === "string" && code === "auth/network-request-failed";
+};
+
+const isBrowserOffline = (): boolean => {
+    if (typeof navigator === "undefined") return false;
+    return navigator.onLine === false;
 };
 
 const getAuthErrorMessage = (error: unknown, fallback: string): string => {
@@ -321,6 +326,7 @@ export function useAuth() {
     const [isInitialSignUp, setIsInitialSignUp] = useState(false); 
     
     const [accessToken, setAccessToken] = useState<string | null>(null);
+    const lastNetworkToastAtRef = useRef(0);
 
     const clearAppStorage = useCallback(() => {
         // Avoid nuking Firebase auth storage used for redirect/persistence.
@@ -332,6 +338,27 @@ export function useAuth() {
     }, []);
 
     const isAuthenticated = !!(accessToken && user);
+
+    useEffect(() => {
+        const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+            if (!isFirebaseNetworkError(event.reason)) return;
+            event.preventDefault();
+            const now = Date.now();
+            if (now - lastNetworkToastAtRef.current > 10000) {
+                showError(
+                    "Network issue while contacting Firebase. Please check your internet and retry.",
+                    "Network Error"
+                );
+                lastNetworkToastAtRef.current = now;
+            }
+            console.warn("Suppressed unhandled Firebase network rejection.");
+        };
+
+        window.addEventListener("unhandledrejection", handleUnhandledRejection);
+        return () => {
+            window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+        };
+    }, [showError]);
 
     const syncUserFromFirebase = useCallback(async (fbUser: FirebaseAuthUser) => {
         // 1. Get the current, secure ID Token (still needed for any future custom backend calls)
@@ -411,7 +438,11 @@ export function useAuth() {
                     } else {
                         // If token fetch or Firestore sync fails for non-network reasons, force logout
                         console.error("Firebase/Firestore sync failed:", e);
-                        await signOut(auth);
+                        try {
+                            await signOut(auth);
+                        } catch (signOutError) {
+                            console.warn("Sign-out after sync failure did not complete cleanly:", signOutError);
+                        }
                         setUser(null);
                         setAccessToken(null);
                     }
@@ -528,7 +559,11 @@ export function useAuth() {
                 console.error("Registration failed:", error);
                 // If Firestore profile creation fails, ensure Firebase auth is rolled back
                 if (auth.currentUser) {
-                    await signOut(auth); 
+                    try {
+                        await signOut(auth);
+                    } catch (signOutError) {
+                        console.warn("Rollback sign-out did not complete cleanly:", signOutError);
+                    }
                 }
                 showError(getAuthErrorMessage(error, "Registration failed"), "Registration Error");
                 throw error;
@@ -652,6 +687,11 @@ export function useAuth() {
     useEffect(() => {
         const handleRedirectResult = async () => {
             try {
+                if (isBrowserOffline()) {
+                    console.warn("Skipping getRedirectResult while offline.");
+                    setIsLoading(false);
+                    return;
+                }
                 console.log(" Checking getRedirectResult... currentUser:", auth.currentUser ? { uid: auth.currentUser.uid, email: auth.currentUser.email } : null);
                 const result = await getRedirectResult(auth);
                 console.log(" getRedirectResult result:", result ? { uid: result.user.uid, email: result.user.email, providerData: result.user.providerData } : null);

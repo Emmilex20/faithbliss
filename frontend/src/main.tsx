@@ -31,6 +31,23 @@ import { ToastProvider } from './contexts/ToastContext.tsx';
 import { AuthProvider } from './contexts/AuthContext.tsx';
 import { AuthGate, PublicOnlyRoute } from './components/AuthGate.tsx';
 
+const isFirebaseNetworkFailure = (reason: unknown): boolean => {
+  const code = (reason as { code?: unknown })?.code;
+  const message = (reason as { message?: unknown })?.message;
+  return (
+    (typeof code === 'string' && code === 'auth/network-request-failed')
+    || (typeof message === 'string' && message.includes('auth/network-request-failed'))
+  );
+};
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', (event) => {
+    if (!isFirebaseNetworkFailure(event.reason)) return;
+    event.preventDefault();
+    console.warn('Suppressed unhandled Firebase network-request-failed rejection at bootstrap.');
+  });
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ToastProvider>

@@ -575,6 +575,25 @@ const MessagesContent = () => {
     }
   }, [remoteCallStream]);
 
+  // Re-attach streams whenever call window layout switches (full <-> minimized),
+  // because the underlying <video> elements are remounted.
+  useLayoutEffect(() => {
+    const localVideo = localCallVideoRef.current;
+    if (localVideo && localVideo.srcObject !== localCallStream) {
+      localVideo.srcObject = localCallStream;
+    }
+
+    const remoteVideo = remoteCallVideoRef.current;
+    if (remoteVideo && remoteVideo.srcObject !== remoteCallStream) {
+      remoteVideo.srcObject = remoteCallStream;
+    }
+
+    const remoteAudio = remoteCallAudioRef.current;
+    if (remoteAudio && remoteAudio.srcObject !== remoteCallStream) {
+      remoteAudio.srcObject = remoteCallStream;
+    }
+  }, [isCallMinimized, localCallStream, remoteCallStream]);
+
   const stopCallTimer = useCallback(() => {
     if (callTimerRef.current) {
       clearInterval(callTimerRef.current);
