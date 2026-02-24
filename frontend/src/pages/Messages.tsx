@@ -56,14 +56,15 @@ type CallBackgroundPreset = {
   id: string;
   label: string;
   className: string;
+  overlayClass: string;
 };
 
 const CALL_VIDEO_FILTER_PRESETS: CallVideoFilterPreset[] = [
   { id: 'none', label: 'Natural', cssFilter: 'none' },
-  { id: 'soft', label: 'Soft', cssFilter: 'brightness(1.06) contrast(1.04) saturate(1.08)' },
-  { id: 'warm', label: 'Warm', cssFilter: 'sepia(0.14) saturate(1.25) contrast(1.03)' },
-  { id: 'mono', label: 'Mono', cssFilter: 'grayscale(1) contrast(1.08)' },
-  { id: 'dream', label: 'Dream', cssFilter: 'saturate(1.28) hue-rotate(-8deg) brightness(1.08)' },
+  { id: 'soft', label: 'Soft', cssFilter: 'brightness(1.1) contrast(1.05) saturate(1.18)' },
+  { id: 'warm', label: 'Warm', cssFilter: 'sepia(0.22) saturate(1.35) contrast(1.08) brightness(1.03)' },
+  { id: 'mono', label: 'Mono', cssFilter: 'grayscale(1) contrast(1.18) brightness(1.02)' },
+  { id: 'dream', label: 'Dream', cssFilter: 'saturate(1.5) hue-rotate(-16deg) brightness(1.1) contrast(1.06)' },
 ];
 
 const CALL_BACKGROUND_PRESETS: CallBackgroundPreset[] = [
@@ -72,24 +73,32 @@ const CALL_BACKGROUND_PRESETS: CallBackgroundPreset[] = [
     label: 'Default',
     className:
       'bg-[radial-gradient(circle_at_20%_20%,rgba(244,114,182,0.2),transparent_40%),radial-gradient(circle_at_80%_75%,rgba(99,102,241,0.22),transparent_45%),linear-gradient(135deg,#07121d,#0d1d2d,#132b3f)]',
+    overlayClass:
+      'bg-[radial-gradient(circle_at_16%_18%,rgba(244,114,182,0.22),transparent_42%),radial-gradient(circle_at_82%_80%,rgba(99,102,241,0.2),transparent_46%)] opacity-60',
   },
   {
     id: 'sunset',
     label: 'Sunset',
     className:
       'bg-[radial-gradient(circle_at_10%_20%,rgba(251,146,60,0.3),transparent_42%),radial-gradient(circle_at_85%_75%,rgba(244,114,182,0.26),transparent_45%),linear-gradient(140deg,#2d0f27,#4a1f40,#1f2748)]',
+    overlayClass:
+      'bg-[linear-gradient(135deg,rgba(251,146,60,0.35),rgba(244,114,182,0.22),rgba(168,85,247,0.2))] opacity-65 mix-blend-screen',
   },
   {
     id: 'ocean',
     label: 'Ocean',
     className:
       'bg-[radial-gradient(circle_at_16%_18%,rgba(56,189,248,0.24),transparent_40%),radial-gradient(circle_at_84%_82%,rgba(34,211,238,0.26),transparent_44%),linear-gradient(140deg,#061a29,#0b2a3f,#103451)]',
+    overlayClass:
+      'bg-[linear-gradient(145deg,rgba(14,116,144,0.32),rgba(6,182,212,0.25),rgba(59,130,246,0.2))] opacity-65 mix-blend-screen',
   },
   {
     id: 'forest',
     label: 'Forest',
     className:
       'bg-[radial-gradient(circle_at_18%_20%,rgba(74,222,128,0.26),transparent_42%),radial-gradient(circle_at_82%_78%,rgba(163,230,53,0.22),transparent_44%),linear-gradient(140deg,#0b1f18,#123324,#1a3f2e)]',
+    overlayClass:
+      'bg-[linear-gradient(145deg,rgba(34,197,94,0.26),rgba(163,230,53,0.22),rgba(21,128,61,0.18))] opacity-65 mix-blend-screen',
   },
 ];
 
@@ -2309,7 +2318,7 @@ const MessagesContent = () => {
     || CALL_VIDEO_FILTER_PRESETS[0];
   const selectedBackground = CALL_BACKGROUND_PRESETS.find((preset) => preset.id === selectedBackgroundId)
     || CALL_BACKGROUND_PRESETS[0];
-  const localVideoFilterStyle = callMode === 'video'
+  const callVideoFilterStyle = callMode === 'video'
     ? { filter: selectedVideoFilter.cssFilter }
     : undefined;
 
@@ -2336,6 +2345,7 @@ const MessagesContent = () => {
                     autoPlay
                     playsInline
                     className="h-full w-full object-cover"
+                    style={callVideoFilterStyle}
                   />
                 ) : (
                   <div className="h-full w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
@@ -2349,10 +2359,11 @@ const MessagesContent = () => {
                       muted
                       playsInline
                       className="h-full w-full object-cover"
-                      style={localVideoFilterStyle}
+                      style={callVideoFilterStyle}
                     />
                   </div>
                 )}
+                <div className={`pointer-events-none absolute inset-0 transition-all duration-300 ${selectedBackground.overlayClass}`} />
                 <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-black/65 to-transparent" />
               </div>
             ) : (
@@ -2469,6 +2480,7 @@ const MessagesContent = () => {
                   autoPlay
                   playsInline
                   className="h-full w-full object-cover"
+                  style={callVideoFilterStyle}
                 />
               ) : (
                 <div className="h-full w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
@@ -2478,6 +2490,7 @@ const MessagesContent = () => {
             )}
           </div>
 
+          <div className={`pointer-events-none absolute inset-0 transition-all duration-300 ${selectedBackground.overlayClass}`} />
           <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/55" />
 
           <div className="absolute top-4 left-4 right-4 flex items-start justify-between gap-3">
@@ -2528,7 +2541,7 @@ const MessagesContent = () => {
                   muted
                   playsInline
                   className="h-full w-full object-cover"
-                  style={localVideoFilterStyle}
+                  style={callVideoFilterStyle}
                 />
               </div>
             )}
