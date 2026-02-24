@@ -26,6 +26,7 @@ import type {
   CallOfferPayload,
   CallRejectPayload,
   CallType,
+  UserPresencePayload,
 } from '@/services/WebSocketService';
 import {
   MessageCircle, ArrowLeft, Search, Send, Phone, Video,
@@ -124,6 +125,54 @@ const formatCallDuration = (totalSeconds: number) => {
     return `${hrs.toString().padStart(2, '0')}:${mins}:${secs}`;
   }
   return `${mins}:${secs}`;
+};
+
+const formatLastSeenTimestamp = (isoTimestamp?: string) => {
+  if (!isoTimestamp) return '';
+  const date = new Date(isoTimestamp);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+
+  if (diffSeconds >= 0 && diffSeconds < 45) return 'just now';
+  if (diffMinutes > 0 && diffMinutes < 60) {
+    return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+  }
+
+  const timeLabel = date.toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+
+  if (date >= startOfToday) {
+    return `today at ${timeLabel}`;
+  }
+
+  if (date >= startOfYesterday) {
+    return `yesterday at ${timeLabel}`;
+  }
+
+  const daysAgo = Math.floor((startOfToday.getTime() - date.getTime()) / (24 * 60 * 60 * 1000));
+  if (daysAgo < 7) {
+    const weekday = date.toLocaleDateString([], { weekday: 'long' });
+    return `${weekday} at ${timeLabel}`;
+  }
+
+  const dateLabel = date.toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  return `${dateLabel} at ${timeLabel}`;
 };
 
 const QUICK_EMOJIS = [
@@ -380,6 +429,7 @@ const MessagesContent = () => {
   const recordingChunksRef = useRef<BlobPart[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [typingStatus, setTypingStatus] = useState<Record<string, boolean>>({});
+  const [presenceByUserId, setPresenceByUserId] = useState<Record<string, UserPresencePayload>>({});
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [viewerMessage, setViewerMessage] = useState<Message | null>(null);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
@@ -1378,6 +1428,67 @@ const MessagesContent = () => {
   useEffect(() => {
     if (!webSocketService) return;
 
+    const handlePresence = (payload: UserPresencePayload) => {
+      if (!payload?.userId) return;
+      setPresenceByUserId((prev) => ({
+        ...prev,
+        [payload.userId]: {
+          userId: payload.userId,
+          isOnline: Boolean(payload.isOnline),
+          lastSeenAt: payload.lastSeenAt,
+        },
+      }));
+    };
+
+    webSocketService.onUserPresence(handlePresence);
+    return () => {
+      webSocketService.off('user:presence', handlePresence);
+    };
+  }, [webSocketService]);
+
+  useEffect(() => {
+    if (!webSocketService) return;
+
+    const userIds = Array.from(
+      new Set(
+        localConversations
+          .map((conversation) => conversation.otherUser?.id)
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+
+    const selectedOtherUserId = currentConversation?.otherUser?.id;
+    if (selectedOtherUserId && !userIds.includes(selectedOtherUserId)) {
+      userIds.push(selectedOtherUserId);
+    }
+
+    if (!userIds.length) return;
+
+    let cancelled = false;
+    void webSocketService.requestPresence(userIds).then((presenceList) => {
+      if (cancelled || !Array.isArray(presenceList)) return;
+      setPresenceByUserId((prev) => {
+        const next = { ...prev };
+        presenceList.forEach((entry) => {
+          if (!entry?.userId) return;
+          next[entry.userId] = {
+            userId: entry.userId,
+            isOnline: Boolean(entry.isOnline),
+            lastSeenAt: entry.lastSeenAt,
+          };
+        });
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentConversation?.otherUser?.id, localConversations, webSocketService]);
+
+  useEffect(() => {
+    if (!webSocketService) return;
+
     const handleCallOffer = (payload: CallOfferPayload) => {
       if (!payload?.fromUserId || payload.fromUserId === currentUserId) return;
 
@@ -1955,6 +2066,11 @@ const MessagesContent = () => {
     return matchedUser?.name?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
+  const selectedOtherUserId = currentConversation?.otherUser?.id;
+  const selectedUserPresence = selectedOtherUserId ? presenceByUserId[selectedOtherUserId] : undefined;
+  const selectedUserOnline = Boolean(selectedUserPresence?.isOnline);
+  const selectedUserLastSeenLabel = formatLastSeenTimestamp(selectedUserPresence?.lastSeenAt);
+
   const callPeerId = incomingCall?.fromUserId || activeCallPeerId;
   const matchedCallConversation = callPeerId
     ? localConversations.find((conversation) => conversation.otherUser?.id === callPeerId)
@@ -2501,6 +2617,8 @@ const MessagesContent = () => {
           >
             {filteredConversations.map((conversation) => {
               const matchedUser = conversation.otherUser;
+              const matchedUserPresence = matchedUser?.id ? presenceByUserId[matchedUser.id] : undefined;
+              const isMatchedUserOnline = Boolean(matchedUserPresence?.isOnline);
               return (
                 <button
                   key={conversation.id}
@@ -2520,7 +2638,9 @@ const MessagesContent = () => {
                         height={48}
                         className="w-12 h-12 object-cover rounded-full ring-2 ring-pink-500/30"
                       />
-                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-400 rounded-full border-2 border-gray-900"></div>
+                      <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-gray-900 ${
+                        isMatchedUserOnline ? 'bg-emerald-400' : 'bg-slate-500'
+                      }`} />
                       {conversation.unreadCount > 0 && (
                         <div className="absolute -top-1 -right-1 w-5 h-5 bg-pink-500 rounded-full flex items-center justify-center">
                           <span className="text-xs font-bold text-white">{conversation.unreadCount}</span>
@@ -2607,13 +2727,21 @@ const MessagesContent = () => {
                       height={40}
                       className="w-10 h-10 object-cover rounded-full ring-2 ring-pink-500/30"
                     />
-                    <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-gray-900"></div>
+                    <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-gray-900 ${
+                      selectedUserOnline ? 'bg-emerald-400' : 'bg-slate-500'
+                    }`} />
                   </div>
 
                   <div className="min-w-0">
                     <h3 className="font-semibold text-white truncate">{currentConversation.otherUser.name}</h3>
                     <p className="text-xs text-gray-400">
-                      {typingStatus[currentConversation.otherUser.id] ? 'Typing…' : 'Active now'}
+                      {typingStatus[currentConversation.otherUser.id]
+                        ? 'Typing...'
+                        : selectedUserOnline
+                          ? 'Online'
+                          : selectedUserLastSeenLabel
+                            ? `Last seen ${selectedUserLastSeenLabel}`
+                            : 'Offline'}
                     </p>
                   </div>
                 </div>
@@ -2998,3 +3126,4 @@ export default function ProtectedMessages() {
     </ProtectedRoute>
   );
 }
+

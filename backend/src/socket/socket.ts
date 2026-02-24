@@ -91,6 +91,25 @@ const sanitizeOptionalString = (value: unknown): string | undefined => {
     return normalized || undefined;
 };
 
+const normalizeTimestampToIso = (value: unknown): string | undefined => {
+    if (!value) return undefined;
+    if (typeof value === 'string') {
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+    }
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+    }
+    if (typeof value === 'object' && value !== null && 'toDate' in value) {
+        const candidate = value as { toDate?: () => Date };
+        if (typeof candidate.toDate === 'function') {
+            const converted = candidate.toDate();
+            return Number.isNaN(converted.getTime()) ? undefined : converted.toISOString();
+        }
+    }
+    return undefined;
+};
+
 const buildReplyPreviewFromDoc = async (
     replyToMessageId: string,
     matchId: string
@@ -123,9 +142,81 @@ const buildReplyPreviewFromDoc = async (
     };
 };
 
+interface UserPresencePayload {
+    userId: string;
+    isOnline: boolean;
+    lastSeenAt?: string;
+}
+
 // Map to store connected users and their socket IDs (for direct messaging/notifications)
 // In a production environment, this should be a distributed cache like Redis
-const usersSocketMap = new Map<string, string>(); 
+const usersSocketMap = new Map<string, Set<string>>();
+
+const addSocketForUser = (userId: string, socketId: string) => {
+    const existing = usersSocketMap.get(userId) || new Set<string>();
+    existing.add(socketId);
+    usersSocketMap.set(userId, existing);
+};
+
+const removeSocketForUser = (userId: string, socketId: string): boolean => {
+    const existing = usersSocketMap.get(userId);
+    if (!existing) return false;
+    existing.delete(socketId);
+    if (existing.size === 0) {
+        usersSocketMap.delete(userId);
+        return false;
+    }
+    usersSocketMap.set(userId, existing);
+    return true;
+};
+
+const isUserOnlineInMemory = (userId: string): boolean => {
+    const sockets = usersSocketMap.get(userId);
+    return Boolean(sockets && sockets.size > 0);
+};
+
+const updateUserPresenceInFirestore = async (userId: string, isOnline: boolean) => {
+    try {
+        await db.collection('users').doc(userId).set(
+            {
+                isOnline,
+                lastSeenAt: admin.firestore.Timestamp.now(),
+            },
+            { merge: true }
+        );
+    } catch (error) {
+        console.error(`Failed to update presence for user ${userId}:`, error);
+    }
+};
+
+const buildPresenceForUsers = async (userIds: string[]): Promise<UserPresencePayload[]> => {
+    const normalizedIds = Array.from(
+        new Set(
+            userIds
+                .map((value) => (typeof value === 'string' ? value.trim() : ''))
+                .filter((value) => Boolean(value))
+        )
+    );
+
+    if (!normalizedIds.length) return [];
+
+    const docs = await Promise.all(
+        normalizedIds.map((userId) => db.collection('users').doc(userId).get())
+    );
+
+    return docs.map((doc, index) => {
+        const userId = normalizedIds[index];
+        const data = doc.exists ? doc.data() as { lastSeenAt?: unknown } : undefined;
+        const persistedLastSeen = normalizeTimestampToIso(data?.lastSeenAt);
+        const online = isUserOnlineInMemory(userId);
+
+        return {
+            userId,
+            isOnline: online,
+            lastSeenAt: online ? new Date().toISOString() : persistedLastSeen,
+        };
+    });
+};
 
 // This function is called from server.ts to start listening for connections
 export const initializeSocketIO = (io: Server) => {
@@ -140,10 +231,16 @@ export const initializeSocketIO = (io: Server) => {
         console.log(`User connected: ${userId} (Socket ID: ${socket.id})`);
         
         // Add user to the map
-        usersSocketMap.set(userId, socket.id);
+        addSocketForUser(userId, socket.id);
 
         // Join a private room for the user to receive notifications/updates
         socket.join(userId);
+        io.emit('user:presence', {
+            userId,
+            isOnline: true,
+            lastSeenAt: new Date().toISOString(),
+        } satisfies UserPresencePayload);
+        void updateUserPresenceInFirestore(userId, true);
 
         // --------------------------------------------------------
         // 2. Handle 'joinRoom' event (Client enters a specific chat)
@@ -266,6 +363,31 @@ export const initializeSocketIO = (io: Server) => {
             });
         });
 
+        socket.on(
+            'presence:batch',
+            async (
+                data: { userIds?: unknown[] } | undefined,
+                acknowledge?: (payload: { presence: UserPresencePayload[] }) => void
+            ) => {
+                const rawIds = Array.isArray(data?.userIds) ? data!.userIds : [];
+                const userIds = rawIds
+                    .filter((value): value is string => typeof value === 'string')
+                    .slice(0, 200);
+
+                try {
+                    const presence = await buildPresenceForUsers(userIds);
+                    if (typeof acknowledge === 'function') {
+                        acknowledge({ presence });
+                    }
+                } catch (error) {
+                    console.error('Failed to resolve presence batch:', error);
+                    if (typeof acknowledge === 'function') {
+                        acknowledge({ presence: [] });
+                    }
+                }
+            }
+        );
+
         socket.on('call:offer', (payload: unknown) => {
             const data = sanitizeRecord(payload);
             if (!data) {
@@ -368,7 +490,16 @@ export const initializeSocketIO = (io: Server) => {
         // --------------------------------------------------------
         socket.on('disconnect', () => {
             console.log(`User disconnected: ${userId} (Socket ID: ${socket.id})`);
-            usersSocketMap.delete(userId);
+            const stillOnline = removeSocketForUser(userId, socket.id);
+            if (!stillOnline) {
+                const lastSeenAt = new Date().toISOString();
+                io.emit('user:presence', {
+                    userId,
+                    isOnline: false,
+                    lastSeenAt,
+                } satisfies UserPresencePayload);
+                void updateUserPresenceInFirestore(userId, false);
+            }
         });
     });
 };

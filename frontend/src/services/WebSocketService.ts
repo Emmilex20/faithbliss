@@ -72,6 +72,12 @@ export interface CallEndPayload {
   reason?: string;
 }
 
+export interface UserPresencePayload {
+  userId: string;
+  isOnline: boolean;
+  lastSeenAt?: string;
+}
+
 class WebSocketService {
   private socket: Socket | null = null;
   private readonly WEBSOCKET_URL: string;
@@ -249,6 +255,37 @@ class WebSocketService {
 
   public onCallEnd(callback: (payload: CallEndPayload) => void): void {
     this.socket?.on('call:end', callback);
+  }
+
+  public onUserPresence(callback: (payload: UserPresencePayload) => void): void {
+    this.socket?.on('user:presence', callback);
+  }
+
+  public requestPresence(userIds: string[]): Promise<UserPresencePayload[]> {
+    return new Promise((resolve) => {
+      if (!this.socket || !this.socket.connected) {
+        resolve([]);
+        return;
+      }
+
+      let settled = false;
+      const timer = window.setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        resolve([]);
+      }, 2500);
+
+      this.socket.emit(
+        'presence:batch',
+        { userIds },
+        (payload?: { presence?: UserPresencePayload[] }) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timer);
+          resolve(Array.isArray(payload?.presence) ? payload!.presence : []);
+        }
+      );
+    });
   }
 
   public isConnected(): boolean {
