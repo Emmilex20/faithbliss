@@ -474,6 +474,7 @@ const MessagesContent = () => {
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const isCleaningUpCallRef = useRef(false);
   const callTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const callDisconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const callStartedAtRef = useRef<number | null>(null);
   const activeCallPeerIdRef = useRef<string | null>(null);
   const activeCallMatchIdRef = useRef<string | null>(null);
@@ -543,11 +544,35 @@ const MessagesContent = () => {
   const tenorApiKey = (import.meta.env.VITE_TENOR_API_KEY as string | undefined)?.trim() || '';
   const tenorClientKey = (import.meta.env.VITE_TENOR_CLIENT_KEY as string | undefined)?.trim() || 'faithbliss-chat';
   const giphyApiKey = (import.meta.env.VITE_GIPHY_API_KEY as string | undefined)?.trim() || '';
+  const turnUrlsRaw = (import.meta.env.VITE_TURN_URLS as string | undefined)?.trim() || '';
+  const turnUsername = (import.meta.env.VITE_TURN_USERNAME as string | undefined)?.trim() || '';
+  const turnCredential = (import.meta.env.VITE_TURN_CREDENTIAL as string | undefined)?.trim() || '';
   const mediaLibraryProvider: 'tenor' | 'giphy' | null = tenorApiKey
     ? 'tenor'
     : giphyApiKey
       ? 'giphy'
       : null;
+  const rtcIceServers = useMemo<RTCIceServer[]>(() => {
+    const defaults: RTCIceServer[] = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ];
+
+    const turnUrls = turnUrlsRaw
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    if (!turnUrls.length) return defaults;
+
+    const turnServer: RTCIceServer = { urls: turnUrls };
+    if (turnUsername && turnCredential) {
+      turnServer.username = turnUsername;
+      turnServer.credential = turnCredential;
+    }
+
+    return [...defaults, turnServer];
+  }, [turnCredential, turnUrlsRaw, turnUsername]);
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [isDesktopLayout, setIsDesktopLayout] = useState(() => {
     if (typeof window === 'undefined') return true;
@@ -580,11 +605,17 @@ const MessagesContent = () => {
     const remoteVideo = remoteCallVideoRef.current;
     if (remoteVideo) {
       remoteVideo.srcObject = remoteCallStream;
+      void remoteVideo.play().catch(() => {
+        // autoplay may be blocked until a gesture; call UI has controls to resume.
+      });
     }
 
     const remoteAudio = remoteCallAudioRef.current;
     if (remoteAudio) {
       remoteAudio.srcObject = remoteCallStream;
+      void remoteAudio.play().catch(() => {
+        // autoplay may be blocked until a gesture; call UI has controls to resume.
+      });
     }
   }, [remoteCallStream]);
 
@@ -599,11 +630,17 @@ const MessagesContent = () => {
     const remoteVideo = remoteCallVideoRef.current;
     if (remoteVideo && remoteVideo.srcObject !== remoteCallStream) {
       remoteVideo.srcObject = remoteCallStream;
+      void remoteVideo.play().catch(() => {
+        // noop
+      });
     }
 
     const remoteAudio = remoteCallAudioRef.current;
     if (remoteAudio && remoteAudio.srcObject !== remoteCallStream) {
       remoteAudio.srcObject = remoteCallStream;
+      void remoteAudio.play().catch(() => {
+        // noop
+      });
     }
   }, [isCallMinimized, localCallStream, remoteCallStream]);
 
@@ -629,6 +666,13 @@ const MessagesContent = () => {
     if (incomingCallTimeoutRef.current) {
       clearTimeout(incomingCallTimeoutRef.current);
       incomingCallTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearCallDisconnectTimeout = useCallback(() => {
+    if (callDisconnectTimeoutRef.current) {
+      clearTimeout(callDisconnectTimeoutRef.current);
+      callDisconnectTimeoutRef.current = null;
     }
   }, []);
 
@@ -729,6 +773,7 @@ const MessagesContent = () => {
   const teardownCallResources = useCallback(() => {
     stopCallTimer();
     clearIncomingCallTimeout();
+    clearCallDisconnectTimeout();
     stopRingtone();
     pendingIncomingOfferRef.current = null;
     pendingIceCandidatesRef.current = [];
@@ -738,6 +783,7 @@ const MessagesContent = () => {
       peerConnection.onicecandidate = null;
       peerConnection.ontrack = null;
       peerConnection.onconnectionstatechange = null;
+      peerConnection.oniceconnectionstatechange = null;
       try {
         peerConnection.close();
       } catch {
@@ -751,7 +797,7 @@ const MessagesContent = () => {
     }
     localCallStreamRef.current = null;
     remoteCallStreamRef.current = null;
-  }, [clearIncomingCallTimeout, stopCallTimer, stopRingtone]);
+  }, [clearCallDisconnectTimeout, clearIncomingCallTimeout, stopCallTimer, stopRingtone]);
 
   const cleanupCallSession = useCallback((resetUi = true) => {
     isCleaningUpCallRef.current = true;
@@ -799,17 +845,30 @@ const MessagesContent = () => {
 
   const createPeerConnection = useCallback((targetUserId: string, matchId?: string) => {
     const peerConnection = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-      ],
+      iceServers: rtcIceServers,
     });
 
     const markCallAsActive = () => {
+      clearCallDisconnectTimeout();
       if (!callStartedAtRef.current) {
         startCallTimer();
       }
       setCallStatus((previous) => (previous === 'active' ? previous : 'active'));
+    };
+
+    const scheduleDisconnectCleanup = () => {
+      clearCallDisconnectTimeout();
+      callDisconnectTimeoutRef.current = setTimeout(() => {
+        const unstableConnection =
+          peerConnection.connectionState === 'disconnected'
+          || peerConnection.iceConnectionState === 'disconnected'
+          || peerConnection.connectionState === 'failed'
+          || peerConnection.iceConnectionState === 'failed';
+
+        if (!isCleaningUpCallRef.current && unstableConnection) {
+          cleanupCallSession();
+        }
+      }, 10000);
     };
 
     peerConnection.onicecandidate = (event) => {
@@ -838,13 +897,26 @@ const MessagesContent = () => {
     peerConnection.onconnectionstatechange = () => {
       if (peerConnection.connectionState === 'connected') {
         markCallAsActive();
+        return;
+      }
+
+      if (peerConnection.connectionState === 'connecting') {
+        clearCallDisconnectTimeout();
+        return;
+      }
+
+      if (
+        !isCleaningUpCallRef.current
+        && peerConnection.connectionState === 'disconnected'
+      ) {
+        scheduleDisconnectCleanup();
+        return;
       }
 
       if (
         !isCleaningUpCallRef.current
         && (
           peerConnection.connectionState === 'failed'
-          || peerConnection.connectionState === 'disconnected'
           || peerConnection.connectionState === 'closed'
         )
       ) {
@@ -861,9 +933,16 @@ const MessagesContent = () => {
 
       if (
         !isCleaningUpCallRef.current
+        && iceConnectionState === 'disconnected'
+      ) {
+        scheduleDisconnectCleanup();
+        return;
+      }
+
+      if (
+        !isCleaningUpCallRef.current
         && (
           iceConnectionState === 'failed'
-          || iceConnectionState === 'disconnected'
           || iceConnectionState === 'closed'
         )
       ) {
@@ -873,7 +952,7 @@ const MessagesContent = () => {
 
     peerConnectionRef.current = peerConnection;
     return peerConnection;
-  }, [cleanupCallSession, startCallTimer, webSocketService]);
+  }, [cleanupCallSession, clearCallDisconnectTimeout, rtcIceServers, startCallTimer, webSocketService]);
 
   const getCallUserMedia = useCallback(async (mode: CallType) => {
     if (!navigator.mediaDevices?.getUserMedia) {
