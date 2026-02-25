@@ -751,6 +751,20 @@ const MessagesContent = () => {
     );
   }, [webSocketService]);
 
+  const sendEndedCallMessage = useCallback((targetUserId: string, matchId?: string, callType?: CallType) => {
+    if (!webSocketService || !targetUserId || !matchId) return;
+    const kind = callType === 'video' ? 'Video' : 'Audio';
+    const clientTempId = `temp-call-ended-${Date.now()}-${Math.random()}`;
+    webSocketService.sendMessage(
+      targetUserId,
+      `${kind} call ended`,
+      matchId,
+      null,
+      clientTempId,
+      null
+    );
+  }, [webSocketService]);
+
   const resetCallState = useCallback(() => {
     setIncomingCall(null);
     setCallStatus('idle');
@@ -822,12 +836,14 @@ const MessagesContent = () => {
         matchId,
         reason: options?.reason,
       });
-      if (statusAtEnd !== 'active') {
+      if (statusAtEnd === 'active' && options?.reason === 'ended-by-user') {
+        sendEndedCallMessage(peerId, matchId, callMode || undefined);
+      } else if (statusAtEnd !== 'active') {
         sendMissedCallMessage(peerId, matchId, callMode || undefined);
       }
     }
     cleanupCallSession();
-  }, [callMode, cleanupCallSession, sendMissedCallMessage, webSocketService]);
+  }, [callMode, cleanupCallSession, sendEndedCallMessage, sendMissedCallMessage, webSocketService]);
 
   const flushPendingIceCandidates = useCallback(async (peerConnection: RTCPeerConnection) => {
     if (!pendingIceCandidatesRef.current.length) return;
