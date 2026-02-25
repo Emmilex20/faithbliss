@@ -11,6 +11,7 @@ const authPaths = ['/login', '/signup'];
 const fullScreenPaths = ['/onboarding', '/about', '/privacy'];
 const appShellPaths = [
   '/dashboard',
+  '/community',
   '/messages',
   '/notifications',
   '/matches',
