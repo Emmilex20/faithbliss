@@ -3,7 +3,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef, useState } from 'react';
-import { Bell, Filter, Sparkles, ArrowLeft } from 'lucide-react';
+import { Bell, Filter, Sparkles, ArrowLeft, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useNotificationUnreadCount } from '@/hooks/useAPI';
 import { useRequireAuth } from '@/hooks/useAuth';
@@ -20,6 +20,11 @@ interface TopBarProps {
   title?: string;
   showBackButton?: boolean;
   onBack?: () => void;
+}
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 }
 
 export const TopBar = ({
@@ -42,6 +47,8 @@ export const TopBar = ({
   const [notificationsAvailable, setNotificationsAvailable] = useState(false);
   const [notificationsPermission, setNotificationsPermission] = useState<'default' | 'granted' | 'denied'>('default');
   const [showMobileProfileMenu, setShowMobileProfileMenu] = useState(false);
+  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstallPrompting, setIsInstallPrompting] = useState(false);
   const mobileProfileMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -49,6 +56,27 @@ export const TopBar = ({
     if (!('Notification' in window)) return;
     setNotificationsAvailable(true);
     setNotificationsPermission(Notification.permission);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event as BeforeInstallPromptEvent);
+    };
+
+    const onInstalled = () => {
+      setInstallPromptEvent(null);
+    };
+
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener);
+    window.addEventListener('appinstalled', onInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
   }, []);
 
   useEffect(() => {
@@ -83,6 +111,20 @@ export const TopBar = ({
       setNotificationsPermission(permission);
     } catch {
       // ignore
+    }
+  };
+
+  const handleInstallApp = async () => {
+    if (!installPromptEvent || isInstallPrompting) return;
+    try {
+      setIsInstallPrompting(true);
+      await installPromptEvent.prompt();
+      await installPromptEvent.userChoice;
+    } catch {
+      // noop
+    } finally {
+      setIsInstallPrompting(false);
+      setInstallPromptEvent(null);
     }
   };
 
@@ -139,6 +181,17 @@ export const TopBar = ({
           </div>
 
           <div className="relative flex items-center gap-2 justify-end">
+            {installPromptEvent && (
+              <button
+                onClick={handleInstallApp}
+                disabled={isInstallPrompting}
+                className="hidden md:inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold tracking-wide bg-pink-500/20 text-pink-100 hover:bg-pink-500/30 border border-pink-300/30 transition-all disabled:opacity-70"
+              >
+                <Download className="w-3.5 h-3.5" />
+                {isInstallPrompting ? 'Installing...' : 'Install app'}
+              </button>
+            )}
+
             {notificationsAvailable && notificationsPermission !== 'granted' && (
               <button
                 onClick={handleEnableNotifications}

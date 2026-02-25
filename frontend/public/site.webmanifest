@@ -2,10 +2,14 @@
   "name": "FaithBliss",
   "short_name": "FaithBliss",
   "description": "Christian dating app for meaningful, faith-centered relationships.",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#111827",
   "theme_color": "#111827",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/logo-mark.svg",
