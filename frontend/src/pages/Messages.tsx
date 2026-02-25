@@ -805,6 +805,13 @@ const MessagesContent = () => {
       ],
     });
 
+    const markCallAsActive = () => {
+      if (!callStartedAtRef.current) {
+        startCallTimer();
+      }
+      setCallStatus((previous) => (previous === 'active' ? previous : 'active'));
+    };
+
     peerConnection.onicecandidate = (event) => {
       if (!event.candidate || !webSocketService) return;
       webSocketService.sendCallIceCandidate(targetUserId, {
@@ -825,18 +832,12 @@ const MessagesContent = () => {
         setRemoteCallStream(fallbackStream);
       }
 
-      if (!callStartedAtRef.current) {
-        startCallTimer();
-      }
-      setCallStatus('active');
+      markCallAsActive();
     };
 
     peerConnection.onconnectionstatechange = () => {
       if (peerConnection.connectionState === 'connected') {
-        if (!callStartedAtRef.current) {
-          startCallTimer();
-        }
-        setCallStatus('active');
+        markCallAsActive();
       }
 
       if (
@@ -845,6 +846,25 @@ const MessagesContent = () => {
           peerConnection.connectionState === 'failed'
           || peerConnection.connectionState === 'disconnected'
           || peerConnection.connectionState === 'closed'
+        )
+      ) {
+        cleanupCallSession();
+      }
+    };
+
+    peerConnection.oniceconnectionstatechange = () => {
+      const { iceConnectionState } = peerConnection;
+      if (iceConnectionState === 'connected' || iceConnectionState === 'completed') {
+        markCallAsActive();
+        return;
+      }
+
+      if (
+        !isCleaningUpCallRef.current
+        && (
+          iceConnectionState === 'failed'
+          || iceConnectionState === 'disconnected'
+          || iceConnectionState === 'closed'
         )
       ) {
         cleanupCallSession();
@@ -1824,7 +1844,7 @@ const MessagesContent = () => {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
         await flushPendingIceCandidates(peerConnection);
         setCallMode(payload.callType);
-        setCallStatus('connecting');
+        setCallStatus((previous) => (previous === 'active' ? previous : 'connecting'));
       } catch (error) {
         console.error('Failed to apply call answer:', error);
         cleanupCallSession();
