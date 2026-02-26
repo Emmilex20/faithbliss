@@ -6,17 +6,19 @@ type MatchCelebrationOverlayProps = {
   currentUserPhoto?: string;
   matchedUserName: string;
   matchedUserPhoto?: string;
+  onChat: () => void;
+  onContinue: () => void;
 };
 
 const PARTICLES = [
-  { emoji: '💖', top: '12%', left: '12%', delay: 0.0 },
-  { emoji: '✨', top: '16%', left: '84%', delay: 0.15 },
-  { emoji: '🎉', top: '28%', left: '6%', delay: 0.25 },
-  { emoji: '🥰', top: '30%', left: '88%', delay: 0.35 },
-  { emoji: '💘', top: '70%', left: '10%', delay: 0.1 },
-  { emoji: '🔥', top: '74%', left: '86%', delay: 0.2 },
-  { emoji: '💞', top: '85%', left: '22%', delay: 0.3 },
-  { emoji: '⭐', top: '88%', left: '76%', delay: 0.4 },
+  { emoji: '\u{1F496}', top: '12%', left: '12%', delay: 0.0 },
+  { emoji: '\u2728', top: '16%', left: '84%', delay: 0.15 },
+  { emoji: '\u{1F389}', top: '28%', left: '6%', delay: 0.25 },
+  { emoji: '\u{1F970}', top: '30%', left: '88%', delay: 0.35 },
+  { emoji: '\u{1F498}', top: '70%', left: '10%', delay: 0.1 },
+  { emoji: '\u{1F525}', top: '74%', left: '86%', delay: 0.2 },
+  { emoji: '\u{1F49E}', top: '85%', left: '22%', delay: 0.3 },
+  { emoji: '\u2B50', top: '88%', left: '76%', delay: 0.4 },
 ];
 
 export function MatchCelebrationOverlay({
@@ -25,6 +27,8 @@ export function MatchCelebrationOverlay({
   currentUserPhoto,
   matchedUserName,
   matchedUserPhoto,
+  onChat,
+  onContinue,
 }: MatchCelebrationOverlayProps) {
   return (
     <AnimatePresence>
@@ -71,7 +75,7 @@ export function MatchCelebrationOverlay({
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.12, duration: 0.24 }}
             >
-              It's a Match!
+              It&apos;s a Match!
             </motion.h2>
 
             <motion.p
@@ -102,7 +106,7 @@ export function MatchCelebrationOverlay({
                 animate={{ scale: [1, 1.18, 1], rotate: [0, -6, 6, 0] }}
                 transition={{ repeat: Infinity, duration: 1.3, ease: 'easeInOut' }}
               >
-                ❤️
+                {'\u2764\uFE0F'}
               </motion.div>
 
               <div className="flex flex-col items-center gap-2">
@@ -117,6 +121,23 @@ export function MatchCelebrationOverlay({
                 </div>
                 <p className="max-w-[7rem] truncate text-xs font-semibold text-white/90 sm:text-sm">{matchedUserName}</p>
               </div>
+            </div>
+
+            <div className="mt-7 flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={onContinue}
+                className="rounded-full border border-white/25 bg-white/10 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20"
+              >
+                Continue
+              </button>
+              <button
+                type="button"
+                onClick={onChat}
+                className="rounded-full bg-pink-500 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-pink-400"
+              >
+                Chat
+              </button>
             </div>
           </motion.div>
         </motion.div>

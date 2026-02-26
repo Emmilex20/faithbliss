@@ -43,10 +43,12 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const matchCelebrationTimerRef = useRef<number | null>(null);
     const [matchCelebration, setMatchCelebration] = useState<{
       open: boolean;
+      matchedUserId: string;
       matchedUserName: string;
       matchedUserPhoto?: string;
     }>({
       open: false,
+      matchedUserId: '',
       matchedUserName: '',
       matchedUserPhoto: undefined,
     });
@@ -312,6 +314,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
       .then((result) => {
         console.log(`Liked profile ${key}`);
         if (result?.isMatch && likedProfile) {
+          const matchedUserId = String(likedProfile.id || (likedProfile as any)._id || key);
           const matchedUserName = likedProfile.name || 'New Match';
           const matchedUserPhoto = likedProfile.profilePhoto1 || likedProfile.profilePhoto2 || likedProfile.profilePhoto3;
 
@@ -321,13 +324,14 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
 
           setMatchCelebration({
             open: true,
+            matchedUserId,
             matchedUserName,
             matchedUserPhoto,
           });
 
           matchCelebrationTimerRef.current = window.setTimeout(() => {
             setMatchCelebration((prev) => ({ ...prev, open: false }));
-          }, 3000);
+          }, 30000);
         }
       })
       .catch((error) => {
@@ -390,6 +394,27 @@ const handleApplyFilters = async (filters: any) => {
         }
     };
 
+  const closeMatchCelebration = () => {
+    if (matchCelebrationTimerRef.current) {
+      window.clearTimeout(matchCelebrationTimerRef.current);
+      matchCelebrationTimerRef.current = null;
+    }
+    setMatchCelebration((prev) => ({ ...prev, open: false }));
+  };
+
+  const handleMatchChat = () => {
+    const targetId = matchCelebration.matchedUserId;
+    const targetName = matchCelebration.matchedUserName;
+    closeMatchCelebration();
+    if (!targetId) {
+      navigate('/messages');
+      return;
+    }
+    navigate(
+      `/messages?profileId=${encodeURIComponent(targetId)}&profileName=${encodeURIComponent(targetName || '')}`
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white pb-20 no-horizontal-scroll dashboard-main">
       <MatchCelebrationOverlay
@@ -398,6 +423,8 @@ const handleApplyFilters = async (filters: any) => {
         currentUserPhoto={userImage}
         matchedUserName={matchCelebration.matchedUserName}
         matchedUserPhoto={matchCelebration.matchedUserPhoto}
+        onContinue={closeMatchCelebration}
+        onChat={handleMatchChat}
       />
       {showPostOnboardingOverlay && (
         <PostOnboardingWelcomeOverlay
