@@ -1,7 +1,5 @@
-// src/controllers/discoverController.ts
-
 import { Request, Response } from 'express';
-import { admin, usersCollection } from '../config/firebase-admin';
+import { usersCollection } from '../config/firebase-admin';
 import type { DocumentData } from 'firebase-admin/firestore';
 
 interface IUserProfile extends DocumentData {
@@ -15,6 +13,7 @@ interface IUserProfile extends DocumentData {
   profilePhoto1?: string;
   profilePhoto2?: string;
   profilePhoto3?: string;
+  bio?: string;
   faithJourney?: string;
   churchAttendance?: string;
   sundayActivity?: string;
@@ -30,19 +29,64 @@ interface IUserProfile extends DocumentData {
   likes?: string[];
   passes?: string[];
   matches?: string[];
+  distance?: number;
 }
 
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+type DiscoveryFilterInput = {
+  preferredGender?: unknown;
+  preferredDenominations?: unknown;
+  preferredDenomination?: unknown;
+  minAge?: unknown;
+  maxAge?: unknown;
+  maxDistance?: unknown;
+  preferredFaithJourney?: unknown;
+  preferredChurchAttendance?: unknown;
+  preferredRelationshipGoals?: unknown;
+};
+
+const toUpperTrimmed = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toUpperCase();
+  return normalized.length > 0 ? normalized : null;
+};
+
+const normalizeGender = (value: unknown): 'MALE' | 'FEMALE' | null => {
+  const normalized = toUpperTrimmed(value);
+  if (!normalized) return null;
+  if (normalized === 'MALE' || normalized === 'MAN') return 'MALE';
+  if (normalized === 'FEMALE' || normalized === 'WOMAN') return 'FEMALE';
+  return null;
+};
+
+const normalizeStringArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => toUpperTrimmed(item))
+      .filter((item): item is string => Boolean(item));
+  }
+
+  const single = toUpperTrimmed(value);
+  return single ? [single] : [];
+};
+
+const parseBoundedInt = (value: unknown, min: number, max: number): number | undefined => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return undefined;
+  return Math.min(max, Math.max(min, Math.round(parsed)));
+};
+
+const haversineKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
   const toRad = (v: number) => (v * Math.PI) / 180;
-  const R = 6371;
+  const earthRadiusKm = 6371;
+
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
+  return earthRadiusKm * c;
+};
 
 export const filterProfiles = async (req: Request, res: Response) => {
   const uid = req.userId;
@@ -56,31 +100,35 @@ export const filterProfiles = async (req: Request, res: Response) => {
   }
 
   const currentUser = { id: userDoc.id, ...userDoc.data() } as IUserProfile;
+  const body = (req.body || {}) as DiscoveryFilterInput;
 
-  const {
-    preferredGender,
-    preferredDenominations,
-    preferredDenomination,
-    minAge,
-    maxAge,
-    maxDistance,
-    preferredFaithJourney,
-    preferredChurchAttendance,
-    preferredRelationshipGoals,
-  } = req.body || {};
+  const preferredGender = normalizeGender(body.preferredGender);
+  const preferredDenominations = normalizeStringArray(
+    body.preferredDenominations ?? body.preferredDenomination
+  );
+  const preferredFaithJourney = normalizeStringArray(body.preferredFaithJourney);
+  const preferredChurchAttendance = normalizeStringArray(body.preferredChurchAttendance);
+  const preferredRelationshipGoals = normalizeStringArray(body.preferredRelationshipGoals);
 
-  const denominationList: string[] | undefined =
-    preferredDenominations || preferredDenomination;
+  const parsedMinAge = parseBoundedInt(body.minAge, 18, 99);
+  const parsedMaxAge = parseBoundedInt(body.maxAge, 18, 99);
+  const minAge = parsedMinAge !== undefined && parsedMaxAge !== undefined
+    ? Math.min(parsedMinAge, parsedMaxAge)
+    : parsedMinAge;
+  const maxAge = parsedMinAge !== undefined && parsedMaxAge !== undefined
+    ? Math.max(parsedMinAge, parsedMaxAge)
+    : parsedMaxAge;
 
-  const min = typeof minAge === 'number' ? minAge : undefined;
-  const max = typeof maxAge === 'number' ? maxAge : undefined;
+  const maxDistance = parseBoundedInt(body.maxDistance, 1, 500);
 
-  const excluded = new Set<string>([
-    currentUser.id,
-    ...(currentUser.likes || []),
-    ...(currentUser.passes || []),
-    ...(currentUser.matches || []),
-  ]);
+  const excluded = new Set<string>(
+    [
+      currentUser.id,
+      ...(currentUser.likes || []),
+      ...(currentUser.passes || []),
+      ...(currentUser.matches || []),
+    ].map(String)
+  );
 
   const snapshot = await usersCollection
     .where('onboardingCompleted', '==', true)
@@ -90,44 +138,78 @@ export const filterProfiles = async (req: Request, res: Response) => {
 
   snapshot.forEach((doc) => {
     if (excluded.has(doc.id)) return;
-    const u = { id: doc.id, ...doc.data() } as IUserProfile;
 
-    if (preferredGender && u.gender !== preferredGender) return;
-    if (typeof min === 'number' && typeof u.age === 'number' && u.age < min) return;
-    if (typeof max === 'number' && typeof u.age === 'number' && u.age > max) return;
+    const candidate = { id: doc.id, ...doc.data() } as IUserProfile;
 
-    if (denominationList?.length && (!u.denomination || !denominationList.includes(u.denomination))) {
-      return;
+    const candidateGender = normalizeGender(candidate.gender);
+    if (preferredGender && candidateGender !== preferredGender) return;
+
+    if (minAge !== undefined || maxAge !== undefined) {
+      if (typeof candidate.age !== 'number') return;
+      if (minAge !== undefined && candidate.age < minAge) return;
+      if (maxAge !== undefined && candidate.age > maxAge) return;
     }
 
-    if (preferredFaithJourney?.length && (!u.faithJourney || !preferredFaithJourney.includes(u.faithJourney))) {
-      return;
+    if (preferredDenominations.length > 0) {
+      const candidateDenomination = toUpperTrimmed(candidate.denomination);
+      if (!candidateDenomination || !preferredDenominations.includes(candidateDenomination)) {
+        return;
+      }
     }
 
-    const attendance = u.churchAttendance || u.sundayActivity;
-    if (preferredChurchAttendance?.length && (!attendance || !preferredChurchAttendance.includes(attendance))) {
-      return;
+    if (preferredFaithJourney.length > 0) {
+      const candidateFaithJourney = toUpperTrimmed(candidate.faithJourney);
+      if (!candidateFaithJourney || !preferredFaithJourney.includes(candidateFaithJourney)) {
+        return;
+      }
     }
 
-    if (preferredRelationshipGoals?.length) {
-      const goals = Array.isArray(u.relationshipGoals) ? u.relationshipGoals : [];
-      const hasGoal = goals.some((g) => preferredRelationshipGoals.includes(g));
-      if (!hasGoal) return;
+    if (preferredChurchAttendance.length > 0) {
+      const attendance = toUpperTrimmed(candidate.churchAttendance || candidate.sundayActivity);
+      if (!attendance || !preferredChurchAttendance.includes(attendance)) {
+        return;
+      }
     }
 
-    if (
-      typeof maxDistance === 'number' &&
-      typeof currentUser.latitude === 'number' &&
-      typeof currentUser.longitude === 'number' &&
-      typeof u.latitude === 'number' &&
-      typeof u.longitude === 'number'
-    ) {
-      const distance = haversineKm(currentUser.latitude, currentUser.longitude, u.latitude, u.longitude);
+    if (preferredRelationshipGoals.length > 0) {
+      const candidateGoals = normalizeStringArray(candidate.relationshipGoals);
+      if (candidateGoals.length === 0) return;
+      const hasGoalMatch = candidateGoals.some((goal) => preferredRelationshipGoals.includes(goal));
+      if (!hasGoalMatch) return;
+    }
+
+    if (maxDistance !== undefined) {
+      if (
+        typeof currentUser.latitude !== 'number' ||
+        typeof currentUser.longitude !== 'number' ||
+        typeof candidate.latitude !== 'number' ||
+        typeof candidate.longitude !== 'number'
+      ) {
+        return;
+      }
+
+      const distance = haversineKm(
+        currentUser.latitude,
+        currentUser.longitude,
+        candidate.latitude,
+        candidate.longitude
+      );
+
       if (distance > maxDistance) return;
-      (u as any).distance = Math.round(distance);
+      candidate.distance = distance;
     }
 
-    results.push(u);
+    results.push(candidate);
+  });
+
+  results.sort((a, b) => {
+    const aDistance = typeof a.distance === 'number' ? a.distance : Number.POSITIVE_INFINITY;
+    const bDistance = typeof b.distance === 'number' ? b.distance : Number.POSITIVE_INFINITY;
+    if (aDistance !== bDistance) return aDistance - bDistance;
+
+    const aAge = typeof a.age === 'number' ? a.age : Number.POSITIVE_INFINITY;
+    const bAge = typeof b.age === 'number' ? b.age : Number.POSITIVE_INFINITY;
+    return aAge - bAge;
   });
 
   return res.status(200).json(
@@ -151,7 +233,8 @@ export const filterProfiles = async (req: Request, res: Response) => {
       profession: u.profession,
       fieldOfStudy: u.fieldOfStudy,
       lookingFor: u.lookingFor,
-      distance: (u as any).distance,
+      distance: typeof u.distance === 'number' ? Math.round(u.distance) : undefined,
     }))
   );
 };
+

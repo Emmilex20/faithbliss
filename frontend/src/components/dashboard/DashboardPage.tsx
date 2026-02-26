@@ -14,6 +14,7 @@ import { OverlayPanels } from '@/components/dashboard/OverlayPanels';
 import { StoryBar } from '@/components/dashboard/StoryBar';
 import { PostOnboardingWelcomeOverlay } from '@/components/dashboard/PostOnboardingWelcomeOverlay';
 import { MatchCelebrationOverlay } from '@/components/dashboard/MatchCelebrationOverlay';
+import { type DashboardFiltersPayload } from '@/components/dashboard/FilterPanel';
 import { insertScrollbarStyles } from '@/components/dashboard/styles'; 
 import { usePotentialMatches, useMatching, useStories, useUserProfile } from '@/hooks/useAPI'; 
 
@@ -79,8 +80,8 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
         const hasDisplayName = (p: User) => typeof p.name === 'string' && p.name.trim().length > 0;
         const currentUserId = currentUserData?.id ? String(currentUserData.id) : null;
 
-        if (filteredProfiles && filteredProfiles.length > 0) {
-            // Filter filtered results for valid IDs
+        if (filteredProfiles !== null) {
+            // Filtered mode: honor even an empty array so "no matches" is preserved.
             return filteredProfiles
                 .filter(hasValidId)
                 .filter(hasDisplayName)
@@ -107,7 +108,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     }, [filteredProfiles, activeProfiles]);
 
     useEffect(() => {
-        if (filteredProfiles) return;
+        if (filteredProfiles !== null) return;
         if (!Array.isArray(activeProfiles) || activeProfiles.length === 0) return;
 
         const remaining = activeProfiles.length - currentProfileIndex - 1;
@@ -128,7 +129,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
 
     // Auto-refresh feed when empty so newly registered users appear without manual reload.
     useEffect(() => {
-        if (filteredProfiles) return;
+        if (filteredProfiles !== null) return;
         if (matchesLoading || userLoading) return;
         if (Array.isArray(activeProfiles) && activeProfiles.length > 0) return;
 
@@ -271,7 +272,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
         if (currentProfileIndex < activeProfiles.length - 1) {
             setCurrentProfileIndex(prev => prev + 1);
         } else {
-            if (filteredProfiles) {
+            if (filteredProfiles !== null) {
                 showInfo("End of filtered results.");
                 setIsExhausted(true);
             } else {
@@ -284,7 +285,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const handleNoProfilesAction = async () => {
         setIsExhausted(false);
         setCurrentProfileIndex(0);
-        if (filteredProfiles) {
+        if (filteredProfiles !== null) {
             setFilteredProfiles(null);
         }
         await refetch();
@@ -380,13 +381,35 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
 
 
  
-const handleApplyFilters = async (filters: any) => {
+const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
+        const normalizedEntries = Object.entries(filters || {}).filter(([, value]) => {
+            if (value === undefined || value === null) return false;
+            if (Array.isArray(value)) return value.length > 0;
+            if (typeof value === 'string') return value.trim().length > 0;
+            return true;
+        });
+        const normalizedFilters = Object.fromEntries(normalizedEntries) as DashboardFiltersPayload;
+        const hasActiveFilters = Object.keys(normalizedFilters).length > 0;
+
+        if (!hasActiveFilters) {
+            setFilteredProfiles(null);
+            setCurrentProfileIndex(0);
+            setIsExhausted(false);
+            showInfo('Filters cleared. Showing all profiles.');
+            return;
+        }
+
         setIsLoadingFilters(true);
         try {
-            const results = await API.Discovery.filterProfiles(filters); 
-            setFilteredProfiles(results);
+            const results = await API.Discovery.filterProfiles(normalizedFilters); 
+            setFilteredProfiles(Array.isArray(results) ? results : []);
+            setCurrentProfileIndex(0);
             setIsExhausted(false);
-            showSuccess('Filters applied!');
+            if (results.length > 0) {
+              showSuccess(`Found ${results.length} profile${results.length > 1 ? 's' : ''}.`);
+            } else {
+              showInfo('No profiles match your filters. Try widening your criteria.');
+            }
         } catch (error) {
             console.error('Failed to apply filters:', error);
         } finally {

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { FilterPanel } from './FilterPanel';
+import { type DashboardFiltersPayload } from './FilterPanel';
 import { SidePanel } from './SidePanel';
 
 interface OverlayPanelsProps {
@@ -10,7 +11,7 @@ interface OverlayPanelsProps {
   user?: any;
   onCloseFilters: () => void;
   onCloseSidePanel: () => void;
-  onApplyFilters: (filters: any) => void;
+  onApplyFilters: (filters: DashboardFiltersPayload) => void;
 }
 
 export const OverlayPanels = ({

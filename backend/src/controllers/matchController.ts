@@ -15,6 +15,8 @@ interface IUserProfile extends DocumentData {
   name: string;
   email: string;
   gender: string;
+  preferredGender?: string;
+  lookingFor?: string[] | string;
   age: number;
   denomination: string;
   location?: string;
@@ -267,6 +269,31 @@ const fetchCurrentUser = async (req: Request, res: Response): Promise<IUserProfi
 
 const uploadMessageAttachmentMiddleware = messageAttachmentUpload.single('file');
 
+const normalizeGenderPreference = (
+  preferredGender?: unknown,
+  lookingFor?: unknown
+): 'MALE' | 'FEMALE' | null => {
+  const preferred = typeof preferredGender === 'string' ? preferredGender.trim().toUpperCase() : '';
+  if (preferred === 'MALE' || preferred === 'FEMALE') return preferred;
+  if (preferred === 'MAN') return 'MALE';
+  if (preferred === 'WOMAN') return 'FEMALE';
+
+  const choices = Array.isArray(lookingFor)
+    ? lookingFor
+    : typeof lookingFor === 'string'
+      ? [lookingFor]
+      : [];
+
+  const normalizedChoices = choices
+    .map((value) => (typeof value === 'string' ? value.trim().toUpperCase() : ''))
+    .filter(Boolean);
+
+  if (normalizedChoices.includes('MALE') || normalizedChoices.includes('MAN')) return 'MALE';
+  if (normalizedChoices.includes('FEMALE') || normalizedChoices.includes('WOMAN')) return 'FEMALE';
+
+  return null;
+};
+
 const uploadMessageAttachment = async (req: Request, res: Response) => {
   const currentUser = await fetchCurrentUser(req, res);
   if (!currentUser) return;
@@ -299,6 +326,11 @@ const getPotentialMatches = async (req: Request, res: Response) => {
 
   try {
     console.log(`?? [getPotentialMatches] Fetching potential matches for ${currentUser.id}`);
+
+    const preferredGender = normalizeGenderPreference(
+      (currentUser as IUserProfile).preferredGender,
+      (currentUser as IUserProfile).lookingFor
+    );
 
     const excludedUids = new Set<string>([
       currentUser.id,
@@ -349,7 +381,10 @@ const getPotentialMatches = async (req: Request, res: Response) => {
 
       snapshot.forEach((doc) => {
         const candidate = { id: doc.id, ...doc.data() } as IUserProfile;
-        if (!excludedUids.has(candidate.id)) {
+        const candidateGender = typeof candidate.gender === 'string' ? candidate.gender.trim().toUpperCase() : '';
+        const matchesPreferredGender = !preferredGender || candidateGender === preferredGender;
+
+        if (!excludedUids.has(candidate.id) && matchesPreferredGender) {
           potentialMatches.push(candidate);
         }
       });
