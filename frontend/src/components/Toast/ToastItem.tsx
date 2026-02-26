@@ -1,35 +1,93 @@
-/* eslint-disable no-irregular-whitespace */
-// src/components/Toast/ToastItem.tsx
-
-import React, { useEffect, useState } from 'react';
-import { X, CheckCircle, XCircle, Info, AlertTriangle } from 'lucide-react';
-import type { Toast } from '@/contexts/ToastContext'; // Import Toast type
- // Import Toast type
+import React, { useEffect, useMemo, useState } from 'react';
+import { X, CheckCircle2, XCircle, Info, AlertTriangle } from 'lucide-react';
+import type { Toast } from '@/contexts/ToastContext';
 
 interface ToastItemProps {
-  toast: Toast;
-  onRemove: () => void;
+  toast: Toast;
+  onRemove: () => void;
 }
 
+const getSuccessEmoji = (text: string) => {
+  const value = text.toLowerCase();
+  if (value.includes('login') || value.includes('welcome')) return '\u{1F44B}';
+  if (value.includes('payment') || value.includes('subscription')) return '\u{1F389}';
+  if (value.includes('photo') || value.includes('upload')) return '\u{1F4F8}';
+  if (value.includes('message') || value.includes('sent')) return '\u{1F4E9}';
+  if (value.includes('saved') || value.includes('updated') || value.includes('settings')) return '\u{2705}';
+  if (value.includes('story')) return '\u{1F31F}';
+  return '\u{2728}';
+};
+
+type ToneMeta = {
+  icon: React.ReactNode;
+  toneClass: string;
+  glowClass: string;
+  iconWrapClass: string;
+  iconClass: string;
+  progressClass: string;
+  emoji?: string;
+};
+
+const getToneMeta = (toast: Toast): ToneMeta => {
+  if (toast.type === 'success') {
+    const source = `${toast.title ?? ''} ${toast.message}`;
+    return {
+      icon: <CheckCircle2 className="h-[18px] w-[18px]" />,
+      toneClass: 'border-emerald-300/30 bg-emerald-500/[0.07]',
+      glowClass: 'shadow-[0_8px_24px_rgba(16,185,129,0.22)]',
+      iconWrapClass: 'bg-emerald-400/18 border border-emerald-300/35',
+      iconClass: 'text-emerald-200',
+      progressClass: 'bg-gradient-to-r from-emerald-300 via-lime-200 to-emerald-300',
+      emoji: getSuccessEmoji(source),
+    };
+  }
+  if (toast.type === 'error') {
+    return {
+      icon: <XCircle className="h-[18px] w-[18px]" />,
+      toneClass: 'border-rose-300/30 bg-rose-500/[0.07]',
+      glowClass: 'shadow-[0_8px_24px_rgba(244,63,94,0.2)]',
+      iconWrapClass: 'bg-rose-400/18 border border-rose-300/35',
+      iconClass: 'text-rose-200',
+      progressClass: 'bg-gradient-to-r from-rose-300 via-rose-200 to-rose-300',
+    };
+  }
+  if (toast.type === 'warning') {
+    return {
+      icon: <AlertTriangle className="h-[18px] w-[18px]" />,
+      toneClass: 'border-amber-300/30 bg-amber-500/[0.07]',
+      glowClass: 'shadow-[0_8px_24px_rgba(245,158,11,0.2)]',
+      iconWrapClass: 'bg-amber-400/18 border border-amber-300/35',
+      iconClass: 'text-amber-200',
+      progressClass: 'bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300',
+    };
+  }
+  return {
+    icon: <Info className="h-[18px] w-[18px]" />,
+    toneClass: 'border-sky-300/30 bg-sky-500/[0.07]',
+    glowClass: 'shadow-[0_8px_24px_rgba(14,165,233,0.2)]',
+    iconWrapClass: 'bg-sky-400/18 border border-sky-300/35',
+    iconClass: 'text-sky-200',
+    progressClass: 'bg-gradient-to-r from-sky-300 via-cyan-200 to-sky-300',
+  };
+};
+
 export const ToastItem: React.FC<ToastItemProps> = ({ toast, onRemove }) => {
-  const [isVisible, setIsVisible] = useState(false);
-  const [isLeaving, setIsLeaving] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const tone = useMemo(() => getToneMeta(toast), [toast]);
 
-  useEffect(() => {
-    // Trigger entrance animation
-    const timer = setTimeout(() => setIsVisible(true), 10);
-    return () => clearTimeout(timer);
-  }, []);
+  useEffect(() => {
+    const timer = setTimeout(() => setIsVisible(true), 10);
+    return () => clearTimeout(timer);
+  }, []);
 
-  // Logic to handle the graceful exit animation
-  const handleRemove = () => {
-    setIsLeaving(true);
-    setTimeout(() => {
-      onRemove();
-    }, 300); // Match the animation duration (duration-300)
-  };
-  
-  // Auto-remove logic (for non-persistent toasts)
+  const handleRemove = () => {
+    setIsLeaving(true);
+    setTimeout(() => {
+      onRemove();
+    }, 220);
+  };
+
   useEffect(() => {
     if (toast.duration && toast.duration > 0 && !toast.persistent) {
       const autoCloseTimer = setTimeout(() => {
@@ -37,93 +95,78 @@ export const ToastItem: React.FC<ToastItemProps> = ({ toast, onRemove }) => {
       }, toast.duration);
       return () => clearTimeout(autoCloseTimer);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast.duration, toast.persistent]); // Recalculate if toast properties change
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast.duration, toast.persistent]);
 
-  const getToastStyles = () => {
-    const baseStyles = "pointer-events-auto transform transition-all duration-300 ease-in-out";
-    
-    if (isLeaving) {
-      return `${baseStyles} -translate-y-full opacity-0 scale-95`;
-    }
-    
-    if (isVisible) {
-      return `${baseStyles} translate-y-0 opacity-100 scale-100`;
-    }
-    
-    return `${baseStyles} -translate-y-full opacity-0 scale-95`;
-  };
+  const shellClass = isLeaving
+    ? 'translate-x-5 opacity-0 scale-[0.985]'
+    : isVisible
+      ? 'translate-x-0 opacity-100 scale-100'
+      : 'translate-x-5 opacity-0 scale-[0.985]';
 
-  const getIconAndColor = () => {
-    switch (toast.type) {
-      case 'success':
-        return {
-          icon: <CheckCircle className="w-5 h-5" />,
-          bgColor: 'bg-green-600',
-          borderColor: 'border-green-500',
-          iconColor: 'text-green-100',
-        };
-      case 'error':
-        return {
-          icon: <XCircle className="w-5 h-5" />,
-          bgColor: 'bg-red-600',
-          borderColor: 'border-red-500',
-          iconColor: 'text-red-100',
-        };
-      case 'warning':
-        return {
-          icon: <AlertTriangle className="w-5 h-5" />,
-          bgColor: 'bg-yellow-600',
-          borderColor: 'border-yellow-500',
-          iconColor: 'text-yellow-100',
-        };
-      case 'info':
-      default:
-        return {
-          icon: <Info className="w-5 h-5" />,
-          bgColor: 'bg-blue-600',
-          borderColor: 'border-blue-500',
-          iconColor: 'text-blue-100',
-        };
-    }
-  };
+  const effectiveTitle = toast.title || (toast.type === 'success' ? 'Success' : undefined);
+  const effectiveMessage =
+    toast.type === 'success' && tone.emoji ? `${tone.emoji} ${toast.message}` : toast.message;
 
-  const { icon, bgColor, borderColor, iconColor } = getIconAndColor();
+  return (
+    <div
+      className={`pointer-events-auto w-full transform transition-all duration-200 ease-out ${shellClass}`}
+      role="status"
+      aria-live="polite"
+    >
+      <div
+        className={[
+          'relative overflow-hidden rounded-xl border backdrop-blur-xl',
+          'bg-slate-900/92 text-white',
+          'px-3.5 py-3',
+          tone.toneClass,
+          tone.glowClass,
+        ].join(' ')}
+      >
+        <div className="flex items-start gap-3">
+          <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${tone.iconWrapClass}`}>
+            <span className={tone.iconClass}>{tone.icon}</span>
+          </div>
 
-  return (
-    <div className={getToastStyles()}>
-      <div className={`
-        ${bgColor} ${borderColor} border 
-        backdrop-blur-lg bg-opacity-95
-        rounded-lg shadow-lg p-4 min-w-[320px] max-w-md
-        flex items-start gap-3
-      `}>
-        {/* Icon */}
-        <div className={`${iconColor} flex-shrink-0 mt-0.5`}>
-          {icon}
-        </div>
+          <div className="min-w-0 flex-1">
+            {effectiveTitle && (
+              <h4 className="truncate text-[13px] font-semibold leading-tight text-white">
+                {effectiveTitle}
+              </h4>
+            )}
+            <p className="mt-0.5 break-words text-[13px] leading-relaxed text-white/85">
+              {effectiveMessage}
+            </p>
+          </div>
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          {toast.title && (
-            <h4 className="text-white font-semibold text-sm mb-1 truncate">
-              {toast.title}
-            </h4>
-          )}
-          <p className="text-white/90 text-sm leading-relaxed break-words">
-            {toast.message}
-          </p>
-        </div>
+          <button
+            type="button"
+            onClick={handleRemove}
+            className="shrink-0 rounded-md p-1 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+            aria-label="Close notification"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
 
-        {/* Close button */}
-        <button
-          onClick={handleRemove}
-          className="flex-shrink-0 text-white/70 hover:text-white transition-colors p-1 -m-1 rounded-md hover:bg-white/10"
-          aria-label="Close notification"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  );
+        {!toast.persistent && toast.duration && toast.duration > 0 && (
+          <div className="mt-2 h-0.5 w-full overflow-hidden rounded-full bg-white/10">
+            <div
+              className={`h-full w-full origin-left ${tone.progressClass}`}
+              style={{
+                animation: `toast-progress ${toast.duration}ms linear forwards`,
+              }}
+            />
+          </div>
+        )}
+      </div>
+      <style>{`
+        @keyframes toast-progress {
+          from { transform: scaleX(1); }
+          to { transform: scaleX(0); }
+        }
+      `}</style>
+    </div>
+  );
 };
