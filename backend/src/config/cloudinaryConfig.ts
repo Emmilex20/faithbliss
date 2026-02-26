@@ -21,10 +21,16 @@ export const storage = new CloudinaryStorage({
     // This function runs on every file upload
     return {
       folder: 'faithbliss_profiles', // Cloudinary folder name
-      format: 'webp', // Automatically convert images to webp for optimization
+      format: 'webp', // Store optimized but high-quality webp image
       public_id: file.originalname.split('.')[0] + '-' + Date.now(),
       transformation: [
-        { width: 800, height: 800, crop: 'limit' } // Example transformation
+        {
+          width: 2048,
+          height: 3072,
+          crop: 'limit',
+          quality: 'auto:best',
+          fetch_format: 'auto',
+        },
       ],
     };
   },

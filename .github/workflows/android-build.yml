@@ -1,0 +1,72 @@
+name: Android Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web app and sync Capacitor Android
+        working-directory: frontend
+        run: pnpm android:prepare
+
+      - name: Decode Android signing keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_B64 != '' }}
+        working-directory: frontend
+        run: |
+          mkdir -p android/keystore
+          echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > android/keystore/upload-keystore.jks
+
+      - name: Ensure Gradle wrapper executable
+        run: chmod +x frontend/android/gradlew
+
+      - name: Build signed Android release (AAB + APK)
+        if: ${{ secrets.ANDROID_KEYSTORE_B64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
+        working-directory: frontend/android
+        env:
+          SIGNING_STORE_FILE: keystore/upload-keystore.jks
+          SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon clean bundleRelease assembleRelease
+
+      - name: Build unsigned Android release (fallback)
+        if: ${{ secrets.ANDROID_KEYSTORE_B64 == '' || secrets.ANDROID_KEYSTORE_PASSWORD == '' || secrets.ANDROID_KEY_ALIAS == '' || secrets.ANDROID_KEY_PASSWORD == '' }}
+        working-directory: frontend/android
+        run: ./gradlew --no-daemon clean bundleRelease assembleRelease
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: faithbliss-android-build
+          path: |
+            frontend/android/app/build/outputs/bundle/release/*.aab
+            frontend/android/app/build/outputs/apk/release/*.apk
+          retention-days: 14

@@ -36,6 +36,19 @@ export const HingeStyleProfileCard = ({
   onLike,
 }: HingeStyleProfileCardProps) => {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const toHighResCloudinary = (url: string) => {
+    if (!url || !url.includes('res.cloudinary.com') || !url.includes('/upload/')) {
+      return url;
+    }
+
+    const [prefix, suffix] = url.split('/upload/');
+    if (!prefix || !suffix) return url;
+
+    // Serve a sharper source to reduce blur on high-DPI mobile screens.
+    const deliveryTransform = 'f_auto,q_auto:best,dpr_auto,w_1600,h_2400,c_limit';
+    return `${prefix}/upload/${deliveryTransform}/${suffix}`;
+  };
+
   const stopEvent = (event: React.SyntheticEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -50,7 +63,7 @@ export const HingeStyleProfileCard = ({
       profile.profilePhoto5,
       profile.profilePhoto6,
     ].filter(Boolean) as string[];
-    return list.length > 0 ? list : ['/default-avatar.png'];
+    return list.length > 0 ? list.map(toHighResCloudinary) : ['/default-avatar.png'];
   }, [
     profile.profilePhoto1,
     profile.profilePhoto2,
@@ -105,7 +118,7 @@ export const HingeStyleProfileCard = ({
             key={`${profileId}-${currentPhotoIndex}`}
             src={photos[currentPhotoIndex]}
             alt={profile.name}
-            className="absolute inset-0 h-full w-full object-cover lg:object-contain"
+            className="absolute inset-0 h-full w-full object-cover [image-rendering:auto] [backface-visibility:hidden] [transform:translateZ(0)]"
             initial={{ opacity: 0.45, scale: 1.02 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0.45, scale: 0.985 }}
