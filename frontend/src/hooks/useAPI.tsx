@@ -378,13 +378,15 @@ export function useMatching() {
     toastRef.current = { showSuccess, showError, showInfo };
   }, [showSuccess, showError, showInfo]);
 
-  const likeUser = useCallback(async (userId: string) => {
+  const likeUser = useCallback(async (userId: string, options?: { suppressSuccessToast?: boolean }) => {
     if (!accessToken) {
       throw new Error('Authentication required. Please log in.');
     }
     try {
       const result = await apiClient.Match.likeUser(userId);
-      toastRef.current.showSuccess(result.isMatch ? 'Ã°Å¸â€™â€¢ It\'s a match!' : 'Ã°Å¸â€˜Â Like sent!');
+      if (!options?.suppressSuccessToast) {
+        toastRef.current.showSuccess(result.isMatch ? "It's a match!" : 'Like sent!');
+      }
       return result;
     } catch (error: any) {
       if (error.message && error.message.includes('User already liked')) {

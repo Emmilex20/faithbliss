@@ -13,6 +13,7 @@ import { ProfileDisplay } from '@/components/dashboard/ProfileDisplay';
 import { OverlayPanels } from '@/components/dashboard/OverlayPanels';
 import { StoryBar } from '@/components/dashboard/StoryBar';
 import { PostOnboardingWelcomeOverlay } from '@/components/dashboard/PostOnboardingWelcomeOverlay';
+import { MatchCelebrationOverlay } from '@/components/dashboard/MatchCelebrationOverlay';
 import { insertScrollbarStyles } from '@/components/dashboard/styles'; 
 import { usePotentialMatches, useMatching, useStories, useUserProfile } from '@/hooks/useAPI'; 
 
@@ -39,6 +40,16 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const hasCompletedInitialLoadRef = useRef(false);
     const [showForcedOnboardingPrompt, setShowForcedOnboardingPrompt] = useState(false);
     const ONBOARDING_PAUSE_STORAGE_KEY = 'faithbliss_onboarding_pause_state';
+    const matchCelebrationTimerRef = useRef<number | null>(null);
+    const [matchCelebration, setMatchCelebration] = useState<{
+      open: boolean;
+      matchedUserName: string;
+      matchedUserPhoto?: string;
+    }>({
+      open: false,
+      matchedUserName: '',
+      matchedUserPhoto: undefined,
+    });
 
   // Fetch real potential matches from backend
   const { 
@@ -145,6 +156,9 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
   useEffect(() => {
     return () => {
       setFilteredProfiles(null);
+      if (matchCelebrationTimerRef.current) {
+        window.clearTimeout(matchCelebrationTimerRef.current);
+      }
     };
   }, []);
 
@@ -277,6 +291,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
   const handleLike = () => {
     //  CRITICAL FIX: Use currentProfile?.id OR currentProfile?._id
     const userIdToLike = currentProfile?.id || currentProfile?._id;
+    const likedProfile = currentProfile;
     
     if (!userIdToLike) {
       console.warn("No user ID found to like. Skipping API call.");
@@ -293,9 +308,27 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     pendingActionIdsRef.current.add(key);
 
     // Fire network call in background so UI never blocks.
-    void likeUser(key)
-      .then(() => {
+    void likeUser(key, { suppressSuccessToast: true })
+      .then((result) => {
         console.log(`Liked profile ${key}`);
+        if (result?.isMatch && likedProfile) {
+          const matchedUserName = likedProfile.name || 'New Match';
+          const matchedUserPhoto = likedProfile.profilePhoto1 || likedProfile.profilePhoto2 || likedProfile.profilePhoto3;
+
+          if (matchCelebrationTimerRef.current) {
+            window.clearTimeout(matchCelebrationTimerRef.current);
+          }
+
+          setMatchCelebration({
+            open: true,
+            matchedUserName,
+            matchedUserPhoto,
+          });
+
+          matchCelebrationTimerRef.current = window.setTimeout(() => {
+            setMatchCelebration((prev) => ({ ...prev, open: false }));
+          }, 3000);
+        }
       })
       .catch((error) => {
         console.error('Failed to like user:', error);
@@ -359,6 +392,13 @@ const handleApplyFilters = async (filters: any) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white pb-20 no-horizontal-scroll dashboard-main">
+      <MatchCelebrationOverlay
+        open={matchCelebration.open}
+        currentUserName={userName}
+        currentUserPhoto={userImage}
+        matchedUserName={matchCelebration.matchedUserName}
+        matchedUserPhoto={matchCelebration.matchedUserPhoto}
+      />
       {showPostOnboardingOverlay && (
         <PostOnboardingWelcomeOverlay
           user={currentUserData}
