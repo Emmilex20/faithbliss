@@ -104,6 +104,7 @@ export const HingeStyleProfileCard = ({
       .replace(/\s+/g, ' ')
       .trim()
       .replace(/\b\w/g, (char) => char.toUpperCase());
+  const mobileDisplayName = profile.name?.trim().split(/\s+/)[0] || profile.name || 'User';
   const primaryGoal = profile.relationshipGoals?.[0] || profile.lookingFor?.[0] || '';
   const ageFilterLabel = profile.age ? `Age ${profile.age}` : 'Age';
   const heightFilterLabel = profile.height ? profile.height.split('(')[0].trim() : 'Height';
@@ -169,7 +170,7 @@ export const HingeStyleProfileCard = ({
           <div className="mb-2 flex items-start justify-between gap-3 px-1">
             <div>
               <h2 className="text-3xl font-bold leading-tight text-white">
-                {profile.name}
+                {mobileDisplayName}
                 {profile.age ? `, ${profile.age}` : ''}
               </h2>
               <p className="mt-1 inline-flex items-center gap-2 text-sm font-semibold text-emerald-600">

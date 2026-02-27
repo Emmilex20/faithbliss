@@ -17,6 +17,7 @@ import SaveButton from '@/components/profile/SaveButton';
 import type { ProfileData } from '@/types/profile';
 import type { UpdateProfileDto } from '@/services/api';
 import { updateProfileClient, uploadSpecificPhotoClient } from '@/services/api-client';
+import { analyzePhotoFaces, validatePhotoFileBasics } from '@/utils/photoValidation';
 
 const ProfilePage: React.FC = () => {
   const { accessToken, user: authUser } = useAuthContext();
@@ -187,6 +188,20 @@ const ProfilePage: React.FC = () => {
     if (!file || !profileData || !accessToken) return;
     setIsSaving(true);
     try {
+      const basicValidationError = validatePhotoFileBasics(file);
+      if (basicValidationError) {
+        setSaveMessage(basicValidationError);
+        setTimeout(() => setSaveMessage(''), 3000);
+        return;
+      }
+
+      const faceAnalysis = await analyzePhotoFaces(file);
+      if (slotIndex === 0 && faceAnalysis.supported && faceAnalysis.faceCount !== 1) {
+        setSaveMessage('Primary photo must contain one clear face. Upload a clear solo photo.');
+        setTimeout(() => setSaveMessage(''), 3500);
+        return;
+      }
+
       const formData = new FormData();
       formData.append('photo', file);
 
@@ -199,7 +214,11 @@ const ProfilePage: React.FC = () => {
       updatedPhotosArray[slotIndex] = photoUrl;
       setProfileData(prev => (prev ? { ...prev, photos: updatedPhotosArray } : null));
 
-      setSaveMessage('Photo uploaded successfully!');
+      if (slotIndex > 0 && faceAnalysis.supported && (faceAnalysis.faceCount ?? 0) > 1) {
+        setSaveMessage('Photo uploaded. Tip: solo photos get better match engagement.');
+      } else {
+        setSaveMessage('Photo uploaded successfully!');
+      }
       if (execute) await execute();
       setTimeout(() => setSaveMessage(''), 3000);
     } catch (err) {
@@ -208,6 +227,7 @@ const ProfilePage: React.FC = () => {
       setTimeout(() => setSaveMessage(''), 3000);
     } finally {
       setIsSaving(false);
+      event.target.value = '';
     }
   };
 

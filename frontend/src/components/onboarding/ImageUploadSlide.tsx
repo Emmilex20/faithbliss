@@ -1,143 +1,167 @@
-// src/components/onboarding/ImageUploadSlide.tsx (VERIFIED - Local logic is fine)
-
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { UploadCloud, X, AlertCircle } from 'lucide-react';
-import type { OnboardingData } from './types'; // Assuming OnboardingData has a 'photos: File[]' field
-import React from 'react'; 
+import { AlertCircle, UploadCloud, X } from 'lucide-react';
+import React from 'react';
+import type { OnboardingData } from './types';
+import { analyzePhotoFaces, validatePhotoFileBasics } from '@/utils/photoValidation';
 
 interface ImageUploadSlideProps {
-    onboardingData: OnboardingData;
-    setOnboardingData: React.Dispatch<React.SetStateAction<OnboardingData>>;
-    isVisible: boolean;
+  onboardingData: OnboardingData;
+  setOnboardingData: React.Dispatch<React.SetStateAction<OnboardingData>>;
+  isVisible: boolean;
 }
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 const ImageUploadSlide = ({ onboardingData, setOnboardingData, isVisible }: ImageUploadSlideProps) => {
-    const [uploading, setUploading] = useState(false);
-    const [photos, setPhotos] = useState<File[]>(onboardingData.photos || []); // Initialize with existing data
-    const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
-    const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [photos, setPhotos] = useState<File[]>(onboardingData.photos || []);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
 
-    useEffect(() => {
-        const newPreviews = photos.map(file => URL.createObjectURL(file));
-        setPhotoPreviews(newPreviews);
-        
-        // Cleanup function to revoke object URLs and prevent memory leaks
-        return () => {
-            newPreviews.forEach(url => URL.revokeObjectURL(url));
-        };
-    }, [photos]);
+  useEffect(() => {
+    const newPreviews = photos.map((file) => URL.createObjectURL(file));
+    setPhotoPreviews(newPreviews);
 
-    const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setError(null);
-        const files = event.target.files;
-        if (!files) return;
+    return () => {
+      newPreviews.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [photos]);
 
-        setUploading(true);
-        const newFiles = Array.from(files);
-        const validFiles: File[] = [];
-        
-        for (const file of newFiles) {
-            if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-                setError(`Invalid file type: ${file.name}. Please use JPEG, PNG, or WebP.`);
-                setUploading(false);
-                event.target.value = ''; 
-                return;
-            }
-            if (file.size > MAX_FILE_SIZE) {
-                setError(`File is too large: ${file.name}. Maximum size is 5MB.`);
-                setUploading(false);
-                event.target.value = '';
-                return;
-            }
-            validFiles.push(file);
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    setError(null);
+    setHint(null);
+    const files = event.target.files;
+    if (!files) return;
+
+    setUploading(true);
+    const newFiles = Array.from(files);
+    const acceptedFiles: File[] = [];
+    const warnings: string[] = [];
+    let nextSlotIndex = photos.length;
+
+    try {
+      for (const file of newFiles) {
+        if (nextSlotIndex >= 6) break;
+
+        const basicValidationError = validatePhotoFileBasics(file);
+        if (basicValidationError) {
+          setError(basicValidationError);
+          return;
         }
 
-        const combinedPhotos = [...photos, ...validFiles].slice(0, 6);
-        setPhotos(combinedPhotos);
-        setOnboardingData(prev => ({ ...prev, photos: combinedPhotos }));
-        setUploading(false);
-        event.target.value = ''; 
-    };
+        const faceAnalysis = await analyzePhotoFaces(file);
 
-    const removePhoto = (indexToRemove: number) => {
-        const newPhotos = photos.filter((_, index) => index !== indexToRemove);
-        setPhotos(newPhotos);
-        setOnboardingData(prev => ({ ...prev, photos: newPhotos }));
-    };
+        if (nextSlotIndex === 0 && faceAnalysis.supported && faceAnalysis.faceCount !== 1) {
+          setError('Primary photo must contain one clear face. Upload a clear solo photo.');
+          return;
+        }
 
-    if (!isVisible) return null;
+        if (faceAnalysis.supported && (faceAnalysis.faceCount ?? 0) > 1) {
+          warnings.push(`Photo ${nextSlotIndex + 1} looks like a group photo. Solo photos usually perform better.`);
+        } else if (faceAnalysis.supported && faceAnalysis.faceCount === 0) {
+          warnings.push(`Photo ${nextSlotIndex + 1} has no clear face detected. Use a clearer face photo.`);
+        } else if (!faceAnalysis.supported && nextSlotIndex === 0) {
+          warnings.push('Could not auto-check your primary photo. Use a clear solo photo for better trust.');
+        }
 
-    return (
-        <motion.div
-            initial={{ opacity: 0, x: 100 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -100 }}
-            transition={{ duration: 0.5 }}
-            className="space-y-8"
-        >
-            <div className="text-center">
-                <h2 className="text-3xl font-bold text-white">Upload Your Photos 📸</h2>
-                <p className="text-gray-400">
-                    Add 2-6 photos. The first two are required. Max 5MB each.
-                </p>
-            </div>
+        acceptedFiles.push(file);
+        nextSlotIndex += 1;
+      }
 
-            {error && (
-                <div className="bg-red-900/50 border border-red-500 text-red-300 px-4 py-3 rounded-lg relative flex items-center">
-                    <AlertCircle className="mr-2" />
-                    <span>{error}</span>
-                </div>
+      if (acceptedFiles.length === 0) {
+        return;
+      }
+
+      const combinedPhotos = [...photos, ...acceptedFiles].slice(0, 6);
+      setPhotos(combinedPhotos);
+      setOnboardingData((prev) => ({ ...prev, photos: combinedPhotos }));
+      if (warnings.length > 0) {
+        setHint(warnings[0]);
+      }
+    } finally {
+      setUploading(false);
+      event.target.value = '';
+    }
+  };
+
+  const removePhoto = (indexToRemove: number) => {
+    const newPhotos = photos.filter((_, index) => index !== indexToRemove);
+    setPhotos(newPhotos);
+    setOnboardingData((prev) => ({ ...prev, photos: newPhotos }));
+  };
+
+  if (!isVisible) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 100 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -100 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-8"
+    >
+      <div className="text-center">
+        <h2 className="text-3xl font-bold text-white">Upload Your Photos</h2>
+        <p className="text-gray-400">Add 2-6 photos. The first two are required. Max 5MB each.</p>
+        <p className="mt-2 text-sm text-cyan-300">Upload a clear solo photo as your first image.</p>
+      </div>
+
+      {error && (
+        <div className="relative flex items-center rounded-lg border border-red-500 bg-red-900/50 px-4 py-3 text-red-300">
+          <AlertCircle className="mr-2" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {hint && !error && (
+        <div className="relative flex items-center rounded-lg border border-cyan-500/60 bg-cyan-900/40 px-4 py-3 text-cyan-200">
+          <AlertCircle className="mr-2" />
+          <span>{hint}</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        {photoPreviews.map((previewUrl, index) => (
+          <div key={index} className="group relative h-40 w-full">
+            <img src={previewUrl} alt={`photo-${index}`} className="absolute inset-0 h-full w-full rounded-lg object-cover" />
+            <button
+              onClick={() => removePhoto(index)}
+              className="absolute right-2 top-2 z-10 rounded-full bg-red-500 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ))}
+
+        {photos.length < 6 && (
+          <div className="relative flex h-40 items-center justify-center rounded-lg border-2 border-dashed border-gray-600">
+            <input
+              type="file"
+              multiple
+              accept={ALLOWED_FILE_TYPES.join(',')}
+              onChange={handleFileUpload}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              disabled={uploading || photos.length >= 6}
+            />
+            {uploading ? (
+              <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-white" />
+            ) : (
+              <div className="text-center text-gray-400">
+                <UploadCloud size={32} className="mx-auto" />
+                <p>Upload</p>
+              </div>
             )}
+          </div>
+        )}
+      </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {photoPreviews.map((previewUrl, index) => (
-                    <div key={index} className="relative group w-full h-40">
-                        <img 
-                            src={previewUrl} 
-                            alt={`photo-${index}`} 
-                            className="absolute inset-0 w-full h-full object-cover rounded-lg"
-                        />
-                        <button
-                            onClick={() => removePhoto(index)}
-                            className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                        >
-                            <X size={16} />
-                        </button>
-                    </div>
-                ))}
-
-                {photos.length < 6 && (
-                    <div className="relative border-2 border-dashed border-gray-600 rounded-lg h-40 flex items-center justify-center">
-                        <input
-                            type="file"
-                            multiple
-                            accept={ALLOWED_FILE_TYPES.join(',')}
-                            onChange={handleFileUpload}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                            disabled={uploading || photos.length >= 6}
-                        />
-                        {uploading ? (
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-                        ) : (
-                            <div className="text-center text-gray-400">
-                                <UploadCloud size={32} className="mx-auto" />
-                                <p>Upload</p>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-            {onboardingData.photos.length < 2 && (
-                <p className="text-red-500 text-center font-semibold">
-                    You must upload at least 2 photos to continue.
-                </p>
-            )}
-        </motion.div>
-    );
+      {onboardingData.photos.length < 2 && (
+        <p className="text-center font-semibold text-red-500">You must upload at least 2 photos to continue.</p>
+      )}
+    </motion.div>
+  );
 };
 
 export default ImageUploadSlide;
