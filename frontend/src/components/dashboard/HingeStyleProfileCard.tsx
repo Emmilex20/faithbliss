@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Heart, MoreHorizontal, SlidersHorizontal, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Heart, Maximize2, Minus, MoreHorizontal, Plus, SlidersHorizontal, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import type { User } from '@/services/api';
@@ -29,6 +29,14 @@ const haversineDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: num
   return earthRadiusKm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 };
 
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const pointerDistance = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.hypot(dx, dy);
+};
+
 export const HingeStyleProfileCard = ({
   profile,
   viewerLatitude,
@@ -41,6 +49,9 @@ export const HingeStyleProfileCard = ({
   const navigate = useNavigate();
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [currentPhotoAspectRatio, setCurrentPhotoAspectRatio] = useState(1);
+  const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
+  const [viewerScale, setViewerScale] = useState(1);
+  const [viewerOffset, setViewerOffset] = useState({ x: 0, y: 0 });
   const [isMobileView, setIsMobileView] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(max-width: 767px)').matches;
@@ -49,7 +60,14 @@ export const HingeStyleProfileCard = ({
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(max-height: 760px)').matches;
   });
-  const toHighResCloudinary = (url: string) => {
+  const viewerStageRef = useRef<HTMLDivElement | null>(null);
+  const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchStartDistanceRef = useRef<number | null>(null);
+  const pinchStartScaleRef = useRef(1);
+  const panStartRef = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const lastTapAtRef = useRef(0);
+
+  const toCardCloudinary = (url: string) => {
     if (!url || !url.includes('res.cloudinary.com') || !url.includes('/upload/')) {
       return url;
     }
@@ -57,8 +75,21 @@ export const HingeStyleProfileCard = ({
     const [prefix, suffix] = url.split('/upload/');
     if (!prefix || !suffix) return url;
 
-    // Deliver a face-aware crop that better preserves faces in cover-mode cards.
+    // Card render: face-aware crop to keep faces safe in cover mode.
     const deliveryTransform = 'c_fill,g_auto:face,ar_7:5,w_2000,f_auto,q_auto:best,dpr_auto,e_sharpen:70';
+    return `${prefix}/upload/${deliveryTransform}/${suffix}`;
+  };
+
+  const toViewerCloudinary = (url: string) => {
+    if (!url || !url.includes('res.cloudinary.com') || !url.includes('/upload/')) {
+      return url;
+    }
+
+    const [prefix, suffix] = url.split('/upload/');
+    if (!prefix || !suffix) return url;
+
+    // Fullscreen viewer: no forced crop, keep original framing.
+    const deliveryTransform = 'f_auto,q_auto:best,dpr_auto,c_limit,w_2400,e_sharpen:60';
     return `${prefix}/upload/${deliveryTransform}/${suffix}`;
   };
 
@@ -70,7 +101,7 @@ export const HingeStyleProfileCard = ({
     event.stopPropagation();
   };
 
-  const photos = useMemo(() => {
+  const rawPhotos = useMemo(() => {
     const list = [
       profile.profilePhoto1,
       profile.profilePhoto2,
@@ -79,7 +110,7 @@ export const HingeStyleProfileCard = ({
       profile.profilePhoto5,
       profile.profilePhoto6,
     ].filter(Boolean) as string[];
-    return list.length > 0 ? list.map(toHighResCloudinary) : ['/default-avatar.png'];
+    return list.length > 0 ? list : ['/default-avatar.png'];
   }, [
     profile.profilePhoto1,
     profile.profilePhoto2,
@@ -89,8 +120,161 @@ export const HingeStyleProfileCard = ({
     profile.profilePhoto6,
   ]);
 
-  const nextPhoto = () => setCurrentPhotoIndex((prev) => (prev + 1) % photos.length);
-  const prevPhoto = () => setCurrentPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length);
+  const cardPhotos = useMemo(() => rawPhotos.map(toCardCloudinary), [rawPhotos]);
+  const viewerPhotos = useMemo(() => rawPhotos.map(toViewerCloudinary), [rawPhotos]);
+
+  const nextPhoto = () => setCurrentPhotoIndex((prev) => (prev + 1) % cardPhotos.length);
+  const prevPhoto = () => setCurrentPhotoIndex((prev) => (prev - 1 + cardPhotos.length) % cardPhotos.length);
+  const currentViewerPhoto = viewerPhotos[currentPhotoIndex] || viewerPhotos[0];
+
+  const clampViewerOffset = (offset: { x: number; y: number }, scale: number) => {
+    const stage = viewerStageRef.current;
+    if (!stage || scale <= 1) return { x: 0, y: 0 };
+
+    const maxX = (stage.clientWidth * (scale - 1)) / 2;
+    const maxY = (stage.clientHeight * (scale - 1)) / 2;
+    return {
+      x: clamp(offset.x, -maxX, maxX),
+      y: clamp(offset.y, -maxY, maxY),
+    };
+  };
+
+  const applyViewerScale = (nextScale: number) => {
+    const clampedScale = clamp(nextScale, 1, 4);
+    setViewerScale(clampedScale);
+    setViewerOffset((prev) => clampViewerOffset(prev, clampedScale));
+  };
+
+  const resetViewerTransform = () => {
+    setViewerScale(1);
+    setViewerOffset({ x: 0, y: 0 });
+  };
+
+  const handleViewerPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (activePointersRef.current.size === 1) {
+      const now = Date.now();
+      if (now - lastTapAtRef.current < 300) {
+        resetViewerTransform();
+      }
+      lastTapAtRef.current = now;
+
+      if (viewerScale > 1) {
+        panStartRef.current = {
+          x: event.clientX,
+          y: event.clientY,
+          offsetX: viewerOffset.x,
+          offsetY: viewerOffset.y,
+        };
+      }
+    }
+
+    if (activePointersRef.current.size === 2) {
+      const points = Array.from(activePointersRef.current.values());
+      pinchStartDistanceRef.current = pointerDistance(points[0], points[1]);
+      pinchStartScaleRef.current = viewerScale;
+      panStartRef.current = null;
+    }
+  };
+
+  const handleViewerPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!activePointersRef.current.has(event.pointerId)) return;
+    activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (activePointersRef.current.size === 2 && pinchStartDistanceRef.current) {
+      const points = Array.from(activePointersRef.current.values());
+      const nextDistance = pointerDistance(points[0], points[1]);
+      const nextScale = pinchStartScaleRef.current * (nextDistance / pinchStartDistanceRef.current);
+      applyViewerScale(nextScale);
+      return;
+    }
+
+    if (activePointersRef.current.size === 1 && panStartRef.current && viewerScale > 1) {
+      const dx = event.clientX - panStartRef.current.x;
+      const dy = event.clientY - panStartRef.current.y;
+      const nextOffset = clampViewerOffset(
+        {
+          x: panStartRef.current.offsetX + dx,
+          y: panStartRef.current.offsetY + dy,
+        },
+        viewerScale,
+      );
+      setViewerOffset(nextOffset);
+    }
+  };
+
+  const handleViewerPointerUpOrCancel = (event: React.PointerEvent<HTMLDivElement>) => {
+    activePointersRef.current.delete(event.pointerId);
+
+    if (activePointersRef.current.size < 2) {
+      pinchStartDistanceRef.current = null;
+    }
+
+    if (activePointersRef.current.size === 1 && viewerScale > 1) {
+      const remaining = Array.from(activePointersRef.current.values())[0];
+      panStartRef.current = {
+        x: remaining.x,
+        y: remaining.y,
+        offsetX: viewerOffset.x,
+        offsetY: viewerOffset.y,
+      };
+    } else {
+      panStartRef.current = null;
+    }
+  };
+
+  const handleViewerWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (!event.cancelable) return;
+    event.preventDefault();
+    const delta = event.deltaY > 0 ? -0.18 : 0.18;
+    applyViewerScale(viewerScale + delta);
+  };
+
+  const openImageViewer = (event?: React.SyntheticEvent) => {
+    if (event) {
+      event.stopPropagation();
+    }
+    resetViewerTransform();
+    setIsImageViewerOpen(true);
+  };
+
+  const closeImageViewer = () => {
+    setIsImageViewerOpen(false);
+    resetViewerTransform();
+  };
+
+  useEffect(() => {
+    if (!isImageViewerOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeImageViewer();
+      } else if (event.key === '+' || event.key === '=') {
+        applyViewerScale(viewerScale + 0.2);
+      } else if (event.key === '-') {
+        applyViewerScale(viewerScale - 0.2);
+      } else if (event.key === '0') {
+        resetViewerTransform();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isImageViewerOpen, viewerScale]);
+
+  useEffect(() => {
+    if (isImageViewerOpen) {
+      resetViewerTransform();
+    }
+  }, [currentPhotoIndex, isImageViewerOpen]);
   const profileWithExtras = profile as User & { _id?: string; distance?: number };
   const profileId = profileWithExtras.id || profileWithExtras._id || 'missing';
   const profileLatitude = typeof profileWithExtras.latitude === 'number' ? profileWithExtras.latitude : null;
@@ -151,13 +335,13 @@ export const HingeStyleProfileCard = ({
   }, []);
 
   useEffect(() => {
-    if (currentPhotoIndex > photos.length - 1) {
+    if (currentPhotoIndex > cardPhotos.length - 1) {
       setCurrentPhotoIndex(0);
     }
-  }, [currentPhotoIndex, photos.length]);
+  }, [currentPhotoIndex, cardPhotos.length]);
 
   useEffect(() => {
-    const currentPhotoUrl = photos[currentPhotoIndex];
+    const currentPhotoUrl = rawPhotos[currentPhotoIndex];
     if (!currentPhotoUrl) return;
 
     let isCancelled = false;
@@ -178,22 +362,23 @@ export const HingeStyleProfileCard = ({
     return () => {
       isCancelled = true;
     };
-  }, [photos, currentPhotoIndex]);
+  }, [rawPhotos, currentPhotoIndex]);
 
   if (isMobileView) {
     const mobileCoverPosition = currentPhotoAspectRatio < 0.95 ? '50% 24%' : '50% 35%';
     const isPortraitImage = currentPhotoAspectRatio < 0.95;
     const mobileStageHeightClass = isCompactHeight
       ? isPortraitImage
-        ? 'min-h-[210px] max-h-[40vh]'
-        : 'min-h-[190px] max-h-[34vh]'
+        ? 'min-h-[220px] max-h-[42vh]'
+        : 'min-h-[200px] max-h-[36vh]'
       : isPortraitImage
-        ? 'min-h-[260px] max-h-[54vh]'
-        : 'min-h-[235px] max-h-[46vh]';
+        ? 'min-h-[285px] max-h-[57vh]'
+        : 'min-h-[255px] max-h-[49vh]';
 
     return (
-      <div className="flex h-full w-full flex-col bg-[radial-gradient(circle_at_10%_10%,rgba(236,72,153,0.17),transparent_38%),radial-gradient(circle_at_90%_0%,rgba(59,130,246,0.16),transparent_35%),linear-gradient(180deg,#020617_0%,#0f172a_100%)] px-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 text-white">
-        <div className={`flex items-center gap-2 overflow-x-auto ${isCompactHeight ? 'mb-2 pb-0.5' : 'mb-3 pb-1'}`}>
+      <>
+        <div className="flex h-full w-full flex-col bg-[radial-gradient(circle_at_10%_10%,rgba(236,72,153,0.17),transparent_38%),radial-gradient(circle_at_90%_0%,rgba(59,130,246,0.16),transparent_35%),linear-gradient(180deg,#020617_0%,#0f172a_100%)] px-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 text-white">
+          <div className={`flex items-center gap-2 overflow-x-auto ${isCompactHeight ? 'mb-2 pb-0.5' : 'mb-3 pb-1'}`}>
           <button
             type="button"
             onClick={() => onOpenFilterSection?.('distance')}
@@ -246,7 +431,7 @@ export const HingeStyleProfileCard = ({
           </div>
 
           <div className={`flex items-center gap-1.5 rounded-full border border-white/12 bg-black/35 backdrop-blur-sm ${isCompactHeight ? 'mb-1.5 px-2.5 py-1.5' : 'mb-2 px-3 py-2'}`}>
-            {photos.map((_, index) => (
+            {cardPhotos.map((_, index) => (
               <button
                 key={index}
                 type="button"
@@ -263,11 +448,22 @@ export const HingeStyleProfileCard = ({
             ))}
           </div>
 
-          <div className={`relative mt-1.5 w-full flex-1 overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/80 ${mobileStageHeightClass}`}>
+          <div
+            className={`relative mt-1.5 w-full flex-1 cursor-zoom-in overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/80 ${mobileStageHeightClass}`}
+            onClick={openImageViewer}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                openImageViewer();
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            aria-label="Open full image"
+          >
             <AnimatePresence mode="wait" initial={false}>
               <motion.img
                 key={`${profileId}-${currentPhotoIndex}-bg-mobile`}
-                src={photos[currentPhotoIndex]}
+                src={cardPhotos[currentPhotoIndex]}
                 alt={profile.name}
                 className="absolute inset-0 h-full w-full object-cover blur-xl brightness-75"
                 initial={{ opacity: 0.45, scale: 1.03 }}
@@ -283,7 +479,7 @@ export const HingeStyleProfileCard = ({
             <AnimatePresence mode="wait" initial={false}>
               <motion.img
                 key={`${profileId}-${currentPhotoIndex}-mobile`}
-                src={photos[currentPhotoIndex]}
+                src={cardPhotos[currentPhotoIndex]}
                 alt={profile.name}
                 className="absolute inset-0 h-full w-full object-cover object-center [image-rendering:auto] [backface-visibility:hidden] [transform:translateZ(0)]"
                 style={{ objectPosition: mobileCoverPosition }}
@@ -298,8 +494,12 @@ export const HingeStyleProfileCard = ({
             </AnimatePresence>
 
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_62%,rgba(2,6,23,0.55)_100%)]" />
+            <div className="pointer-events-none absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full border border-white/30 bg-black/35 px-2 py-1 text-[11px] font-semibold text-white/90 backdrop-blur-sm">
+              <Maximize2 className="h-3.5 w-3.5" />
+              Full
+            </div>
 
-            {photos.length > 1 && (
+            {cardPhotos.length > 1 && (
               <>
                 <button
                   type="button"
@@ -378,8 +578,124 @@ export const HingeStyleProfileCard = ({
               </button>
             </div>
           </div>
-        </article>
-      </div>
+          </article>
+        </div>
+
+        <AnimatePresence>
+          {isImageViewerOpen && (
+            <motion.div
+              className="fixed inset-0 z-[140] flex items-center justify-center bg-black/92 p-2 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={closeImageViewer}
+            >
+              <button
+                type="button"
+                onClick={closeImageViewer}
+                className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/35 bg-black/40 text-white"
+                aria-label="Close full image viewer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <div className="relative flex h-full w-full max-w-5xl flex-col items-center justify-center" onClick={(event) => event.stopPropagation()}>
+                <div className="absolute left-3 right-3 top-3 z-20 flex items-center justify-between rounded-2xl border border-white/20 bg-black/35 px-3 py-2 text-white backdrop-blur-md">
+                  <div className="text-sm font-semibold">
+                    {mobileDisplayName} • {currentPhotoIndex + 1}/{viewerPhotos.length}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => applyViewerScale(viewerScale - 0.2)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/35 bg-black/35 text-white"
+                      aria-label="Zoom out"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetViewerTransform}
+                      className="rounded-full border border-white/35 bg-black/35 px-2.5 py-1 text-xs font-semibold text-white"
+                    >
+                      {Math.round(viewerScale * 100)}%
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyViewerScale(viewerScale + 0.2)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/35 bg-black/35 text-white"
+                      aria-label="Zoom in"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  ref={viewerStageRef}
+                  className="relative h-[84vh] w-full touch-none overflow-hidden rounded-2xl border border-white/20 bg-black/30 shadow-[0_20px_60px_rgba(2,6,23,0.75)]"
+                  onPointerDown={handleViewerPointerDown}
+                  onPointerMove={handleViewerPointerMove}
+                  onPointerUp={handleViewerPointerUpOrCancel}
+                  onPointerCancel={handleViewerPointerUpOrCancel}
+                  onWheel={handleViewerWheel}
+                >
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.img
+                    key={`${profileId}-${currentPhotoIndex}-viewer`}
+                    src={currentViewerPhoto}
+                    alt={profile.name}
+                    className="h-full w-full select-none object-contain"
+                    style={{
+                      transform: `translate3d(${viewerOffset.x}px, ${viewerOffset.y}px, 0) scale(${viewerScale})`,
+                      transformOrigin: 'center center',
+                    }}
+                    initial={{ opacity: 0.4, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0.4, scale: 0.98 }}
+                    transition={{ duration: 0.22, ease: 'easeOut' }}
+                    draggable={false}
+                    loading="eager"
+                    decoding="async"
+                  />
+                </AnimatePresence>
+
+                {viewerPhotos.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        prevPhoto();
+                      }}
+                      className="absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full border border-white/35 bg-black/45 p-2 text-white backdrop-blur-sm"
+                      aria-label="Previous photo"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        nextPhoto();
+                      }}
+                      className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full border border-white/35 bg-black/45 p-2 text-white backdrop-blur-sm"
+                      aria-label="Next photo"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                  </>
+                )}
+
+                  <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-black/40 px-3 py-1 text-[11px] text-white/85 backdrop-blur-md">
+                    Pinch to zoom • Drag to pan • Double tap to reset
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </>
     );
   }
 
@@ -389,7 +705,7 @@ export const HingeStyleProfileCard = ({
         <AnimatePresence mode="wait" initial={false}>
           <motion.img
             key={`${profileId}-${currentPhotoIndex}-blur`}
-            src={photos[currentPhotoIndex]}
+            src={cardPhotos[currentPhotoIndex]}
             alt={profile.name}
             className="absolute inset-0 h-full w-full object-cover blur-xl brightness-50"
             initial={{ opacity: 0.45, scale: 1.03 }}
@@ -405,7 +721,7 @@ export const HingeStyleProfileCard = ({
         <AnimatePresence mode="wait" initial={false}>
           <motion.img
             key={`${profileId}-${currentPhotoIndex}`}
-            src={photos[currentPhotoIndex]}
+            src={cardPhotos[currentPhotoIndex]}
             alt={profile.name}
             className="absolute inset-0 h-full w-full object-cover object-center [image-rendering:auto] [backface-visibility:hidden] [transform:translateZ(0)]"
             initial={{ opacity: 0.45 }}
@@ -420,7 +736,7 @@ export const HingeStyleProfileCard = ({
 
         <div className="absolute inset-x-0 top-0 z-30 p-3 sm:p-3 swiper-no-swiping">
           <div className="flex items-center gap-1.5 rounded-full bg-black/30 px-3 py-2 backdrop-blur-sm">
-            {photos.map((_, index) => (
+            {cardPhotos.map((_, index) => (
               <button
                 key={index}
                 type="button"
@@ -438,7 +754,7 @@ export const HingeStyleProfileCard = ({
           </div>
         </div>
 
-        {photos.length > 1 && (
+        {cardPhotos.length > 1 && (
           <>
             <button
               type="button"
