@@ -103,10 +103,6 @@ export const HingeStyleProfileCard = ({
   };
 
   const stopEvent = (event: React.SyntheticEvent) => {
-    const nativeEvent = event.nativeEvent as Event;
-    if (nativeEvent.cancelable) {
-      event.preventDefault();
-    }
     event.stopPropagation();
   };
 
@@ -304,7 +300,6 @@ export const HingeStyleProfileCard = ({
     }
 
     if (event.touches.length === 2) {
-      if (event.cancelable) event.preventDefault();
       touchPinchDistanceRef.current = touchDistance(event.touches[0], event.touches[1]);
       touchPinchScaleRef.current = viewerScale;
       touchPanStartRef.current = null;
@@ -314,7 +309,6 @@ export const HingeStyleProfileCard = ({
 
   const handleViewerTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
     if (event.touches.length === 2 && touchPinchDistanceRef.current) {
-      if (event.cancelable) event.preventDefault();
       const nextDistance = touchDistance(event.touches[0], event.touches[1]);
       const nextScale = touchPinchScaleRef.current * (nextDistance / touchPinchDistanceRef.current);
       applyViewerScale(nextScale);
@@ -322,7 +316,6 @@ export const HingeStyleProfileCard = ({
     }
 
     if (event.touches.length === 1 && touchPanStartRef.current && viewerScale > 1) {
-      if (event.cancelable) event.preventDefault();
       const touch = event.touches[0];
       const dx = touch.clientX - touchPanStartRef.current.x;
       const dy = touch.clientY - touchPanStartRef.current.y;
@@ -515,11 +508,11 @@ export const HingeStyleProfileCard = ({
     const isPortraitImage = currentPhotoAspectRatio < 0.95;
     const mobileStageHeightClass = isCompactHeight
       ? isPortraitImage
-        ? 'min-h-[250px] max-h-[48vh]'
-        : 'min-h-[230px] max-h-[42vh]'
+        ? 'min-h-[250px]'
+        : 'min-h-[230px]'
       : isPortraitImage
-        ? 'min-h-[340px] max-h-[64vh]'
-        : 'min-h-[300px] max-h-[56vh]';
+        ? 'min-h-[340px]'
+        : 'min-h-[300px]';
 
     return (
       <>
@@ -820,10 +813,11 @@ export const HingeStyleProfileCard = ({
                     style={{
                       transform: `translate3d(${viewerOffset.x}px, ${viewerOffset.y}px, 0) scale(${viewerScale})`,
                       transformOrigin: 'center center',
+                      willChange: 'transform',
                     }}
-                    initial={{ opacity: 0.4, scale: 0.98 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0.4, scale: 0.98 }}
+                    initial={{ opacity: 0.4 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0.4 }}
                     transition={{ duration: 0.22, ease: 'easeOut' }}
                     draggable={false}
                     loading="eager"
@@ -987,4 +981,3 @@ export const HingeStyleProfileCard = ({
     </div>
   );
 };
-
