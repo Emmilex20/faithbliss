@@ -44,6 +44,10 @@ export const HingeStyleProfileCard = ({
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(max-width: 767px)').matches;
   });
+  const [isCompactHeight, setIsCompactHeight] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-height: 760px)').matches;
+  });
   const toHighResCloudinary = (url: string) => {
     if (!url || !url.includes('res.cloudinary.com') || !url.includes('/upload/')) {
       return url;
@@ -133,6 +137,19 @@ export const HingeStyleProfileCard = ({
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const compactHeightQuery = window.matchMedia('(max-height: 760px)');
+    const handleCompactHeightChange = (event: MediaQueryListEvent) => {
+      setIsCompactHeight(event.matches);
+    };
+
+    setIsCompactHeight(compactHeightQuery.matches);
+    compactHeightQuery.addEventListener('change', handleCompactHeightChange);
+    return () => compactHeightQuery.removeEventListener('change', handleCompactHeightChange);
+  }, []);
+
+  useEffect(() => {
     if (currentPhotoIndex > photos.length - 1) {
       setCurrentPhotoIndex(0);
     }
@@ -140,12 +157,14 @@ export const HingeStyleProfileCard = ({
 
   if (isMobileView) {
     return (
-      <div className="flex h-full w-full flex-col bg-[radial-gradient(circle_at_10%_10%,rgba(236,72,153,0.17),transparent_38%),radial-gradient(circle_at_90%_0%,rgba(59,130,246,0.16),transparent_35%),linear-gradient(180deg,#020617_0%,#0f172a_100%)] px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3 text-white">
-        <div className="mb-3 flex items-center gap-2 overflow-x-auto pb-1">
+      <div className="flex h-full w-full flex-col bg-[radial-gradient(circle_at_10%_10%,rgba(236,72,153,0.17),transparent_38%),radial-gradient(circle_at_90%_0%,rgba(59,130,246,0.16),transparent_35%),linear-gradient(180deg,#020617_0%,#0f172a_100%)] px-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 text-white">
+        <div className={`flex items-center gap-2 overflow-x-auto ${isCompactHeight ? 'mb-2 pb-0.5' : 'mb-3 pb-1'}`}>
           <button
             type="button"
             onClick={() => onOpenFilterSection?.('distance')}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-pink-300/45 bg-pink-500/25 text-pink-100 shadow-[0_8px_20px_rgba(236,72,153,0.28)]"
+            className={`inline-flex shrink-0 items-center justify-center rounded-full border border-pink-300/45 bg-pink-500/25 text-pink-100 shadow-[0_8px_20px_rgba(236,72,153,0.28)] ${
+              isCompactHeight ? 'h-9 w-9' : 'h-10 w-10'
+            }`}
             aria-label="Filter options"
           >
             <SlidersHorizontal className="h-4 w-4" />
@@ -155,35 +174,35 @@ export const HingeStyleProfileCard = ({
               key={chip.label}
               type="button"
               onClick={() => onOpenFilterSection?.(chip.section)}
-              className={`inline-flex shrink-0 items-center rounded-full border px-4 py-2 text-xs font-semibold shadow-sm ${
+              className={`inline-flex shrink-0 items-center rounded-full border text-xs font-semibold shadow-sm ${
                 index === 0
                   ? 'border-white/60 bg-white/95 text-slate-900'
                   : 'border-white/25 bg-slate-900/60 text-slate-100 backdrop-blur-sm'
-              }`}
+              } ${isCompactHeight ? 'px-3.5 py-1.5' : 'px-4 py-2'}`}
             >
               {chip.label}
             </button>
           ))}
         </div>
 
-        <article className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-3xl border border-white/15 bg-slate-900/72 p-3 shadow-[0_18px_46px_rgba(2,6,23,0.6)] backdrop-blur-sm">
-          <div className="mb-2 flex items-start justify-between gap-3 px-1">
+        <article className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/15 bg-slate-900/72 shadow-[0_18px_46px_rgba(2,6,23,0.6)] backdrop-blur-sm ${isCompactHeight ? 'p-2.5' : 'p-3'}`}>
+          <div className={`flex items-start justify-between gap-3 px-1 ${isCompactHeight ? 'mb-1.5' : 'mb-2'}`}>
             <div>
-              <h2 className="text-3xl font-bold leading-tight text-white">
+              <h2 className={`${isCompactHeight ? 'text-[2rem]' : 'text-3xl'} font-bold leading-tight text-white`}>
                 {mobileDisplayName}
                 {profile.age ? `, ${profile.age}` : ''}
               </h2>
-              <p className="mt-1 inline-flex items-center gap-2 text-sm font-semibold text-emerald-600">
+              <p className={`inline-flex items-center gap-2 font-semibold text-emerald-600 ${isCompactHeight ? 'mt-0.5 text-xs' : 'mt-1 text-sm'}`}>
                 <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
                 Active today
               </p>
-              <p className="mt-1 text-sm text-slate-300">{locationText}</p>
+              <p className={`${isCompactHeight ? 'mt-0.5 text-xs' : 'mt-1 text-sm'} text-slate-300`}>{locationText}</p>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => navigate(`/profile/${profileId}`)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/35 text-slate-100 backdrop-blur-sm"
+                className={`inline-flex items-center justify-center rounded-full border border-white/20 bg-black/35 text-slate-100 backdrop-blur-sm ${isCompactHeight ? 'h-8 w-8' : 'h-9 w-9'}`}
                 aria-label="More options"
               >
                 <MoreHorizontal className="h-4 w-4" />
@@ -191,7 +210,7 @@ export const HingeStyleProfileCard = ({
             </div>
           </div>
 
-          <div className="mb-2 flex items-center gap-1.5 rounded-full border border-white/12 bg-black/35 px-3 py-2 backdrop-blur-sm">
+          <div className={`flex items-center gap-1.5 rounded-full border border-white/12 bg-black/35 backdrop-blur-sm ${isCompactHeight ? 'mb-1.5 px-2.5 py-1.5' : 'mb-2 px-3 py-2'}`}>
             {photos.map((_, index) => (
               <button
                 key={index}
@@ -209,7 +228,11 @@ export const HingeStyleProfileCard = ({
             ))}
           </div>
 
-          <div className="relative mt-2 w-full min-h-[320px] max-h-[58vh] overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/80 [aspect-ratio:3/4]">
+          <div
+            className={`relative mt-2 w-full flex-1 overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/80 ${
+              isCompactHeight ? 'min-h-[180px] max-h-[34vh]' : 'min-h-[240px] max-h-[46vh]'
+            }`}
+          >
             <AnimatePresence mode="wait" initial={false}>
               <motion.img
                 key={`${profileId}-${currentPhotoIndex}-bg-mobile`}
@@ -282,32 +305,40 @@ export const HingeStyleProfileCard = ({
             )}
           </div>
 
-          <div className="mt-2 flex items-center gap-2">
+          <div className={`${isCompactHeight ? 'mt-1.5' : 'mt-2'} flex items-center gap-2`}>
             <span className="inline-flex items-center rounded-full bg-emerald-500/90 px-3 py-1 text-xs font-semibold text-white">
               {distanceBadge}
             </span>
           </div>
-          <p className="mt-1 line-clamp-2 text-sm text-slate-100">{profile.bio?.trim() || 'No bio available yet.'}</p>
+          <p className={`${isCompactHeight ? 'mt-1 line-clamp-1 text-xs' : 'mt-1 line-clamp-2 text-sm'} text-slate-100`}>
+            {profile.bio?.trim() || 'No bio available yet.'}
+          </p>
 
-          <div className="mt-3 flex items-center gap-3 pb-1">
+          <div className={`${isCompactHeight ? 'mt-2 gap-2 pb-0' : 'mt-3 gap-3 pb-1'} flex items-center`}>
             <button
               type="button"
               onClick={onPass}
-              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/22 text-rose-100 shadow-[0_10px_24px_rgba(244,63,94,0.32)]"
+              className={`inline-flex shrink-0 items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/22 text-rose-100 shadow-[0_10px_24px_rgba(244,63,94,0.32)] ${
+                isCompactHeight ? 'h-11 w-11' : 'h-12 w-12'
+              }`}
               aria-label="Pass"
             >
               <X className="h-5 w-5" />
             </button>
             <Link
               to={`/profile/${profileId}`}
-              className="inline-flex h-12 flex-1 items-center justify-center rounded-full border border-cyan-300/55 bg-cyan-500/20 px-4 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/30 hover:text-white"
+              className={`inline-flex flex-1 items-center justify-center rounded-full border border-cyan-300/55 bg-cyan-500/20 px-4 font-semibold text-cyan-100 transition hover:bg-cyan-500/30 hover:text-white ${
+                isCompactHeight ? 'h-11 text-[13px]' : 'h-12 text-sm'
+              }`}
             >
               View Full Profile
             </Link>
             <button
               type="button"
               onClick={onLike}
-              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-fuchsia-300/50 bg-fuchsia-500/24 text-fuchsia-100 shadow-[0_10px_24px_rgba(217,70,239,0.34)]"
+              className={`inline-flex shrink-0 items-center justify-center rounded-full border border-fuchsia-300/50 bg-fuchsia-500/24 text-fuchsia-100 shadow-[0_10px_24px_rgba(217,70,239,0.34)] ${
+                isCompactHeight ? 'h-11 w-11' : 'h-12 w-12'
+              }`}
               aria-label="Like"
             >
               <Heart className="h-5 w-5 fill-current" />

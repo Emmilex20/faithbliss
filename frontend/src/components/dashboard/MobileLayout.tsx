@@ -40,7 +40,7 @@ export const MobileLayout = ({
       />
 
       {/* Mobile Profile Display */}
-      <div className="flex h-[calc(100dvh-74px)] flex-col px-0 pb-[88px] pt-0">
+      <div className="flex h-[calc(100dvh-62px)] sm:h-[calc(100dvh-74px)] flex-col px-0 pb-[88px] pt-0">
         <div className="relative mx-auto h-full w-full flex-1">
           {children}
         </div>
