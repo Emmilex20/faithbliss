@@ -1,4 +1,4 @@
-/* eslint-disable no-irregular-whitespace */
+﻿/* eslint-disable no-irregular-whitespace */
 // services/api.ts - Comprehensive API service for all backend endpoints
 
 import type { User, UserPreferences } from "@/types/User";
@@ -919,6 +919,17 @@ export const DiscoveryAPI = {
   getUsersByInterest: async (interest: string): Promise<User[]> => {
     // FIX: Added /api prefix
     return apiRequest(`/api/discover/interest/${encodeURIComponent(interest)}`);
+  },
+
+  getUsersByInterests: async (interests: string[]): Promise<User[]> => {
+    const normalized = (Array.isArray(interests) ? interests : [])
+      .map((value) => (typeof value === 'string' ? value.trim() : ''))
+      .filter((value) => value.length > 0);
+    const query = new URLSearchParams();
+    if (normalized.length > 0) {
+      query.set('interests', normalized.join(','));
+    }
+    return apiRequest(`/api/discover/interests${query.toString() ? `?${query.toString()}` : ''}`);
   },
 
   getActiveUsers: async (): Promise<User[]> => {

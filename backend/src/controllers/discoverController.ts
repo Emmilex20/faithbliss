@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { usersCollection } from '../config/firebase-admin';
+import { admin, usersCollection } from '../config/firebase-admin';
 import type { DocumentData } from 'firebase-admin/firestore';
 
 interface IUserProfile extends DocumentData {
@@ -7,6 +7,9 @@ interface IUserProfile extends DocumentData {
   name?: string;
   email?: string;
   gender?: string;
+  preferredGender?: string;
+  interests?: string[];
+  hobbies?: string[];
   age?: number;
   denomination?: string;
   location?: string;
@@ -18,7 +21,6 @@ interface IUserProfile extends DocumentData {
   churchAttendance?: string;
   sundayActivity?: string;
   relationshipGoals?: string[];
-  hobbies?: string[];
   values?: string[];
   favoriteVerse?: string;
   profession?: string;
@@ -30,6 +32,10 @@ interface IUserProfile extends DocumentData {
   passes?: string[];
   matches?: string[];
   distance?: number;
+}
+
+interface IMatchDoc extends DocumentData {
+  users?: string[];
 }
 
 type DiscoveryFilterInput = {
@@ -44,9 +50,17 @@ type DiscoveryFilterInput = {
   preferredRelationshipGoals?: unknown;
 };
 
+const matchesCollection = admin.firestore().collection('matches');
+
 const toUpperTrimmed = (value: unknown): string | null => {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().toUpperCase();
+  return normalized.length > 0 ? normalized : null;
+};
+
+const toLowerTrimmed = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
   return normalized.length > 0 ? normalized : null;
 };
 
@@ -69,6 +83,16 @@ const normalizeStringArray = (value: unknown): string[] => {
   return single ? [single] : [];
 };
 
+const normalizeLowerStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  const unique = new Set<string>();
+  value.forEach((item) => {
+    const normalized = toLowerTrimmed(item);
+    if (normalized) unique.add(normalized);
+  });
+  return Array.from(unique);
+};
+
 const parseBoundedInt = (value: unknown, min: number, max: number): number | undefined => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return undefined;
@@ -86,6 +110,80 @@ const haversineKm = (lat1: number, lon1: number, lat2: number, lon2: number) => 
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return earthRadiusKm * c;
+};
+
+const normalizeGenderPreference = (
+  preferredGender?: unknown,
+  lookingFor?: unknown
+): 'MALE' | 'FEMALE' | null => {
+  const preferred = normalizeGender(preferredGender);
+  if (preferred) return preferred;
+
+  const choices = Array.isArray(lookingFor)
+    ? lookingFor
+    : typeof lookingFor === 'string'
+      ? [lookingFor]
+      : [];
+
+  for (const choice of choices) {
+    const normalized = normalizeGender(choice);
+    if (normalized) return normalized;
+  }
+
+  return null;
+};
+
+const parseInterestQuery = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    const normalized = value
+      .flatMap((item) =>
+        typeof item === 'string'
+          ? item.split(',')
+          : []
+      )
+      .map((item) => toLowerTrimmed(item))
+      .filter((item): item is string => Boolean(item));
+    return Array.from(new Set(normalized));
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value
+      .split(',')
+      .map((item) => toLowerTrimmed(item))
+      .filter((item): item is string => Boolean(item));
+    return Array.from(new Set(normalized));
+  }
+
+  return [];
+};
+
+const buildExcludedUserIds = async (currentUser: IUserProfile): Promise<Set<string>> => {
+  const excluded = new Set<string>(
+    [
+      currentUser.id,
+      ...(currentUser.likes || []),
+      ...(currentUser.passes || []),
+    ].map(String)
+  );
+
+  const matchIds = Array.isArray(currentUser.matches) ? currentUser.matches : [];
+  if (matchIds.length === 0) return excluded;
+
+  const matchDocs = await Promise.all(
+    matchIds.map((matchId) => matchesCollection.doc(String(matchId)).get())
+  );
+
+  matchDocs.forEach((doc) => {
+    const data = doc.data() as IMatchDoc | undefined;
+    const users = Array.isArray(data?.users) ? data.users : [];
+    users.forEach((uid) => {
+      if (uid && uid !== currentUser.id) {
+        excluded.add(String(uid));
+      }
+    });
+  });
+
+  return excluded;
 };
 
 export const filterProfiles = async (req: Request, res: Response) => {
@@ -120,15 +218,7 @@ export const filterProfiles = async (req: Request, res: Response) => {
     : parsedMaxAge;
 
   const maxDistance = parseBoundedInt(body.maxDistance, 1, 500);
-
-  const excluded = new Set<string>(
-    [
-      currentUser.id,
-      ...(currentUser.likes || []),
-      ...(currentUser.passes || []),
-      ...(currentUser.matches || []),
-    ].map(String)
-  );
+  const excluded = await buildExcludedUserIds(currentUser);
 
   const snapshot = await usersCollection
     .where('onboardingCompleted', '==', true)
@@ -238,3 +328,115 @@ export const filterProfiles = async (req: Request, res: Response) => {
   );
 };
 
+export const discoverByInterests = async (req: Request, res: Response) => {
+  const uid = req.userId;
+  if (!uid) {
+    return res.status(401).json({ message: 'Unauthorized: Firebase UID missing.' });
+  }
+
+  const userDoc = await usersCollection.doc(uid).get();
+  if (!userDoc.exists) {
+    return res.status(404).json({ message: 'User profile not found.' });
+  }
+
+  const currentUser = { id: userDoc.id, ...userDoc.data() } as IUserProfile;
+  const selectedInterests = parseInterestQuery(req.query.interests);
+  if (selectedInterests.length === 0) {
+    return res.status(400).json({ message: 'Provide at least one interest in query parameter: interests' });
+  }
+
+  const preferredGender = normalizeGenderPreference(
+    currentUser.preferredGender,
+    currentUser.lookingFor
+  );
+  const excluded = await buildExcludedUserIds(currentUser);
+
+  const snapshot = await usersCollection
+    .where('onboardingCompleted', '==', true)
+    .get();
+
+  const selectedSet = new Set(selectedInterests);
+  const collectResults = (enforceGender: boolean) => {
+    const data: Array<IUserProfile & { matchedInterests: string[]; interestMatchCount: number }> = [];
+
+    snapshot.forEach((doc) => {
+      if (excluded.has(doc.id)) return;
+
+      const candidate = { id: doc.id, ...doc.data() } as IUserProfile;
+      const candidateGender = normalizeGender(candidate.gender);
+      if (enforceGender && preferredGender && candidateGender !== preferredGender) return;
+
+      const interestSource = [
+        ...(Array.isArray(candidate.interests) ? candidate.interests : []),
+        ...(Array.isArray(candidate.hobbies) ? candidate.hobbies : []),
+      ];
+
+      const normalizedCandidateInterests = normalizeLowerStringArray(interestSource);
+      if (normalizedCandidateInterests.length === 0) return;
+
+      const displayMap = new Map<string, string>();
+      interestSource.forEach((raw) => {
+        if (typeof raw !== 'string') return;
+        const normalized = toLowerTrimmed(raw);
+        if (!normalized || displayMap.has(normalized)) return;
+        displayMap.set(normalized, raw.trim());
+      });
+
+      const matched = normalizedCandidateInterests
+        .filter((item) => selectedSet.has(item))
+        .map((item) => displayMap.get(item) || item);
+
+      if (matched.length === 0) return;
+
+      data.push({
+        ...candidate,
+        matchedInterests: matched,
+        interestMatchCount: matched.length,
+      });
+    });
+
+    return data;
+  };
+
+  let results = collectResults(true);
+  const usedFallbackWithoutPreference = Boolean(preferredGender && results.length === 0);
+  if (usedFallbackWithoutPreference) {
+    results = collectResults(false);
+  }
+
+  results.sort((a, b) => {
+    if (b.interestMatchCount !== a.interestMatchCount) {
+      return b.interestMatchCount - a.interestMatchCount;
+    }
+    const aAge = typeof a.age === 'number' ? a.age : Number.POSITIVE_INFINITY;
+    const bAge = typeof b.age === 'number' ? b.age : Number.POSITIVE_INFINITY;
+    return aAge - bAge;
+  });
+
+  return res.status(200).json(
+    results.map((u) => ({
+      id: u.id,
+      name: u.name,
+      age: u.age,
+      gender: u.gender,
+      denomination: u.denomination,
+      location: u.location,
+      profilePhoto1: u.profilePhoto1,
+      profilePhoto2: u.profilePhoto2,
+      profilePhoto3: u.profilePhoto3,
+      bio: u.bio,
+      faithJourney: u.faithJourney,
+      churchAttendance: u.churchAttendance || u.sundayActivity,
+      relationshipGoals: u.relationshipGoals,
+      hobbies: u.hobbies,
+      interests: u.interests,
+      values: u.values,
+      favoriteVerse: u.favoriteVerse,
+      profession: u.profession,
+      fieldOfStudy: u.fieldOfStudy,
+      matchedInterests: u.matchedInterests,
+      interestMatchCount: u.interestMatchCount,
+      usedFallbackWithoutPreference,
+    }))
+  );
+};

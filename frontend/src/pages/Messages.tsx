@@ -38,6 +38,7 @@ import {
 import { useConversations, useConversationMessages } from '@/hooks/useAPI';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { HeartBeatLoader } from '@/components/HeartBeatLoader';
+import AppDropdown from '@/components/AppDropdown';
 
 interface OptimizedImageProps {
   src: string;
@@ -2798,30 +2799,32 @@ const MessagesContent = () => {
                 </div>
                 {callMode === 'video' && (
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    <select
+                    <AppDropdown
                       value={selectedVideoFilterId}
-                      onChange={(event) => setSelectedVideoFilterId(event.target.value)}
-                      className="h-9 rounded-lg border border-white/20 bg-white/10 px-2 text-xs text-white outline-none focus:border-pink-300/70"
-                      aria-label="Video filter"
-                    >
-                      {CALL_VIDEO_FILTER_PRESETS.map((preset) => (
-                        <option key={preset.id} value={preset.id} className="text-black">
-                          Filter: {preset.label}
-                        </option>
-                      ))}
-                    </select>
-                    <select
+                      onChange={setSelectedVideoFilterId}
+                      options={CALL_VIDEO_FILTER_PRESETS.map((preset) => ({
+                        value: preset.id,
+                        label: `Filter: ${preset.label}`,
+                      }))}
+                      placeholder="Video filter"
+                      triggerClassName="h-9 rounded-lg border border-white/20 bg-white/10 px-2 text-xs text-white focus:border-pink-300/70"
+                      menuClassName="border-white/20 bg-slate-900/96"
+                      optionClassName="text-xs sm:text-sm"
+                      ariaLabel="Video filter"
+                    />
+                    <AppDropdown
                       value={selectedBackgroundId}
-                      onChange={(event) => setSelectedBackgroundId(event.target.value)}
-                      className="h-9 rounded-lg border border-white/20 bg-white/10 px-2 text-xs text-white outline-none focus:border-pink-300/70"
-                      aria-label="Call background"
-                    >
-                      {CALL_BACKGROUND_PRESETS.map((preset) => (
-                        <option key={preset.id} value={preset.id} className="text-black">
-                          Bg: {preset.label}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setSelectedBackgroundId}
+                      options={CALL_BACKGROUND_PRESETS.map((preset) => ({
+                        value: preset.id,
+                        label: `Bg: ${preset.label}`,
+                      }))}
+                      placeholder="Call background"
+                      triggerClassName="h-9 rounded-lg border border-white/20 bg-white/10 px-2 text-xs text-white focus:border-pink-300/70"
+                      menuClassName="border-white/20 bg-slate-900/96"
+                      optionClassName="text-xs sm:text-sm"
+                      ariaLabel="Call background"
+                    />
                   </div>
                 )}
               </div>

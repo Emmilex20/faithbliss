@@ -20,6 +20,7 @@ import PaymentSuccess from './pages/PaymentSuccess.tsx';
 import OnboardingRouteWrapper from './pages/OnboardingPage.tsx';
 import MatchPage from './pages/MatchesPage.tsx';
 import Community from './pages/Community.tsx';
+import Explore from './pages/Explore.tsx';
 import About from './pages/About.tsx';
 import Privacy from './pages/Privacy.tsx';
 import Settings from './pages/Settings.tsx';
@@ -91,6 +92,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 {/* Dashboard and other private routes */}
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="community" element={<Community />} />
+                <Route path="explore" element={<Explore />} />
 
                 {/* 💡 ADDED: Messages Route (Now protected by AuthGate) */}
                 <Route path="messages" element={<Messages />} />

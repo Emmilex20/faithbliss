@@ -1,10 +1,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ChevronDown, Search } from 'lucide-react';
 import type { OnboardingData } from './types';
 import SelectableCard from './SelectableCard';
 import { CountryCodeSelect, countries, defaultCountry } from '@/components/CountryCodeSelect';
 import type { Country } from '@/components/CountryCodeSelect';
+import AppDropdown from '@/components/AppDropdown';
 import SelectWithOtherInput from './SelectWithOtherInput';
 
 interface ProfileBuilderSlideProps {
@@ -194,94 +194,19 @@ const SingleSelectDropdown = ({
   options: Array<{ value: string; label: string }>;
   onChange: (next: string) => void;
   placeholder: string;
-}) => {
-  const dropdownRef = React.useRef<HTMLDivElement>(null);
-  const searchInputRef = React.useRef<HTMLInputElement>(null);
-  const [isOpen, setIsOpen] = React.useState(false);
-  const [searchTerm, setSearchTerm] = React.useState('');
-
-  React.useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!dropdownRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  React.useEffect(() => {
-    if (!isOpen) {
-      setSearchTerm('');
-      return;
-    }
-    searchInputRef.current?.focus();
-  }, [isOpen]);
-
-  const filteredOptions = React.useMemo(
-    () => options.filter((option) => option.label.toLowerCase().includes(searchTerm.toLowerCase())),
-    [options, searchTerm]
-  );
-
-  const selectedLabel = options.find((option) => option.value === value)?.label;
-
-  return (
-    <div ref={dropdownRef} className="relative">
-      <button
-        id={id}
-        type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="input-style flex w-full items-center justify-between gap-3 text-left"
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-      >
-        <span className={selectedLabel ? 'text-white' : 'text-slate-400'}>{selectedLabel || placeholder}</span>
-        <ChevronDown className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {isOpen && (
-        <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-2xl border border-slate-600/60 bg-slate-900/98 shadow-2xl backdrop-blur-md">
-          <div className="border-b border-slate-700/70 p-3">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search status..."
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 py-2 pl-9 pr-3 text-sm text-white placeholder-slate-400 outline-none focus:border-pink-500"
-              />
-            </div>
-          </div>
-
-          <div className="max-h-56 overflow-y-auto py-1">
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => {
-                    onChange(option.value);
-                    setIsOpen(false);
-                  }}
-                  className={`w-full px-4 py-2.5 text-left text-sm transition sm:text-base ${
-                    option.value === value ? 'bg-pink-500/20 text-pink-100' : 'text-slate-200 hover:bg-slate-800'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))
-            ) : (
-              <p className="px-4 py-3 text-sm text-slate-400">No matching status.</p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+}) => (
+  <AppDropdown
+    id={id}
+    value={value || ''}
+    options={options}
+    onChange={onChange}
+    placeholder={placeholder}
+    searchable
+    searchPlaceholder="Search status..."
+    emptyText="No matching status."
+    triggerClassName="input-style flex w-full items-center justify-between gap-3 text-left"
+  />
+);
 
 const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: ProfileBuilderSlideProps) => {
   const [selectedCountry, setSelectedCountry] = React.useState<Country>(defaultCountry);

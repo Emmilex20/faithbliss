@@ -1,102 +1,118 @@
-﻿import type { ProfileData } from '@/types/profile';
+import type React from 'react';
+import type { ProfileData } from '@/types/profile';
+import AppDropdown from '@/components/AppDropdown';
 
 interface FaithSectionProps {
   profileData: ProfileData;
   setProfileData: React.Dispatch<React.SetStateAction<ProfileData | null>>;
 }
 
-const FaithSection = ({ profileData, setProfileData }: FaithSectionProps) => (
+type FaithJourneyValue = NonNullable<ProfileData['faithJourney']>;
+
+const CHURCH_ATTENDANCE_OPTIONS = [
+  { value: '', label: 'Select attendance' },
+  { value: 'WEEKLY', label: 'Weekly' },
+  { value: 'BI_WEEKLY', label: 'Bi-weekly' },
+  { value: 'MONTHLY', label: 'Monthly' },
+  { value: 'RARELY', label: 'Rarely' },
+  { value: 'OCCASIONALLY', label: 'Occasionally' },
+];
+
+const BAPTISM_STATUS_OPTIONS = [
+  { value: '', label: 'Select status' },
+  { value: 'BAPTIZED', label: 'Baptized' },
+  { value: 'NOT_BAPTIZED', label: 'Not baptized' },
+  { value: 'PENDING', label: 'Planning to be baptized' },
+  { value: 'PREFER_NOT_TO_SAY', label: 'Prefer not to say' },
+];
+
+const DENOMINATION_OPTIONS = [
+  { value: '', label: 'Select denomination' },
+  { value: 'BAPTIST', label: 'Baptist' },
+  { value: 'METHODIST', label: 'Methodist' },
+  { value: 'PRESBYTERIAN', label: 'Presbyterian' },
+  { value: 'PENTECOSTAL', label: 'Pentecostal' },
+  { value: 'CATHOLIC', label: 'Catholic' },
+  { value: 'ORTHODOX', label: 'Orthodox' },
+  { value: 'ANGLICAN', label: 'Anglican' },
+  { value: 'LUTHERAN', label: 'Lutheran' },
+  { value: 'ASSEMBLIES_OF_GOD', label: 'Assemblies of God' },
+  { value: 'SEVENTH_DAY_ADVENTIST', label: 'Seventh-day Adventist' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+const FAITH_JOURNEY_STAGE_OPTIONS: Array<{ value: FaithJourneyValue; label: string }> = [
+  { value: 'PASSIONATE', label: 'Passionate Believer' },
+  { value: 'ROOTED', label: 'Rooted & Steady' },
+  { value: 'GROWING', label: 'Growing in Faith' },
+  { value: 'ESTABLISHED', label: 'Established & Grounded' },
+  { value: 'SEEKING', label: 'Seeking Faith' },
+];
+
+export const FaithSection = ({ profileData, setProfileData }: FaithSectionProps) => (
   <div className="space-y-6">
-    <div className="bg-gray-800/50 rounded-3xl p-8 border border-gray-700/50">
-      <h2 className="text-2xl font-bold text-white mb-6">Faith Journey</h2>
+    <div className="rounded-3xl border border-gray-700/50 bg-gray-800/50 p-8">
+      <h2 className="mb-6 text-2xl font-bold text-white">Faith Journey</h2>
 
       <div className="space-y-6">
         <div>
-          <label className="block text-sm font-semibold text-gray-300 mb-3">Church Attendance</label>
-          <select
+          <label className="mb-3 block text-sm font-semibold text-gray-300">Church Attendance</label>
+          <AppDropdown
             value={profileData.churchAttendance || profileData.sundayActivity || ''}
-            onChange={(e) => setProfileData((prev) => (prev ? ({ ...prev, churchAttendance: e.target.value as any }) : null))}
-            className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
-          >
-            <option value="">Select attendance</option>
-            <option value="WEEKLY">Weekly</option>
-            <option value="BI_WEEKLY">Bi-weekly</option>
-            <option value="MONTHLY">Monthly</option>
-            <option value="RARELY">Rarely</option>
-            <option value="OCCASIONALLY">Occasionally</option>
-          </select>
+            onChange={(next) =>
+              setProfileData((prev) => (prev ? ({ ...prev, churchAttendance: next as ProfileData['churchAttendance'] }) : null))
+            }
+            options={CHURCH_ATTENDANCE_OPTIONS}
+            placeholder="Select attendance"
+            triggerClassName="w-full rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white transition-colors focus:border-pink-500"
+            menuClassName="border-gray-600/60 bg-slate-900/98"
+          />
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-gray-300 mb-3">Baptism Status</label>
-          <select
+          <label className="mb-3 block text-sm font-semibold text-gray-300">Baptism Status</label>
+          <AppDropdown
             value={profileData.baptismStatus || ''}
-            onChange={(e) => setProfileData((prev) => (prev ? ({ ...prev, baptismStatus: e.target.value as any }) : null))}
-            className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
-          >
-            <option value="">Select status</option>
-            <option value="BAPTIZED">Baptized</option>
-            <option value="NOT_BAPTIZED">Not baptized</option>
-            <option value="PENDING">Planning to be baptized</option>
-            <option value="PREFER_NOT_TO_SAY">Prefer not to say</option>
-          </select>
+            onChange={(next) =>
+              setProfileData((prev) => (prev ? ({ ...prev, baptismStatus: next as ProfileData['baptismStatus'] }) : null))
+            }
+            options={BAPTISM_STATUS_OPTIONS}
+            placeholder="Select status"
+            triggerClassName="w-full rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white transition-colors focus:border-pink-500"
+            menuClassName="border-gray-600/60 bg-slate-900/98"
+          />
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-gray-300 mb-3">Denomination</label>
-          <select
+          <label className="mb-3 block text-sm font-semibold text-gray-300">Denomination</label>
+          <AppDropdown
             value={profileData.denomination || ''}
-            onChange={(e) =>
+            onChange={(next) =>
               setProfileData((prev) =>
                 prev
                   ? ({
                       ...prev,
-                      denomination: e.target.value as
-                        | 'BAPTIST'
-                        | 'METHODIST'
-                        | 'PRESBYTERIAN'
-                        | 'PENTECOSTAL'
-                        | 'CATHOLIC'
-                        | 'ORTHODOX'
-                        | 'ANGLICAN'
-                        | 'LUTHERAN'
-                        | 'ASSEMBLIES_OF_GOD'
-                        | 'SEVENTH_DAY_ADVENTIST'
-                        | 'OTHER',
+                      denomination: next as ProfileData['denomination'],
                     })
                   : null
               )
             }
-            className="w-full p-4 bg-gray-700/50 border border-gray-600/50 rounded-2xl text-white focus:border-pink-500 focus:outline-none transition-colors"
-          >
-            <option value="">Select denomination</option>
-            <option value="BAPTIST">Baptist</option>
-            <option value="METHODIST">Methodist</option>
-            <option value="PRESBYTERIAN">Presbyterian</option>
-            <option value="PENTECOSTAL">Pentecostal</option>
-            <option value="CATHOLIC">Catholic</option>
-            <option value="ORTHODOX">Orthodox</option>
-            <option value="ANGLICAN">Anglican</option>
-            <option value="LUTHERAN">Lutheran</option>
-            <option value="ASSEMBLIES_OF_GOD">Assemblies of God</option>
-            <option value="SEVENTH_DAY_ADVENTIST">Seventh-day Adventist</option>
-            <option value="OTHER">Other</option>
-          </select>
+            options={DENOMINATION_OPTIONS}
+            placeholder="Select denomination"
+            searchable
+            searchPlaceholder="Search denomination..."
+            triggerClassName="w-full rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white transition-colors focus:border-pink-500"
+            menuClassName="border-gray-600/60 bg-slate-900/98"
+          />
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-gray-300 mb-3">Faith Journey Stage</label>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {[
-              { value: 'PASSIONATE', label: 'Passionate Believer' },
-              { value: 'ROOTED', label: 'Rooted & Steady' },
-              { value: 'GROWING', label: 'Growing in Faith' },
-              { value: 'ESTABLISHED', label: 'Established & Grounded' },
-              { value: 'SEEKING', label: 'Seeking Faith' },
-            ].map((stage) => (
+          <label className="mb-3 block text-sm font-semibold text-gray-300">Faith Journey Stage</label>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {FAITH_JOURNEY_STAGE_OPTIONS.map((stage) => (
               <button
                 key={stage.value}
-                onClick={() => setProfileData((prev) => (prev ? ({ ...prev, faithJourney: stage.value as any }) : null))}
+                onClick={() => setProfileData((prev) => (prev ? ({ ...prev, faithJourney: stage.value }) : null))}
                 className={`p-4 rounded-2xl font-medium transition-all ${
                   profileData.faithJourney === stage.value
                     ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white'
@@ -110,8 +126,8 @@ const FaithSection = ({ profileData, setProfileData }: FaithSectionProps) => (
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-gray-300 mb-3">Spiritual Gifts</label>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <label className="mb-3 block text-sm font-semibold text-gray-300">Spiritual Gifts</label>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             {[
               'Teaching',
               'Serving',
@@ -149,7 +165,7 @@ const FaithSection = ({ profileData, setProfileData }: FaithSectionProps) => (
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-gray-300 mb-3">Favorite Bible Verse</label>
+          <label className="mb-3 block text-sm font-semibold text-gray-300">Favorite Bible Verse</label>
           <textarea
             value={profileData.favoriteVerse || ''}
             onChange={(e) => setProfileData((prev) => (prev ? ({ ...prev, favoriteVerse: e.target.value }) : null))}
@@ -160,8 +176,8 @@ const FaithSection = ({ profileData, setProfileData }: FaithSectionProps) => (
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-gray-300 mb-3">Looking For</label>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label className="mb-3 block text-sm font-semibold text-gray-300">Looking For</label>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {[
               { value: 'MARRIAGE_MINDED', label: 'Marriage Minded' },
               { value: 'RELATIONSHIP', label: 'Dating with Purpose' },

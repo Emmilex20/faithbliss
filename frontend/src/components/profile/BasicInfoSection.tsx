@@ -3,6 +3,7 @@ import type { ProfileData } from '@/types/profile';
 import { BIO_MAX_LENGTH, PROFILE_PROMPT_OPTIONS, PROMPT_ANSWER_MAX_LENGTH } from '@/constants/profilePrompts';
 import { CountryCodeSelect, countries, defaultCountry } from '@/components/CountryCodeSelect';
 import type { Country } from '@/components/CountryCodeSelect';
+import AppDropdown from '@/components/AppDropdown';
 
 interface BasicInfoSectionProps {
   profileData: ProfileData;
@@ -27,6 +28,15 @@ const LANGUAGE_OPTIONS = [
 
 const COMMUNICATION_STYLE_OPTIONS = ['Big time texter', 'Phone caller', 'Video chatter', 'Bad texter', 'Better in person'];
 const LOVE_STYLE_OPTIONS = ['Thoughtful gestures', 'Presents', 'Touch', 'Compliments', 'Time together'];
+const GENDER_OPTIONS = [
+  { value: '', label: 'Select gender' },
+  { value: 'MALE', label: 'Male' },
+  { value: 'FEMALE', label: 'Female' },
+];
+const PROMPT_QUESTION_OPTIONS = [
+  { value: '', label: 'Select a question' },
+  ...PROFILE_PROMPT_OPTIONS.map((prompt) => ({ value: prompt, label: prompt })),
+];
 
 const toArray = (value?: string[] | string): string[] => {
   if (Array.isArray(value)) return value.filter(Boolean);
@@ -95,15 +105,16 @@ const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div>
             <label className="mb-3 block text-sm font-semibold text-gray-300">Gender</label>
-            <select
+            <AppDropdown
               value={profileData.gender || ''}
-              onChange={(e) => setProfileData((prev) => (prev ? ({ ...prev, gender: e.target.value as 'MALE' | 'FEMALE' }) : null))}
-              className="w-full rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white transition-colors focus:border-pink-500 focus:outline-none"
-            >
-              <option value="">Select gender</option>
-              <option value="MALE">Male</option>
-              <option value="FEMALE">Female</option>
-            </select>
+              onChange={(next) =>
+                setProfileData((prev) => (prev ? ({ ...prev, gender: next as 'MALE' | 'FEMALE' }) : null))
+              }
+              options={GENDER_OPTIONS}
+              placeholder="Select gender"
+              triggerClassName="w-full rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white transition-colors focus:border-pink-500"
+              menuClassName="border-gray-600/60 bg-slate-900/98"
+            />
           </div>
 
           <div>
@@ -223,18 +234,16 @@ const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps
         <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
           <div>
             <label className="mb-3 block text-sm font-semibold text-gray-300">Personal Prompt</label>
-            <select
+            <AppDropdown
               value={profileData.personalPromptQuestion || ''}
-              onChange={(e) => setProfileData((prev) => (prev ? ({ ...prev, personalPromptQuestion: e.target.value }) : null))}
-              className="w-full rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white transition-colors focus:border-pink-500 focus:outline-none"
-            >
-              <option value="">Select a question</option>
-              {PROFILE_PROMPT_OPTIONS.map((prompt) => (
-                <option key={prompt} value={prompt}>
-                  {prompt}
-                </option>
-              ))}
-            </select>
+              onChange={(next) => setProfileData((prev) => (prev ? ({ ...prev, personalPromptQuestion: next }) : null))}
+              options={PROMPT_QUESTION_OPTIONS}
+              placeholder="Select a question"
+              searchable
+              searchPlaceholder="Search prompts..."
+              triggerClassName="w-full rounded-2xl border border-gray-600/50 bg-gray-700/50 p-4 text-white transition-colors focus:border-pink-500"
+              menuClassName="border-gray-600/60 bg-slate-900/98"
+            />
           </div>
 
           <div>

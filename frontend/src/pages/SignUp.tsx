@@ -6,6 +6,7 @@ import { Eye, EyeOff, Heart, Lock, Mail, Sparkles, User } from 'lucide-react';
 import { PopupInstruction } from '@/components/auth/PopupInstruction';
 import { SuccessModal } from '@/components/SuccessModal';
 import { HeartBeatIcon } from '@/components/HeartBeatIcon';
+import AppDropdown from '@/components/AppDropdown';
 import { useAuthContext } from '../contexts/AuthContext';
 
 export default function Signup() {
@@ -81,10 +82,17 @@ export default function Signup() {
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((prev) => ({
       ...prev,
       [e.target.name]: e.target.value,
+    }));
+  };
+
+  const handleGenderChange = (nextGender: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      gender: nextGender,
     }));
   };
 
@@ -203,17 +211,19 @@ export default function Signup() {
             <label htmlFor="gender" className="block text-sm font-medium text-gray-300 mb-2">
               Gender
             </label>
-            <select
+            <AppDropdown
               id="gender"
-              name="gender"
               value={formData.gender}
-              onChange={handleInputChange}
-              className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 text-white rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500/50 transition-all"
-              required
-            >
-              <option value="MALE">Male</option>
-              <option value="FEMALE">Female</option>
-            </select>
+              onChange={handleGenderChange}
+              options={[
+                { value: 'MALE', label: 'Male' },
+                { value: 'FEMALE', label: 'Female' },
+              ]}
+              triggerClassName="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 text-white rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500/50 transition-all"
+              menuClassName="border-gray-600/70 bg-slate-900/98"
+              optionClassName="text-sm"
+              ariaLabel="Gender"
+            />
           </div>
 
           <button

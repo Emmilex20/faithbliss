@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom'; // ðŸŒŸ VITE FIX 2: Use Link from r
 // Remove: import Image from 'next/image'; // ðŸŒŸ VITE FIX 3: Replaced with standard <img>
 import { 
   X, User, Heart, MessageCircle, Star, Settings, 
-  HelpCircle, LogOut, Home, UserX, AlertTriangle, Bell, Users
+  HelpCircle, LogOut, Home, UserX, AlertTriangle, Bell, Users, Compass
 } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNotificationUnreadCount } from '@/hooks/useAPI';
@@ -84,6 +84,18 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
               <div>
                 <h4 className="text-white font-semibold">Home</h4>
                 <p className="text-gray-400 text-sm">Discover new connections</p>
+              </div>
+            </div>
+          </Link>
+
+          <Link to="/explore" onClick={onClose}>
+            <div className="flex items-center space-x-4 p-4 hover:bg-gray-800/50 rounded-2xl transition-colors cursor-pointer group">
+              <div className="p-2 bg-cyan-500/20 rounded-xl group-hover:bg-cyan-500/30 transition-colors">
+                <Compass className="w-5 h-5 text-cyan-300" />
+              </div>
+              <div>
+                <h4 className="text-white font-semibold">Explore</h4>
+                <p className="text-gray-400 text-sm">Find by shared interests</p>
               </div>
             </div>
           </Link>

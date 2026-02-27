@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, Filter, RotateCcw, X } from 'lucide-react';
+import AppDropdown from '@/components/AppDropdown';
 
 export interface DashboardFiltersPayload {
   preferredGender?: 'MALE' | 'FEMALE';
@@ -23,6 +24,51 @@ const sanitizeNumberInput = (value: string, fallback: number) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
+
+const INTERESTED_IN_OPTIONS = [
+  { value: '', label: 'Any' },
+  { value: 'MALE', label: 'Men' },
+  { value: 'FEMALE', label: 'Women' },
+];
+
+const FAITH_JOURNEY_OPTIONS = [
+  { value: '', label: 'Any' },
+  { value: 'EXPLORING', label: 'Exploring' },
+  { value: 'GROWING', label: 'Growing' },
+  { value: 'ROOTED', label: 'Rooted' },
+  { value: 'PASSIONATE', label: 'Passionate' },
+];
+
+const DENOMINATION_OPTIONS = [
+  { value: '', label: 'Any' },
+  { value: 'BAPTIST', label: 'Baptist' },
+  { value: 'METHODIST', label: 'Methodist' },
+  { value: 'PRESBYTERIAN', label: 'Presbyterian' },
+  { value: 'PENTECOSTAL', label: 'Pentecostal' },
+  { value: 'CATHOLIC', label: 'Catholic' },
+  { value: 'ORTHODOX', label: 'Orthodox' },
+  { value: 'ANGLICAN', label: 'Anglican' },
+  { value: 'LUTHERAN', label: 'Lutheran' },
+  { value: 'ASSEMBLIES_OF_GOD', label: 'Assemblies of God' },
+  { value: 'SEVENTH_DAY_ADVENTIST', label: 'Seventh-day Adventist' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+const CHURCH_ATTENDANCE_OPTIONS = [
+  { value: '', label: 'Any' },
+  { value: 'WEEKLY', label: 'Weekly' },
+  { value: 'BIWEEKLY', label: 'Bi-weekly' },
+  { value: 'MONTHLY', label: 'Monthly' },
+  { value: 'OCCASIONALLY', label: 'Occasionally' },
+  { value: 'RARELY', label: 'Rarely' },
+];
+
+const RELATIONSHIP_GOAL_OPTIONS = [
+  { value: '', label: 'Any' },
+  { value: 'FRIENDSHIP', label: 'Friendship' },
+  { value: 'RELATIONSHIP', label: 'Relationship' },
+  { value: 'MARRIAGE_MINDED', label: 'Marriage-minded' },
+];
 
 export const FilterPanel = ({ onClose, onApplyFilters }: FilterPanelProps) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -119,15 +165,14 @@ export const FilterPanel = ({ onClose, onApplyFilters }: FilterPanelProps) => {
       <div className="flex-1 overflow-y-auto p-6 space-y-5">
         <section className="rounded-2xl border border-indigo-400/20 bg-indigo-500/10 p-4">
           <label className="block text-xs font-semibold uppercase tracking-wide text-indigo-200 mb-2">Interested In</label>
-          <select
+          <AppDropdown
             value={gender}
-            onChange={(e) => setGender(e.target.value as 'MALE' | 'FEMALE' | '')}
-            className="w-full rounded-xl bg-slate-900/70 border border-indigo-300/30 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
-          >
-            <option value="">Any</option>
-            <option value="MALE">Men</option>
-            <option value="FEMALE">Women</option>
-          </select>
+            onChange={(next) => setGender(next as 'MALE' | 'FEMALE' | '')}
+            options={INTERESTED_IN_OPTIONS}
+            placeholder="Any"
+            triggerClassName="w-full rounded-xl bg-slate-900/70 border border-indigo-300/30 px-3 py-2.5 text-sm text-white focus:ring-2 focus:ring-indigo-400/40"
+            menuClassName="border-indigo-300/30 bg-slate-900/98"
+          />
         </section>
 
         <section className="rounded-2xl border border-pink-400/20 bg-pink-500/10 p-4">
@@ -168,17 +213,14 @@ export const FilterPanel = ({ onClose, onApplyFilters }: FilterPanelProps) => {
 
         <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
           <label className="block text-xs font-semibold uppercase tracking-wide text-emerald-200 mb-2">Faith Journey</label>
-          <select
+          <AppDropdown
             value={faithJourney}
-            onChange={(e) => setFaithJourney(e.target.value)}
-            className="w-full rounded-xl bg-slate-900/70 border border-emerald-300/30 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
-          >
-            <option value="">Any</option>
-            <option value="EXPLORING">Exploring</option>
-            <option value="GROWING">Growing</option>
-            <option value="ROOTED">Rooted</option>
-            <option value="PASSIONATE">Passionate</option>
-          </select>
+            onChange={setFaithJourney}
+            options={FAITH_JOURNEY_OPTIONS}
+            placeholder="Any"
+            triggerClassName="w-full rounded-xl bg-slate-900/70 border border-emerald-300/30 px-3 py-2.5 text-sm text-white focus:ring-2 focus:ring-emerald-400/40"
+            menuClassName="border-emerald-300/30 bg-slate-900/98"
+          />
         </section>
 
         <button
@@ -194,54 +236,40 @@ export const FilterPanel = ({ onClose, onApplyFilters }: FilterPanelProps) => {
           <div className="space-y-4">
             <section className="rounded-2xl border border-purple-400/20 bg-purple-500/10 p-4">
               <label className="block text-xs font-semibold uppercase tracking-wide text-purple-200 mb-2">Denomination</label>
-              <select
+              <AppDropdown
                 value={denomination}
-                onChange={(e) => setDenomination(e.target.value)}
-                className="w-full rounded-xl bg-slate-900/70 border border-purple-300/30 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-400/40"
-              >
-                <option value="">Any</option>
-                <option value="BAPTIST">Baptist</option>
-                <option value="METHODIST">Methodist</option>
-                <option value="PRESBYTERIAN">Presbyterian</option>
-                <option value="PENTECOSTAL">Pentecostal</option>
-                <option value="CATHOLIC">Catholic</option>
-                <option value="ORTHODOX">Orthodox</option>
-                <option value="ANGLICAN">Anglican</option>
-                <option value="LUTHERAN">Lutheran</option>
-                <option value="ASSEMBLIES_OF_GOD">Assemblies of God</option>
-                <option value="SEVENTH_DAY_ADVENTIST">Seventh-day Adventist</option>
-                <option value="OTHER">Other</option>
-              </select>
+                onChange={setDenomination}
+                options={DENOMINATION_OPTIONS}
+                placeholder="Any"
+                searchable
+                searchPlaceholder="Search denomination..."
+                triggerClassName="w-full rounded-xl bg-slate-900/70 border border-purple-300/30 px-3 py-2.5 text-sm text-white focus:ring-2 focus:ring-purple-400/40"
+                menuClassName="border-purple-300/30 bg-slate-900/98"
+              />
             </section>
 
             <section className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
               <label className="block text-xs font-semibold uppercase tracking-wide text-amber-200 mb-2">Church Attendance</label>
-              <select
+              <AppDropdown
                 value={churchAttendance}
-                onChange={(e) => setChurchAttendance(e.target.value)}
-                className="w-full rounded-xl bg-slate-900/70 border border-amber-300/30 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-400/40"
-              >
-                <option value="">Any</option>
-                <option value="WEEKLY">Weekly</option>
-                <option value="BIWEEKLY">Bi-weekly</option>
-                <option value="MONTHLY">Monthly</option>
-                <option value="OCCASIONALLY">Occasionally</option>
-                <option value="RARELY">Rarely</option>
-              </select>
+                onChange={setChurchAttendance}
+                options={CHURCH_ATTENDANCE_OPTIONS}
+                placeholder="Any"
+                triggerClassName="w-full rounded-xl bg-slate-900/70 border border-amber-300/30 px-3 py-2.5 text-sm text-white focus:ring-2 focus:ring-amber-400/40"
+                menuClassName="border-amber-300/30 bg-slate-900/98"
+              />
             </section>
 
             <section className="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4">
               <label className="block text-xs font-semibold uppercase tracking-wide text-rose-200 mb-2">Relationship Goal</label>
-              <select
+              <AppDropdown
                 value={relationshipGoal}
-                onChange={(e) => setRelationshipGoal(e.target.value)}
-                className="w-full rounded-xl bg-slate-900/70 border border-rose-300/30 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-rose-400/40"
-              >
-                <option value="">Any</option>
-                <option value="FRIENDSHIP">Friendship</option>
-                <option value="RELATIONSHIP">Relationship</option>
-                <option value="MARRIAGE_MINDED">Marriage-minded</option>
-              </select>
+                onChange={setRelationshipGoal}
+                options={RELATIONSHIP_GOAL_OPTIONS}
+                placeholder="Any"
+                triggerClassName="w-full rounded-xl bg-slate-900/70 border border-rose-300/30 px-3 py-2.5 text-sm text-white focus:ring-2 focus:ring-rose-400/40"
+                menuClassName="border-rose-300/30 bg-slate-900/98"
+              />
             </section>
           </div>
         )}
