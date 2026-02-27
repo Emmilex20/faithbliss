@@ -57,8 +57,8 @@ export const HingeStyleProfileCard = ({
     const [prefix, suffix] = url.split('/upload/');
     if (!prefix || !suffix) return url;
 
-    // Request a larger high-clarity source so images stay sharp on dense mobile screens.
-    const deliveryTransform = 'f_auto,q_auto:best,dpr_auto,c_limit,w_2000,e_sharpen:60';
+    // Deliver a face-aware crop that better preserves faces in cover-mode cards.
+    const deliveryTransform = 'c_fill,g_auto:face,ar_7:5,w_2000,f_auto,q_auto:best,dpr_auto,e_sharpen:70';
     return `${prefix}/upload/${deliveryTransform}/${suffix}`;
   };
 
@@ -181,6 +181,7 @@ export const HingeStyleProfileCard = ({
   }, [photos, currentPhotoIndex]);
 
   if (isMobileView) {
+    const mobileCoverPosition = currentPhotoAspectRatio < 0.95 ? '50% 24%' : '50% 35%';
     const isPortraitImage = currentPhotoAspectRatio < 0.95;
     const mobileStageHeightClass = isCompactHeight
       ? isPortraitImage
@@ -285,6 +286,7 @@ export const HingeStyleProfileCard = ({
                 src={photos[currentPhotoIndex]}
                 alt={profile.name}
                 className="absolute inset-0 h-full w-full object-cover object-center [image-rendering:auto] [backface-visibility:hidden] [transform:translateZ(0)]"
+                style={{ objectPosition: mobileCoverPosition }}
                 initial={{ opacity: 0.5 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0.5 }}
