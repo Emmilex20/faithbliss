@@ -185,11 +185,11 @@ export const HingeStyleProfileCard = ({
     const isPortraitImage = currentPhotoAspectRatio < 0.95;
     const mobileStageHeightClass = isCompactHeight
       ? isPortraitImage
-        ? 'min-h-[190px] max-h-[36vh]'
-        : 'min-h-[170px] max-h-[30vh]'
+        ? 'min-h-[210px] max-h-[40vh]'
+        : 'min-h-[190px] max-h-[34vh]'
       : isPortraitImage
-        ? 'min-h-[240px] max-h-[50vh]'
-        : 'min-h-[220px] max-h-[42vh]';
+        ? 'min-h-[260px] max-h-[54vh]'
+        : 'min-h-[235px] max-h-[46vh]';
 
     return (
       <div className="flex h-full w-full flex-col bg-[radial-gradient(circle_at_10%_10%,rgba(236,72,153,0.17),transparent_38%),radial-gradient(circle_at_90%_0%,rgba(59,130,246,0.16),transparent_35%),linear-gradient(180deg,#020617_0%,#0f172a_100%)] px-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 text-white">
@@ -263,7 +263,7 @@ export const HingeStyleProfileCard = ({
             ))}
           </div>
 
-          <div className={`relative mt-2 w-full flex-1 overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/80 ${mobileStageHeightClass}`}>
+          <div className={`relative mt-1.5 w-full flex-1 overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/80 ${mobileStageHeightClass}`}>
             <AnimatePresence mode="wait" initial={false}>
               <motion.img
                 key={`${profileId}-${currentPhotoIndex}-bg-mobile`}
@@ -337,44 +337,46 @@ export const HingeStyleProfileCard = ({
             )}
           </div>
 
-          <div className={`${isCompactHeight ? 'mt-1.5' : 'mt-2'} flex items-center gap-2`}>
-            <span className="inline-flex items-center rounded-full bg-emerald-500/90 px-3 py-1 text-xs font-semibold text-white">
-              {distanceBadge}
-            </span>
-          </div>
-          <p className={`${isCompactHeight ? 'mt-1 line-clamp-1 text-xs' : 'mt-1 line-clamp-2 text-sm'} text-slate-100`}>
-            {profile.bio?.trim() || 'No bio available yet.'}
-          </p>
+          <div className="mt-auto">
+            <div className={`${isCompactHeight ? 'mt-1.5' : 'mt-2'} flex items-center gap-2`}>
+              <span className="inline-flex items-center rounded-full bg-emerald-500/90 px-3 py-1 text-xs font-semibold text-white">
+                {distanceBadge}
+              </span>
+            </div>
+            <p className={`${isCompactHeight ? 'mt-1 line-clamp-1 text-xs' : 'mt-1 line-clamp-2 text-sm'} text-slate-100`}>
+              {profile.bio?.trim() || 'No bio available yet.'}
+            </p>
 
-          <div className={`${isCompactHeight ? 'mt-2 gap-2 pb-0' : 'mt-3 gap-3 pb-1'} flex items-center`}>
-            <button
-              type="button"
-              onClick={onPass}
-              className={`inline-flex shrink-0 items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/22 text-rose-100 shadow-[0_10px_24px_rgba(244,63,94,0.32)] ${
-                isCompactHeight ? 'h-11 w-11' : 'h-12 w-12'
-              }`}
-              aria-label="Pass"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <Link
-              to={`/profile/${profileId}`}
-              className={`inline-flex flex-1 items-center justify-center rounded-full border border-cyan-300/55 bg-cyan-500/20 px-4 font-semibold text-cyan-100 transition hover:bg-cyan-500/30 hover:text-white ${
-                isCompactHeight ? 'h-11 text-[13px]' : 'h-12 text-sm'
-              }`}
-            >
-              View Full Profile
-            </Link>
-            <button
-              type="button"
-              onClick={onLike}
-              className={`inline-flex shrink-0 items-center justify-center rounded-full border border-fuchsia-300/50 bg-fuchsia-500/24 text-fuchsia-100 shadow-[0_10px_24px_rgba(217,70,239,0.34)] ${
-                isCompactHeight ? 'h-11 w-11' : 'h-12 w-12'
-              }`}
-              aria-label="Like"
-            >
-              <Heart className="h-5 w-5 fill-current" />
-            </button>
+            <div className={`${isCompactHeight ? 'mt-2 gap-2 pb-0' : 'mt-3 gap-3 pb-1'} flex items-center`}>
+              <button
+                type="button"
+                onClick={onPass}
+                className={`inline-flex shrink-0 items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/22 text-rose-100 shadow-[0_10px_24px_rgba(244,63,94,0.32)] ${
+                  isCompactHeight ? 'h-11 w-11' : 'h-12 w-12'
+                }`}
+                aria-label="Pass"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <Link
+                to={`/profile/${profileId}`}
+                className={`inline-flex flex-1 items-center justify-center rounded-full border border-cyan-300/55 bg-cyan-500/20 px-4 font-semibold text-cyan-100 transition hover:bg-cyan-500/30 hover:text-white ${
+                  isCompactHeight ? 'h-11 text-[13px]' : 'h-12 text-sm'
+                }`}
+              >
+                View Full Profile
+              </Link>
+              <button
+                type="button"
+                onClick={onLike}
+                className={`inline-flex shrink-0 items-center justify-center rounded-full border border-fuchsia-300/50 bg-fuchsia-500/24 text-fuchsia-100 shadow-[0_10px_24px_rgba(217,70,239,0.34)] ${
+                  isCompactHeight ? 'h-11 w-11' : 'h-12 w-12'
+                }`}
+                aria-label="Like"
+              >
+                <Heart className="h-5 w-5 fill-current" />
+              </button>
+            </div>
           </div>
         </article>
       </div>
