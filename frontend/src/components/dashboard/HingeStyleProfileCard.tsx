@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Heart, Maximize2, Minus, MoreHorizontal, Plus, SlidersHorizontal, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Heart, Minus, Plus, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import type { User } from '@/services/api';
@@ -31,6 +31,11 @@ const haversineDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: num
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+type TouchPoint = {
+  clientX: number;
+  clientY: number;
+};
+
 const pointerDistance = (a: { x: number; y: number }, b: { x: number; y: number }) => {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
@@ -46,7 +51,6 @@ export const HingeStyleProfileCard = ({
   onLike,
   onOpenFilterSection,
 }: HingeStyleProfileCardProps) => {
-  const navigate = useNavigate();
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [currentPhotoAspectRatio, setCurrentPhotoAspectRatio] = useState(1);
   const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
@@ -65,6 +69,11 @@ export const HingeStyleProfileCard = ({
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchStartScaleRef = useRef(1);
   const panStartRef = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchPinchDistanceRef = useRef<number | null>(null);
+  const touchPinchScaleRef = useRef(1);
+  const touchPanStartRef = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const touchSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const lastTapAtRef = useRef(0);
 
   const toCardCloudinary = (url: string) => {
@@ -127,7 +136,7 @@ export const HingeStyleProfileCard = ({
   const prevPhoto = () => setCurrentPhotoIndex((prev) => (prev - 1 + cardPhotos.length) % cardPhotos.length);
   const currentViewerPhoto = viewerPhotos[currentPhotoIndex] || viewerPhotos[0];
 
-  const clampViewerOffset = (offset: { x: number; y: number }, scale: number) => {
+  const clampViewerOffset = useCallback((offset: { x: number; y: number }, scale: number) => {
     const stage = viewerStageRef.current;
     if (!stage || scale <= 1) return { x: 0, y: 0 };
 
@@ -137,24 +146,26 @@ export const HingeStyleProfileCard = ({
       x: clamp(offset.x, -maxX, maxX),
       y: clamp(offset.y, -maxY, maxY),
     };
-  };
+  }, []);
 
-  const applyViewerScale = (nextScale: number) => {
+  const applyViewerScale = useCallback((nextScale: number) => {
     const clampedScale = clamp(nextScale, 1, 4);
     setViewerScale(clampedScale);
     setViewerOffset((prev) => clampViewerOffset(prev, clampedScale));
-  };
+  }, [clampViewerOffset]);
 
-  const resetViewerTransform = () => {
+  const resetViewerTransform = useCallback(() => {
     setViewerScale(1);
     setViewerOffset({ x: 0, y: 0 });
-  };
+  }, []);
 
   const handleViewerPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'touch') return;
     event.currentTarget.setPointerCapture(event.pointerId);
     activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
     if (activePointersRef.current.size === 1) {
+      swipeStartRef.current = { x: event.clientX, y: event.clientY };
       const now = Date.now();
       if (now - lastTapAtRef.current < 300) {
         resetViewerTransform();
@@ -176,10 +187,12 @@ export const HingeStyleProfileCard = ({
       pinchStartDistanceRef.current = pointerDistance(points[0], points[1]);
       pinchStartScaleRef.current = viewerScale;
       panStartRef.current = null;
+      swipeStartRef.current = null;
     }
   };
 
   const handleViewerPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'touch') return;
     if (!activePointersRef.current.has(event.pointerId)) return;
     activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
@@ -206,7 +219,32 @@ export const HingeStyleProfileCard = ({
   };
 
   const handleViewerPointerUpOrCancel = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'touch') return;
+    const pointerStart = swipeStartRef.current;
+    const pointerEnd = activePointersRef.current.get(event.pointerId);
     activePointersRef.current.delete(event.pointerId);
+
+    if (
+      pointerStart &&
+      pointerEnd &&
+      activePointersRef.current.size === 0 &&
+      viewerScale <= 1.02 &&
+      viewerPhotos.length > 1
+    ) {
+      const dx = pointerEnd.x - pointerStart.x;
+      const dy = pointerEnd.y - pointerStart.y;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+
+      // Natural gallery behavior: swipe left => next, swipe right => previous.
+      if (absDx > 42 && absDx > absDy * 1.35) {
+        if (dx < 0) {
+          nextPhoto();
+        } else {
+          prevPhoto();
+        }
+      }
+    }
 
     if (activePointersRef.current.size < 2) {
       pinchStartDistanceRef.current = null;
@@ -223,6 +261,10 @@ export const HingeStyleProfileCard = ({
     } else {
       panStartRef.current = null;
     }
+
+    if (activePointersRef.current.size === 0) {
+      swipeStartRef.current = null;
+    }
   };
 
   const handleViewerWheel = (event: React.WheelEvent<HTMLDivElement>) => {
@@ -230,6 +272,110 @@ export const HingeStyleProfileCard = ({
     event.preventDefault();
     const delta = event.deltaY > 0 ? -0.18 : 0.18;
     applyViewerScale(viewerScale + delta);
+  };
+
+  const touchDistance = (a: TouchPoint, b: TouchPoint) => {
+    const dx = a.clientX - b.clientX;
+    const dy = a.clientY - b.clientY;
+    return Math.hypot(dx, dy);
+  };
+
+  const handleViewerTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length === 1) {
+      const touch = event.touches[0];
+      touchSwipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+
+      const now = Date.now();
+      if (now - lastTapAtRef.current < 300) {
+        resetViewerTransform();
+      }
+      lastTapAtRef.current = now;
+
+      if (viewerScale > 1) {
+        touchPanStartRef.current = {
+          x: touch.clientX,
+          y: touch.clientY,
+          offsetX: viewerOffset.x,
+          offsetY: viewerOffset.y,
+        };
+      } else {
+        touchPanStartRef.current = null;
+      }
+    }
+
+    if (event.touches.length === 2) {
+      if (event.cancelable) event.preventDefault();
+      touchPinchDistanceRef.current = touchDistance(event.touches[0], event.touches[1]);
+      touchPinchScaleRef.current = viewerScale;
+      touchPanStartRef.current = null;
+      touchSwipeStartRef.current = null;
+    }
+  };
+
+  const handleViewerTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length === 2 && touchPinchDistanceRef.current) {
+      if (event.cancelable) event.preventDefault();
+      const nextDistance = touchDistance(event.touches[0], event.touches[1]);
+      const nextScale = touchPinchScaleRef.current * (nextDistance / touchPinchDistanceRef.current);
+      applyViewerScale(nextScale);
+      return;
+    }
+
+    if (event.touches.length === 1 && touchPanStartRef.current && viewerScale > 1) {
+      if (event.cancelable) event.preventDefault();
+      const touch = event.touches[0];
+      const dx = touch.clientX - touchPanStartRef.current.x;
+      const dy = touch.clientY - touchPanStartRef.current.y;
+      const nextOffset = clampViewerOffset(
+        {
+          x: touchPanStartRef.current.offsetX + dx,
+          y: touchPanStartRef.current.offsetY + dy,
+        },
+        viewerScale,
+      );
+      setViewerOffset(nextOffset);
+    }
+  };
+
+  const handleViewerTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (
+      event.touches.length === 0 &&
+      touchSwipeStartRef.current &&
+      event.changedTouches.length > 0 &&
+      viewerScale <= 1.02 &&
+      viewerPhotos.length > 1
+    ) {
+      const endTouch = event.changedTouches[0];
+      const dx = endTouch.clientX - touchSwipeStartRef.current.x;
+      const dy = endTouch.clientY - touchSwipeStartRef.current.y;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+
+      if (absDx > 42 && absDx > absDy * 1.35) {
+        if (dx < 0) {
+          nextPhoto();
+        } else {
+          prevPhoto();
+        }
+      }
+    }
+
+    if (event.touches.length < 2) {
+      touchPinchDistanceRef.current = null;
+    }
+
+    if (event.touches.length === 1 && viewerScale > 1) {
+      const touch = event.touches[0];
+      touchPanStartRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        offsetX: viewerOffset.x,
+        offsetY: viewerOffset.y,
+      };
+    } else if (event.touches.length === 0) {
+      touchPanStartRef.current = null;
+      touchSwipeStartRef.current = null;
+    }
   };
 
   const openImageViewer = (event?: React.SyntheticEvent) => {
@@ -240,10 +386,10 @@ export const HingeStyleProfileCard = ({
     setIsImageViewerOpen(true);
   };
 
-  const closeImageViewer = () => {
+  const closeImageViewer = useCallback(() => {
     setIsImageViewerOpen(false);
     resetViewerTransform();
-  };
+  }, [resetViewerTransform]);
 
   useEffect(() => {
     if (!isImageViewerOpen) return undefined;
@@ -268,13 +414,13 @@ export const HingeStyleProfileCard = ({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isImageViewerOpen, viewerScale]);
+  }, [applyViewerScale, closeImageViewer, isImageViewerOpen, resetViewerTransform, viewerScale]);
 
   useEffect(() => {
     if (isImageViewerOpen) {
       resetViewerTransform();
     }
-  }, [currentPhotoIndex, isImageViewerOpen]);
+  }, [currentPhotoIndex, isImageViewerOpen, resetViewerTransform]);
   const profileWithExtras = profile as User & { _id?: string; distance?: number };
   const profileId = profileWithExtras.id || profileWithExtras._id || 'missing';
   const profileLatitude = typeof profileWithExtras.latitude === 'number' ? profileWithExtras.latitude : null;
@@ -369,11 +515,11 @@ export const HingeStyleProfileCard = ({
     const isPortraitImage = currentPhotoAspectRatio < 0.95;
     const mobileStageHeightClass = isCompactHeight
       ? isPortraitImage
-        ? 'min-h-[220px] max-h-[42vh]'
-        : 'min-h-[200px] max-h-[36vh]'
+        ? 'min-h-[250px] max-h-[48vh]'
+        : 'min-h-[230px] max-h-[42vh]'
       : isPortraitImage
-        ? 'min-h-[285px] max-h-[57vh]'
-        : 'min-h-[255px] max-h-[49vh]';
+        ? 'min-h-[340px] max-h-[64vh]'
+        : 'min-h-[300px] max-h-[56vh]';
 
     return (
       <>
@@ -406,27 +552,21 @@ export const HingeStyleProfileCard = ({
         </div>
 
         <article className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/15 bg-slate-900/72 shadow-[0_18px_46px_rgba(2,6,23,0.6)] backdrop-blur-sm ${isCompactHeight ? 'p-2.5' : 'p-3'}`}>
-          <div className={`flex items-start justify-between gap-3 px-1 ${isCompactHeight ? 'mb-1.5' : 'mb-2'}`}>
-            <div>
-              <h2 className={`${isCompactHeight ? 'text-[2rem]' : 'text-3xl'} font-bold leading-tight text-white`}>
+          <div className={`px-1 ${isCompactHeight ? 'mb-1.5' : 'mb-2'}`}>
+            <div className="flex items-start justify-between gap-3">
+              <h2 className={`${isCompactHeight ? 'text-[1.55rem]' : 'text-[1.7rem]'} min-w-0 flex-1 truncate font-bold leading-tight text-white`}>
                 {mobileDisplayName}
                 {profile.age ? `, ${profile.age}` : ''}
               </h2>
-              <p className={`inline-flex items-center gap-2 font-semibold text-emerald-600 ${isCompactHeight ? 'mt-0.5 text-xs' : 'mt-1 text-sm'}`}>
-                <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-                Active today
-              </p>
-              <p className={`${isCompactHeight ? 'mt-0.5 text-xs' : 'mt-1 text-sm'} text-slate-300`}>{locationText}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => navigate(`/profile/${profileId}`)}
-                className={`inline-flex items-center justify-center rounded-full border border-white/20 bg-black/35 text-slate-100 backdrop-blur-sm ${isCompactHeight ? 'h-8 w-8' : 'h-9 w-9'}`}
-                aria-label="More options"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </button>
+              <div className="max-w-[42%] shrink-0 pt-0.5 text-right">
+                <p className={`${isCompactHeight ? 'text-[10px]' : 'text-[11px]'} truncate text-slate-300`}>
+                  {locationText}
+                </p>
+                <p className={`${isCompactHeight ? 'mt-0.5 text-[10px]' : 'mt-0.5 text-[11px]'} inline-flex items-center justify-end gap-1.5 font-semibold text-emerald-400`}>
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  Active today
+                </p>
+              </div>
             </div>
           </div>
 
@@ -493,11 +633,23 @@ export const HingeStyleProfileCard = ({
               />
             </AnimatePresence>
 
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_62%,rgba(2,6,23,0.55)_100%)]" />
-            <div className="pointer-events-none absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full border border-white/30 bg-black/35 px-2 py-1 text-[11px] font-semibold text-white/90 backdrop-blur-sm">
-              <Maximize2 className="h-3.5 w-3.5" />
-              Full
-            </div>
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_58%,rgba(2,6,23,0.5)_100%)]" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+
+            <button
+              type="button"
+              onPointerDown={stopEvent}
+              onMouseDown={stopEvent}
+              onTouchStart={stopEvent}
+              onClick={(event) => {
+                stopEvent(event);
+                onGoBack();
+              }}
+              className="absolute right-3 top-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/30 bg-black/35 text-white/90 backdrop-blur-sm"
+              aria-label="Go back"
+            >
+              <RotateCcw className="h-4.5 w-4.5" />
+            </button>
 
             {cardPhotos.length > 1 && (
               <>
@@ -535,47 +687,63 @@ export const HingeStyleProfileCard = ({
                 </button>
               </>
             )}
-          </div>
 
-          <div className="mt-auto">
-            <div className={`${isCompactHeight ? 'mt-1.5' : 'mt-2'} flex items-center gap-2`}>
-              <span className="inline-flex items-center rounded-full bg-emerald-500/90 px-3 py-1 text-xs font-semibold text-white">
+            <div className="pointer-events-none absolute inset-x-3 bottom-3 z-20">
+              <span className="inline-flex items-center rounded-full bg-emerald-500/92 px-3 py-1 text-[11px] font-semibold text-white shadow-[0_10px_24px_rgba(16,185,129,0.25)]">
                 {distanceBadge}
               </span>
-            </div>
-            <p className={`${isCompactHeight ? 'mt-1 line-clamp-1 text-xs' : 'mt-1 line-clamp-2 text-sm'} text-slate-100`}>
-              {profile.bio?.trim() || 'No bio available yet.'}
-            </p>
+              <p className={`${isCompactHeight ? 'mt-1 line-clamp-1 text-[12px]' : 'mt-1.5 line-clamp-2 text-[13px]'} text-slate-100`}>
+                {profile.bio?.trim() || 'No bio available yet.'}
+              </p>
 
-            <div className={`${isCompactHeight ? 'mt-2 gap-2 pb-0' : 'mt-3 gap-3 pb-1'} flex items-center`}>
-              <button
-                type="button"
-                onClick={onPass}
-                className={`inline-flex shrink-0 items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/22 text-rose-100 shadow-[0_10px_24px_rgba(244,63,94,0.32)] ${
-                  isCompactHeight ? 'h-11 w-11' : 'h-12 w-12'
-                }`}
-                aria-label="Pass"
-              >
-                <X className="h-5 w-5" />
-              </button>
-              <Link
-                to={`/profile/${profileId}`}
-                className={`inline-flex flex-1 items-center justify-center rounded-full border border-cyan-300/55 bg-cyan-500/20 px-4 font-semibold text-cyan-100 transition hover:bg-cyan-500/30 hover:text-white ${
-                  isCompactHeight ? 'h-11 text-[13px]' : 'h-12 text-sm'
-                }`}
-              >
-                View Full Profile
-              </Link>
-              <button
-                type="button"
-                onClick={onLike}
-                className={`inline-flex shrink-0 items-center justify-center rounded-full border border-fuchsia-300/50 bg-fuchsia-500/24 text-fuchsia-100 shadow-[0_10px_24px_rgba(217,70,239,0.34)] ${
-                  isCompactHeight ? 'h-11 w-11' : 'h-12 w-12'
-                }`}
-                aria-label="Like"
-              >
-                <Heart className="h-5 w-5 fill-current" />
-              </button>
+              <div className={`${isCompactHeight ? 'mt-2 gap-2' : 'mt-2.5 gap-2.5'} flex items-center`}>
+                <button
+                  type="button"
+                  onPointerDown={stopEvent}
+                  onMouseDown={stopEvent}
+                  onTouchStart={stopEvent}
+                  onClick={(event) => {
+                    stopEvent(event);
+                    onPass();
+                  }}
+                  className={`pointer-events-auto inline-flex shrink-0 items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/22 text-rose-100 shadow-[0_10px_24px_rgba(244,63,94,0.32)] backdrop-blur-sm ${
+                    isCompactHeight ? 'h-11 w-11' : 'h-12 w-12'
+                  }`}
+                  aria-label="Pass"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+                <Link
+                  to={`/profile/${profileId}`}
+                  onPointerDown={stopEvent}
+                  onMouseDown={stopEvent}
+                  onTouchStart={stopEvent}
+                  onClick={(event) => {
+                    stopEvent(event);
+                  }}
+                  className={`pointer-events-auto inline-flex flex-1 items-center justify-center rounded-full border border-cyan-300/55 bg-cyan-500/20 px-4 font-semibold text-cyan-100 shadow-[0_10px_28px_rgba(6,182,212,0.18)] backdrop-blur-sm transition hover:bg-cyan-500/30 hover:text-white ${
+                    isCompactHeight ? 'h-11 text-[13px]' : 'h-12 text-sm'
+                  }`}
+                >
+                  View Full Profile
+                </Link>
+                <button
+                  type="button"
+                  onPointerDown={stopEvent}
+                  onMouseDown={stopEvent}
+                  onTouchStart={stopEvent}
+                  onClick={(event) => {
+                    stopEvent(event);
+                    onLike();
+                  }}
+                  className={`pointer-events-auto inline-flex shrink-0 items-center justify-center rounded-full border border-fuchsia-300/50 bg-fuchsia-500/24 text-fuchsia-100 shadow-[0_10px_24px_rgba(217,70,239,0.34)] backdrop-blur-sm ${
+                    isCompactHeight ? 'h-11 w-11' : 'h-12 w-12'
+                  }`}
+                  aria-label="Like"
+                >
+                  <Heart className="h-5 w-5 fill-current" />
+                </button>
+              </div>
             </div>
           </div>
           </article>
@@ -590,21 +758,20 @@ export const HingeStyleProfileCard = ({
               exit={{ opacity: 0 }}
               onClick={closeImageViewer}
             >
-              <button
-                type="button"
-                onClick={closeImageViewer}
-                className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/35 bg-black/40 text-white"
-                aria-label="Close full image viewer"
-              >
-                <X className="h-5 w-5" />
-              </button>
-
               <div className="relative flex h-full w-full max-w-5xl flex-col items-center justify-center" onClick={(event) => event.stopPropagation()}>
-                <div className="absolute left-3 right-3 top-3 z-20 flex items-center justify-between rounded-2xl border border-white/20 bg-black/35 px-3 py-2 text-white backdrop-blur-md">
-                  <div className="text-sm font-semibold">
-                    {mobileDisplayName} • {currentPhotoIndex + 1}/{viewerPhotos.length}
+                <div className="absolute left-2 right-2 top-2 z-20 flex items-center gap-2 rounded-2xl border border-white/20 bg-black/35 px-2.5 py-2 text-white backdrop-blur-md sm:left-3 sm:right-3 sm:top-3 sm:px-3">
+                  <button
+                    type="button"
+                    onClick={closeImageViewer}
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/35 bg-black/35 text-white"
+                    aria-label="Close full image viewer"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  <div className="min-w-0 flex-1 truncate text-center text-xs font-semibold sm:text-sm">
+                    {mobileDisplayName} - {currentPhotoIndex + 1}/{viewerPhotos.length}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
                     <button
                       type="button"
                       onClick={() => applyViewerScale(viewerScale - 0.2)}
@@ -639,6 +806,10 @@ export const HingeStyleProfileCard = ({
                   onPointerUp={handleViewerPointerUpOrCancel}
                   onPointerCancel={handleViewerPointerUpOrCancel}
                   onWheel={handleViewerWheel}
+                  onTouchStart={handleViewerTouchStart}
+                  onTouchMove={handleViewerTouchMove}
+                  onTouchEnd={handleViewerTouchEnd}
+                  onTouchCancel={handleViewerTouchEnd}
                 >
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.img
@@ -688,7 +859,7 @@ export const HingeStyleProfileCard = ({
                 )}
 
                   <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-black/40 px-3 py-1 text-[11px] text-white/85 backdrop-blur-md">
-                    Pinch to zoom • Drag to pan • Double tap to reset
+                    Pinch to zoom - Drag to pan - Double tap to reset
                   </div>
                 </div>
               </div>
@@ -816,3 +987,4 @@ export const HingeStyleProfileCard = ({
     </div>
   );
 };
+
