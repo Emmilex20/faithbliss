@@ -44,8 +44,8 @@ export const HingeStyleProfileCard = ({
     const [prefix, suffix] = url.split('/upload/');
     if (!prefix || !suffix) return url;
 
-    // Serve a sharper source to reduce blur on high-DPI mobile screens.
-    const deliveryTransform = 'f_auto,q_auto:best,dpr_auto,w_1600,h_2400,c_limit';
+    // Keep original framing while requesting a high-clarity source for high-DPI displays.
+    const deliveryTransform = 'f_auto,q_auto:best,dpr_auto';
     return `${prefix}/upload/${deliveryTransform}/${suffix}`;
   };
 
@@ -110,6 +110,9 @@ export const HingeStyleProfileCard = ({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0.45, scale: 0.985 }}
             transition={{ duration: 0.28, ease: 'easeOut' }}
+            draggable={false}
+            loading="eager"
+            decoding="async"
           />
         </AnimatePresence>
 
@@ -118,11 +121,14 @@ export const HingeStyleProfileCard = ({
             key={`${profileId}-${currentPhotoIndex}`}
             src={photos[currentPhotoIndex]}
             alt={profile.name}
-            className="absolute inset-0 h-full w-full object-cover [image-rendering:auto] [backface-visibility:hidden] [transform:translateZ(0)]"
-            initial={{ opacity: 0.45, scale: 1.02 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0.45, scale: 0.985 }}
+            className="absolute inset-0 h-full w-full object-contain [image-rendering:auto] [backface-visibility:hidden] [transform:translateZ(0)]"
+            initial={{ opacity: 0.45 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0.45 }}
             transition={{ duration: 0.28, ease: 'easeOut' }}
+            draggable={false}
+            loading="eager"
+            decoding="async"
           />
         </AnimatePresence>
 
