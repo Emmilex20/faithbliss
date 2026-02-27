@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { ReactNode } from 'react';
 import { TopBar } from './TopBar';
+import { MobileBottomNav } from './MobileBottomNav';
 
 interface MobileLayoutProps {
   userName: string;
@@ -22,7 +23,6 @@ export const MobileLayout = ({
   showSidePanel,
   onToggleFilters,
   onToggleSidePanel,
-  topContent: _topContent,
   children
 }: MobileLayoutProps) => {
   return (
@@ -40,11 +40,13 @@ export const MobileLayout = ({
       />
 
       {/* Mobile Profile Display */}
-      <div className="flex h-[calc(100dvh-74px)] flex-col px-0 pb-0 pt-0">
+      <div className="flex h-[calc(100dvh-74px)] flex-col px-0 pb-[88px] pt-0">
         <div className="relative mx-auto h-full w-full flex-1">
           {children}
         </div>
       </div>
+
+      <MobileBottomNav userImage={userImage} userName={userName} />
     </div>
   );
 };

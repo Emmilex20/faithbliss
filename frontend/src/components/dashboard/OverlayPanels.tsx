@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { FilterPanel } from './FilterPanel';
 import { type DashboardFiltersPayload } from './FilterPanel';
+import { type DashboardFilterFocusSection } from './FilterPanel';
 import { SidePanel } from './SidePanel';
 
 interface OverlayPanelsProps {
@@ -12,6 +13,7 @@ interface OverlayPanelsProps {
   onCloseFilters: () => void;
   onCloseSidePanel: () => void;
   onApplyFilters: (filters: DashboardFiltersPayload) => void;
+  filterFocusSection?: DashboardFilterFocusSection | null;
 }
 
 export const OverlayPanels = ({
@@ -22,7 +24,8 @@ export const OverlayPanels = ({
   user,
   onCloseFilters,
   onCloseSidePanel,
-  onApplyFilters
+  onApplyFilters,
+  filterFocusSection = null,
 }: OverlayPanelsProps) => {
   return (
     <>
@@ -38,7 +41,12 @@ export const OverlayPanels = ({
       <div
         className={`fixed inset-y-0 right-0 w-full max-w-md bg-gray-900/98 backdrop-blur-xl border-l border-gray-700/50 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${showFilters ? 'translate-x-0' : 'translate-x-full'}`}
       >
-        <FilterPanel onClose={onCloseFilters} onApplyFilters={onApplyFilters} />
+        <FilterPanel
+          onClose={onCloseFilters}
+          onApplyFilters={onApplyFilters}
+          isOpen={showFilters}
+          initialFocusSection={filterFocusSection}
+        />
       </div>
 
       {/* Mobile Side Navigation Panel */}

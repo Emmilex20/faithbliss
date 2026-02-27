@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Heart, MoreHorizontal, SlidersHorizontal, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import type { User } from '@/services/api';
 import { FloatingActionButtons } from './FloatingActionButtons';
+import type { DashboardFilterFocusSection } from './FilterPanel';
 
 interface HingeStyleProfileCardProps {
   profile: User;
@@ -13,6 +14,7 @@ interface HingeStyleProfileCardProps {
   onGoBack: () => void;
   onPass: () => void;
   onLike: () => void;
+  onOpenFilterSection?: (section: DashboardFilterFocusSection) => void;
 }
 
 const toRadians = (value: number) => (value * Math.PI) / 180;
@@ -34,8 +36,14 @@ export const HingeStyleProfileCard = ({
   onGoBack,
   onPass,
   onLike,
+  onOpenFilterSection,
 }: HingeStyleProfileCardProps) => {
+  const navigate = useNavigate();
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [isMobileView, setIsMobileView] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 767px)').matches;
+  });
   const toHighResCloudinary = (url: string) => {
     if (!url || !url.includes('res.cloudinary.com') || !url.includes('/upload/')) {
       return url;
@@ -50,7 +58,10 @@ export const HingeStyleProfileCard = ({
   };
 
   const stopEvent = (event: React.SyntheticEvent) => {
-    event.preventDefault();
+    const nativeEvent = event.nativeEvent as Event;
+    if (nativeEvent.cancelable) {
+      event.preventDefault();
+    }
     event.stopPropagation();
   };
 
@@ -75,10 +86,11 @@ export const HingeStyleProfileCard = ({
 
   const nextPhoto = () => setCurrentPhotoIndex((prev) => (prev + 1) % photos.length);
   const prevPhoto = () => setCurrentPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length);
-  const profileId = profile.id || (profile as any)._id || 'missing';
-  const profileLatitude = typeof (profile as any).latitude === 'number' ? (profile as any).latitude : null;
-  const profileLongitude = typeof (profile as any).longitude === 'number' ? (profile as any).longitude : null;
-  const apiDistance = typeof (profile as any).distance === 'number' ? Math.round((profile as any).distance) : null;
+  const profileWithExtras = profile as User & { _id?: string; distance?: number };
+  const profileId = profileWithExtras.id || profileWithExtras._id || 'missing';
+  const profileLatitude = typeof profileWithExtras.latitude === 'number' ? profileWithExtras.latitude : null;
+  const profileLongitude = typeof profileWithExtras.longitude === 'number' ? profileWithExtras.longitude : null;
+  const apiDistance = typeof profileWithExtras.distance === 'number' ? Math.round(profileWithExtras.distance) : null;
   const calculatedDistance =
     viewerLatitude != null && viewerLongitude != null && profileLatitude != null && profileLongitude != null
       ? Math.round(haversineDistanceKm(viewerLatitude, viewerLongitude, profileLatitude, profileLongitude))
@@ -86,16 +98,224 @@ export const HingeStyleProfileCard = ({
   const distance = apiDistance ?? calculatedDistance;
   const distanceBadge = distance !== null ? `${distance} km away` : 'Nearby';
   const locationText = profile.location?.trim() || 'Location not set';
+  const formatLabel = (value: string) =>
+    value
+      .replace(/_/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  const primaryGoal = profile.relationshipGoals?.[0] || profile.lookingFor?.[0] || '';
+  const ageFilterLabel = profile.age ? `Age ${profile.age}` : 'Age';
+  const heightFilterLabel = profile.height ? profile.height.split('(')[0].trim() : 'Height';
+  const goalFilterLabel = primaryGoal ? formatLabel(primaryGoal) : 'Dating Intentions';
+  const mobileChips: Array<{ label: string; section: DashboardFilterFocusSection }> = [
+    { label: ageFilterLabel, section: 'age' },
+    { label: heightFilterLabel, section: 'height' },
+    { label: goalFilterLabel, section: 'relationship-goal' },
+  ];
 
   useEffect(() => {
     setCurrentPhotoIndex(0);
   }, [profileId]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const mediaQuery = window.matchMedia('(max-width: 767px)');
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsMobileView(event.matches);
+    };
+
+    setIsMobileView(mediaQuery.matches);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  useEffect(() => {
     if (currentPhotoIndex > photos.length - 1) {
       setCurrentPhotoIndex(0);
     }
   }, [currentPhotoIndex, photos.length]);
+
+  if (isMobileView) {
+    return (
+      <div className="flex h-full w-full flex-col bg-[radial-gradient(circle_at_10%_10%,rgba(236,72,153,0.17),transparent_38%),radial-gradient(circle_at_90%_0%,rgba(59,130,246,0.16),transparent_35%),linear-gradient(180deg,#020617_0%,#0f172a_100%)] px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3 text-white">
+        <div className="mb-3 flex items-center gap-2 overflow-x-auto pb-1">
+          <button
+            type="button"
+            onClick={() => onOpenFilterSection?.('distance')}
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-pink-300/45 bg-pink-500/25 text-pink-100 shadow-[0_8px_20px_rgba(236,72,153,0.28)]"
+            aria-label="Filter options"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+          </button>
+          {mobileChips.map((chip, index) => (
+            <button
+              key={chip.label}
+              type="button"
+              onClick={() => onOpenFilterSection?.(chip.section)}
+              className={`inline-flex shrink-0 items-center rounded-full border px-4 py-2 text-xs font-semibold shadow-sm ${
+                index === 0
+                  ? 'border-white/60 bg-white/95 text-slate-900'
+                  : 'border-white/25 bg-slate-900/60 text-slate-100 backdrop-blur-sm'
+              }`}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+
+        <article className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-3xl border border-white/15 bg-slate-900/72 p-3 shadow-[0_18px_46px_rgba(2,6,23,0.6)] backdrop-blur-sm">
+          <div className="mb-2 flex items-start justify-between gap-3 px-1">
+            <div>
+              <h2 className="text-3xl font-bold leading-tight text-white">
+                {profile.name}
+                {profile.age ? `, ${profile.age}` : ''}
+              </h2>
+              <p className="mt-1 inline-flex items-center gap-2 text-sm font-semibold text-emerald-600">
+                <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                Active today
+              </p>
+              <p className="mt-1 text-sm text-slate-300">{locationText}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => navigate(`/profile/${profileId}`)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/35 text-slate-100 backdrop-blur-sm"
+                aria-label="More options"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-2 flex items-center gap-1.5 rounded-full border border-white/12 bg-black/35 px-3 py-2 backdrop-blur-sm">
+            {photos.map((_, index) => (
+              <button
+                key={index}
+                type="button"
+                onPointerDown={stopEvent}
+                onMouseDown={stopEvent}
+                onTouchStart={stopEvent}
+                onClick={(event) => {
+                  stopEvent(event);
+                  setCurrentPhotoIndex(index);
+                }}
+                className={`h-1.5 flex-1 rounded-full transition-colors ${index === currentPhotoIndex ? 'bg-white' : 'bg-white/35'}`}
+                aria-label={`Photo ${index + 1}`}
+              />
+            ))}
+          </div>
+
+          <div className="relative mt-2 w-full min-h-[320px] max-h-[58vh] overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/80 [aspect-ratio:3/4]">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.img
+                key={`${profileId}-${currentPhotoIndex}-bg-mobile`}
+                src={photos[currentPhotoIndex]}
+                alt={profile.name}
+                className="absolute inset-0 h-full w-full object-cover blur-xl brightness-75"
+                initial={{ opacity: 0.45, scale: 1.03 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0.45, scale: 0.985 }}
+                transition={{ duration: 0.28, ease: 'easeOut' }}
+                draggable={false}
+                loading="eager"
+                decoding="async"
+              />
+            </AnimatePresence>
+
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.img
+                key={`${profileId}-${currentPhotoIndex}-mobile`}
+                src={photos[currentPhotoIndex]}
+                alt={profile.name}
+                className="absolute inset-0 h-full w-full object-contain object-center [image-rendering:auto] [backface-visibility:hidden] [transform:translateZ(0)]"
+                initial={{ opacity: 0.5 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0.5 }}
+                transition={{ duration: 0.28, ease: 'easeOut' }}
+                draggable={false}
+                loading="eager"
+                decoding="async"
+              />
+            </AnimatePresence>
+
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_62%,rgba(2,6,23,0.55)_100%)]" />
+
+            {photos.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onPointerDown={stopEvent}
+                  onMouseDown={stopEvent}
+                  onTouchStart={stopEvent}
+                  onClick={(event) => {
+                    stopEvent(event);
+                    prevPhoto();
+                  }}
+                  className="absolute inset-y-0 left-0 z-20 flex w-[18%] items-center justify-start pl-2"
+                  aria-label="Previous photo"
+                >
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/35 bg-black/30 text-white/90 backdrop-blur-sm">
+                    <ChevronLeft className="h-5 w-5" />
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onPointerDown={stopEvent}
+                  onMouseDown={stopEvent}
+                  onTouchStart={stopEvent}
+                  onClick={(event) => {
+                    stopEvent(event);
+                    nextPhoto();
+                  }}
+                  className="absolute inset-y-0 right-0 z-20 flex w-[18%] items-center justify-end pr-2"
+                  aria-label="Next photo"
+                >
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/35 bg-black/30 text-white/90 backdrop-blur-sm">
+                    <ChevronRight className="h-5 w-5" />
+                  </span>
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="mt-2 flex items-center gap-2">
+            <span className="inline-flex items-center rounded-full bg-emerald-500/90 px-3 py-1 text-xs font-semibold text-white">
+              {distanceBadge}
+            </span>
+          </div>
+          <p className="mt-1 line-clamp-2 text-sm text-slate-100">{profile.bio?.trim() || 'No bio available yet.'}</p>
+
+          <div className="mt-3 flex items-center gap-3 pb-1">
+            <button
+              type="button"
+              onClick={onPass}
+              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-rose-300/45 bg-rose-500/22 text-rose-100 shadow-[0_10px_24px_rgba(244,63,94,0.32)]"
+              aria-label="Pass"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <Link
+              to={`/profile/${profileId}`}
+              className="inline-flex h-12 flex-1 items-center justify-center rounded-full border border-cyan-300/55 bg-cyan-500/20 px-4 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/30 hover:text-white"
+            >
+              View Full Profile
+            </Link>
+            <button
+              type="button"
+              onClick={onLike}
+              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-fuchsia-300/50 bg-fuchsia-500/24 text-fuchsia-100 shadow-[0_10px_24px_rgba(217,70,239,0.34)]"
+              aria-label="Like"
+            >
+              <Heart className="h-5 w-5 fill-current" />
+            </button>
+          </div>
+        </article>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full w-full overflow-hidden rounded-none border-0 bg-slate-900/78 shadow-none sm:rounded-3xl sm:border sm:border-white/12 sm:shadow-[0_20px_65px_rgba(3,12,28,0.62)] sm:backdrop-blur-sm">
@@ -141,8 +361,8 @@ export const HingeStyleProfileCard = ({
                 onPointerDown={stopEvent}
                 onMouseDown={stopEvent}
                 onTouchStart={stopEvent}
-                onClick={(e) => {
-                  stopEvent(e);
+                onClick={(event) => {
+                  stopEvent(event);
                   setCurrentPhotoIndex(index);
                 }}
                 className={`h-1.5 flex-1 rounded-full ${index === currentPhotoIndex ? 'bg-white' : 'bg-white/35'}`}
@@ -159,8 +379,8 @@ export const HingeStyleProfileCard = ({
               onPointerDown={stopEvent}
               onMouseDown={stopEvent}
               onTouchStart={stopEvent}
-              onClick={(e) => {
-                stopEvent(e);
+              onClick={(event) => {
+                stopEvent(event);
                 prevPhoto();
               }}
               className="absolute left-3 top-1/2 z-30 -translate-y-1/2 rounded-full border border-white/25 bg-black/40 p-2 text-white transition hover:bg-black/60 swiper-no-swiping"
@@ -173,8 +393,8 @@ export const HingeStyleProfileCard = ({
               onPointerDown={stopEvent}
               onMouseDown={stopEvent}
               onTouchStart={stopEvent}
-              onClick={(e) => {
-                stopEvent(e);
+              onClick={(event) => {
+                stopEvent(event);
                 nextPhoto();
               }}
               className="absolute right-3 top-1/2 z-30 -translate-y-1/2 rounded-full border border-white/25 bg-black/40 p-2 text-white transition hover:bg-black/60 swiper-no-swiping"

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Filter, RotateCcw, X } from 'lucide-react';
 import AppDropdown from '@/components/AppDropdown';
 
@@ -8,14 +8,27 @@ export interface DashboardFiltersPayload {
   minAge?: number;
   maxAge?: number;
   maxDistance?: number;
+  preferredMinHeight?: number;
   preferredFaithJourney?: string[];
   preferredChurchAttendance?: string[];
   preferredRelationshipGoals?: string[];
 }
 
+export type DashboardFilterFocusSection =
+  | 'gender'
+  | 'distance'
+  | 'age'
+  | 'height'
+  | 'faith-journey'
+  | 'denomination'
+  | 'church-attendance'
+  | 'relationship-goal';
+
 interface FilterPanelProps {
   onClose: () => void;
   onApplyFilters: (filters: DashboardFiltersPayload) => void;
+  isOpen?: boolean;
+  initialFocusSection?: DashboardFilterFocusSection | null;
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -70,12 +83,14 @@ const RELATIONSHIP_GOAL_OPTIONS = [
   { value: 'MARRIAGE_MINDED', label: 'Marriage-minded' },
 ];
 
-export const FilterPanel = ({ onClose, onApplyFilters }: FilterPanelProps) => {
+export const FilterPanel = ({ onClose, onApplyFilters, isOpen = false, initialFocusSection = null }: FilterPanelProps) => {
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [gender, setGender] = useState<'MALE' | 'FEMALE' | ''>('');
   const [distance, setDistance] = useState(50);
   const [minAge, setMinAge] = useState(22);
   const [maxAge, setMaxAge] = useState(40);
+  const [minHeight, setMinHeight] = useState(120);
   const [faithJourney, setFaithJourney] = useState('');
   const [churchAttendance, setChurchAttendance] = useState('');
   const [relationshipGoal, setRelationshipGoal] = useState('');
@@ -86,18 +101,20 @@ export const FilterPanel = ({ onClose, onApplyFilters }: FilterPanelProps) => {
     if (gender) count += 1;
     if (distance !== 50) count += 1;
     if (minAge !== 22 || maxAge !== 40) count += 1;
+    if (minHeight > 120) count += 1;
     if (faithJourney) count += 1;
     if (churchAttendance) count += 1;
     if (relationshipGoal) count += 1;
     if (denomination) count += 1;
     return count;
-  }, [churchAttendance, denomination, distance, faithJourney, gender, maxAge, minAge, relationshipGoal]);
+  }, [churchAttendance, denomination, distance, faithJourney, gender, maxAge, minAge, minHeight, relationshipGoal]);
 
   const resetLocalState = () => {
     setGender('');
     setDistance(50);
     setMinAge(22);
     setMaxAge(40);
+    setMinHeight(120);
     setFaithJourney('');
     setChurchAttendance('');
     setRelationshipGoal('');
@@ -117,6 +134,7 @@ export const FilterPanel = ({ onClose, onApplyFilters }: FilterPanelProps) => {
       payload.minAge = normalizedMinAge;
       payload.maxAge = normalizedMaxAge;
     }
+    if (minHeight > 120) payload.preferredMinHeight = clamp(Math.round(minHeight), 120, 220);
     if (faithJourney) payload.preferredFaithJourney = [faithJourney];
     if (churchAttendance) payload.preferredChurchAttendance = [churchAttendance];
     if (relationshipGoal) payload.preferredRelationshipGoals = [relationshipGoal];
@@ -135,6 +153,22 @@ export const FilterPanel = ({ onClose, onApplyFilters }: FilterPanelProps) => {
     onApplyFilters({});
     onClose();
   };
+
+  useEffect(() => {
+    if (!isOpen || !initialFocusSection) return;
+
+    if (initialFocusSection === 'denomination' || initialFocusSection === 'church-attendance' || initialFocusSection === 'relationship-goal') {
+      setShowAdvanced(true);
+    }
+
+    const timer = window.setTimeout(() => {
+      const selector = `[data-filter-section="${initialFocusSection}"]`;
+      const section = scrollContainerRef.current?.querySelector(selector) as HTMLElement | null;
+      section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 140);
+
+    return () => window.clearTimeout(timer);
+  }, [initialFocusSection, isOpen]);
 
   return (
     <div className="h-full flex flex-col">
@@ -162,8 +196,8 @@ export const FilterPanel = ({ onClose, onApplyFilters }: FilterPanelProps) => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-5">
-        <section className="rounded-2xl border border-indigo-400/20 bg-indigo-500/10 p-4">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-6 space-y-5">
+        <section data-filter-section="gender" className="rounded-2xl border border-indigo-400/20 bg-indigo-500/10 p-4">
           <label className="block text-xs font-semibold uppercase tracking-wide text-indigo-200 mb-2">Interested In</label>
           <AppDropdown
             value={gender}
@@ -175,7 +209,7 @@ export const FilterPanel = ({ onClose, onApplyFilters }: FilterPanelProps) => {
           />
         </section>
 
-        <section className="rounded-2xl border border-pink-400/20 bg-pink-500/10 p-4">
+        <section data-filter-section="distance" className="rounded-2xl border border-pink-400/20 bg-pink-500/10 p-4">
           <label className="block text-xs font-semibold uppercase tracking-wide text-pink-200 mb-2">Distance</label>
           <input
             type="range"
@@ -188,7 +222,7 @@ export const FilterPanel = ({ onClose, onApplyFilters }: FilterPanelProps) => {
           <div className="mt-2 text-sm text-slate-200 font-semibold">{distance} km</div>
         </section>
 
-        <section className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4">
+        <section data-filter-section="age" className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4">
           <label className="block text-xs font-semibold uppercase tracking-wide text-cyan-200 mb-2">Age Range</label>
           <div className="flex items-center gap-3">
             <input
@@ -211,7 +245,20 @@ export const FilterPanel = ({ onClose, onApplyFilters }: FilterPanelProps) => {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
+        <section data-filter-section="height" className="rounded-2xl border border-fuchsia-400/20 bg-fuchsia-500/10 p-4">
+          <label className="block text-xs font-semibold uppercase tracking-wide text-fuchsia-200 mb-2">Minimum Height</label>
+          <input
+            type="range"
+            min={120}
+            max={220}
+            value={minHeight}
+            onChange={(e) => setMinHeight(clamp(sanitizeNumberInput(e.target.value, 120), 120, 220))}
+            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-fuchsia-500"
+          />
+          <div className="mt-2 text-sm text-slate-200 font-semibold">{minHeight} cm +</div>
+        </section>
+
+        <section data-filter-section="faith-journey" className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
           <label className="block text-xs font-semibold uppercase tracking-wide text-emerald-200 mb-2">Faith Journey</label>
           <AppDropdown
             value={faithJourney}
@@ -234,7 +281,7 @@ export const FilterPanel = ({ onClose, onApplyFilters }: FilterPanelProps) => {
 
         {showAdvanced && (
           <div className="space-y-4">
-            <section className="rounded-2xl border border-purple-400/20 bg-purple-500/10 p-4">
+            <section data-filter-section="denomination" className="rounded-2xl border border-purple-400/20 bg-purple-500/10 p-4">
               <label className="block text-xs font-semibold uppercase tracking-wide text-purple-200 mb-2">Denomination</label>
               <AppDropdown
                 value={denomination}
@@ -248,7 +295,7 @@ export const FilterPanel = ({ onClose, onApplyFilters }: FilterPanelProps) => {
               />
             </section>
 
-            <section className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
+            <section data-filter-section="church-attendance" className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
               <label className="block text-xs font-semibold uppercase tracking-wide text-amber-200 mb-2">Church Attendance</label>
               <AppDropdown
                 value={churchAttendance}
@@ -260,7 +307,7 @@ export const FilterPanel = ({ onClose, onApplyFilters }: FilterPanelProps) => {
               />
             </section>
 
-            <section className="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4">
+            <section data-filter-section="relationship-goal" className="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4">
               <label className="block text-xs font-semibold uppercase tracking-wide text-rose-200 mb-2">Relationship Goal</label>
               <AppDropdown
                 value={relationshipGoal}

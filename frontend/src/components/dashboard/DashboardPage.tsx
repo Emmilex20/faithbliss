@@ -1,6 +1,3 @@
-/* eslint-disable no-irregular-whitespace */
-// src/components/dashboard/DashboardPage.tsx (FINAL, CORRECTED VERSION)
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -15,6 +12,7 @@ import { StoryBar } from '@/components/dashboard/StoryBar';
 import { PostOnboardingWelcomeOverlay } from '@/components/dashboard/PostOnboardingWelcomeOverlay';
 import { MatchCelebrationOverlay } from '@/components/dashboard/MatchCelebrationOverlay';
 import { type DashboardFiltersPayload } from '@/components/dashboard/FilterPanel';
+import type { DashboardFilterFocusSection } from '@/components/dashboard/FilterPanel';
 import { insertScrollbarStyles } from '@/components/dashboard/styles'; 
 import { usePotentialMatches, useMatching, useStories, useUserProfile } from '@/hooks/useAPI'; 
 
@@ -27,6 +25,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
   const navigate = useNavigate();
   const { showSuccess, showInfo } = useToast();
   const [showFilters, setShowFilters] = useState(false);
+    const [filterFocusSection, setFilterFocusSection] = useState<DashboardFilterFocusSection | null>(null);
     const [showSidePanel, setShowSidePanel] = useState(false);
     const [showPostOnboardingOverlay, setShowPostOnboardingOverlay] = useState(false);
     const [currentProfileIndex, setCurrentProfileIndex] = useState(0);
@@ -438,8 +437,23 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
     );
   };
 
+  const handleToggleFilters = () => {
+    setFilterFocusSection(null);
+    setShowFilters((prev) => !prev);
+  };
+
+  const handleCloseFilters = () => {
+    setShowFilters(false);
+    setFilterFocusSection(null);
+  };
+
+  const openFiltersToSection = (section: DashboardFilterFocusSection) => {
+    setFilterFocusSection(section);
+    setShowFilters(true);
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white pb-20 no-horizontal-scroll dashboard-main">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white pb-0 lg:pb-20 no-horizontal-scroll dashboard-main">
       <MatchCelebrationOverlay
         open={matchCelebration.open}
         currentUserName={userName}
@@ -497,7 +511,7 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
         user={currentUserData} 
         showFilters={showFilters}
         showSidePanel={showSidePanel}
-                    onToggleFilters={() => setShowFilters(!showFilters)}
+                    onToggleFilters={handleToggleFilters}
                     onToggleSidePanel={() => setShowSidePanel(!showSidePanel)}
                     topContent={
                       <StoryBar
@@ -525,6 +539,7 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
                         noProfilesDescription="You have liked or passed everyone available for now. Tap reload and we will fetch fresh profiles instantly."
                         noProfilesActionLabel="Reload Profiles"
                         onNoProfilesAction={handleNoProfilesAction}
+                        onOpenFilterSection={openFiltersToSection}
                     />
                 </DesktopLayout>
 
@@ -535,7 +550,7 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
         user={currentUserData} 
         showFilters={showFilters}
         showSidePanel={showSidePanel}
-                    onToggleFilters={() => setShowFilters(!showFilters)}
+                    onToggleFilters={handleToggleFilters}
                     onToggleSidePanel={() => setShowSidePanel(!showSidePanel)}
                     topContent={
                       <StoryBar
@@ -563,6 +578,7 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
                         noProfilesDescription="You have liked or passed everyone available for now. Tap reload and we will fetch fresh profiles instantly."
                         noProfilesActionLabel="Reload Profiles"
                         onNoProfilesAction={handleNoProfilesAction}
+                        onOpenFilterSection={openFiltersToSection}
                     />
                 </MobileLayout>
 
@@ -573,9 +589,10 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
         userName={userName}
         userImage={userImage}
         user={currentUserData} 
-        onCloseFilters={() => setShowFilters(false)}
+        onCloseFilters={handleCloseFilters}
         onCloseSidePanel={() => setShowSidePanel(false)}
         onApplyFilters={handleApplyFilters}
+        filterFocusSection={filterFocusSection}
       />
     </div>
   );

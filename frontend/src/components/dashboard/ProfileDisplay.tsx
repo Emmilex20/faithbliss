@@ -1,10 +1,20 @@
 import { HingeStyleProfileCard } from './HingeStyleProfileCard';
 import { NoProfilesState } from './NoProfilesState';
 import type { User } from '@/services/api';
+import type { DashboardFilterFocusSection } from './FilterPanel';
 import { useEffect, useMemo, useRef } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import type { Swiper as SwiperInstance } from 'swiper';
 import 'swiper/css';
+
+type ProfileWithLegacyId = User & { _id?: string };
+
+const getProfileId = (profile?: User | null): string | null => {
+  if (!profile) return null;
+  const candidate = profile as ProfileWithLegacyId;
+  const id = candidate.id || candidate._id;
+  return id ? String(id) : null;
+};
 
 interface ProfileDisplayProps {
   currentProfile: User | null | undefined;
@@ -19,6 +29,7 @@ interface ProfileDisplayProps {
   noProfilesDescription?: string;
   noProfilesActionLabel?: string;
   onNoProfilesAction?: () => void;
+  onOpenFilterSection?: (section: DashboardFilterFocusSection) => void;
 }
 
 export const ProfileDisplay = ({
@@ -33,11 +44,13 @@ export const ProfileDisplay = ({
   noProfilesDescription,
   noProfilesActionLabel,
   onNoProfilesAction,
+  onOpenFilterSection,
 }: ProfileDisplayProps) => {
   const swipeLockRef = useRef(false);
   const swiperRef = useRef<SwiperInstance | null>(null);
-  const hasRenderableProfile = Boolean(currentProfile && (currentProfile.id || (currentProfile as any)._id));
-  const profileKey = hasRenderableProfile ? String(currentProfile!.id || (currentProfile as any)._id) : 'no-profile';
+  const currentProfileId = getProfileId(currentProfile);
+  const hasRenderableProfile = currentProfileId !== null;
+  const profileKey = currentProfileId ?? 'no-profile';
 
   const resetToCenter = () => {
     requestAnimationFrame(() => {
@@ -120,6 +133,7 @@ export const ProfileDisplay = ({
               onGoBack={onGoBack}
               onLike={onLike}
               onPass={onPass}
+              onOpenFilterSection={onOpenFilterSection}
             />
           </div>
         </SwiperSlide>
