@@ -135,12 +135,12 @@ export const TopBar = ({
     : userName;
 
   return (
-    <div className="bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 px-4 py-4 sticky top-0 z-50">
+    <div className="bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 px-3 py-2.5 sm:px-4 sm:py-4 sticky top-0 z-50">
       <div className="absolute inset-0 bg-gradient-to-r from-pink-500/5 via-purple-500/5 to-blue-500/5"></div>
 
       <div className="max-w-7xl mx-auto relative z-10">
-        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
-          <div className="flex items-center gap-3">
+        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {showBackButton ? (
               <button
                 onClick={onBack}
@@ -151,7 +151,7 @@ export const TopBar = ({
             ) : (
               <button
                 onClick={onToggleSidePanel}
-                className="p-2 hover:bg-white/10 rounded-2xl transition-all hover:scale-105 lg:hidden"
+                className="p-1.5 sm:p-2 hover:bg-white/10 rounded-2xl transition-all hover:scale-105 lg:hidden"
               >
                 <div className="w-6 h-6 flex flex-col justify-center space-y-1">
                   <div className="w-full h-0.5 bg-gray-300 rounded"></div>
@@ -165,14 +165,14 @@ export const TopBar = ({
               to="/dashboard"
               className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer"
             >
-              <div className="bg-gradient-to-r from-pink-500 to-purple-600 p-2 rounded-2xl shrink-0">
-                <Sparkles className="w-6 h-6 text-white" />
+              <div className="bg-gradient-to-r from-pink-500 to-purple-600 p-1.5 sm:p-2 rounded-2xl shrink-0">
+                <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
             </Link>
           </div>
 
           <div className="min-w-0">
-            <h1 className="text-base sm:text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent truncate text-center sm:text-left">
+            <h1 className="text-[15px] sm:text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent truncate text-center sm:text-left">
               {title || 'FaithBliss'}
             </h1>
             <p className="text-xs text-gray-400 hidden md:block truncate">
@@ -202,8 +202,8 @@ export const TopBar = ({
             )}
 
             <Link to="/notifications">
-              <button className="relative p-2.5 sm:p-3 hover:bg-white/10 rounded-2xl transition-all hover:scale-105 group">
-                <Bell className="w-6 h-6 text-gray-300 group-hover:text-white transition-colors" />
+              <button className="relative p-2 sm:p-3 hover:bg-white/10 rounded-2xl transition-all hover:scale-105 group">
+                <Bell className="w-5 h-5 sm:w-6 sm:h-6 text-gray-300 group-hover:text-white transition-colors" />
                 {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-pink-500 to-red-500 rounded-full flex items-center justify-center">
                     <span className="text-xs font-bold text-white">{unreadCount}</span>
@@ -215,21 +215,21 @@ export const TopBar = ({
             {showFilterButton && onToggleFilters && (
               <button
                 onClick={onToggleFilters}
-                className={`p-2.5 sm:p-3 rounded-2xl transition-all hover:scale-105 ${
+                className={`hidden sm:inline-flex p-2 sm:p-3 rounded-2xl transition-all hover:scale-105 ${
                   showFilters
                     ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
                     : 'hover:bg-white/10 text-gray-300 hover:text-white'
                 }`}
               >
-                <Filter className="w-6 h-6 transition-colors" />
+                <Filter className="w-5 h-5 sm:w-6 sm:h-6 transition-colors" />
               </button>
             )}
 
             <button
               onClick={() => setShowMobileProfileMenu((prev) => !prev)}
-              className="p-2.5 sm:p-3 hover:bg-white/10 rounded-2xl transition-all hover:scale-105 group lg:hidden"
+              className="p-2 sm:p-3 hover:bg-white/10 rounded-2xl transition-all hover:scale-105 group lg:hidden"
             >
-              <div className="w-8 h-8 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full flex items-center justify-center">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full flex items-center justify-center">
                 {displayImage ? (
                   <img
                     src={displayImage}
