@@ -20,11 +20,18 @@ interface IUserProfile extends DocumentData {
   age: number;
   denomination: string;
   location?: string;
+  latitude?: number;
+  longitude?: number;
+  maxDistance?: number;
   profilePhoto1?: string;
+  profilePhoto2?: string;
+  profilePhoto3?: string;
+  bio?: string;
   onboardingCompleted: boolean;
   likes?: string[];
   passes?: string[];
   matches?: string[];
+  distance?: number;
 }
 
 interface IMatch extends DocumentData {
@@ -294,6 +301,25 @@ const normalizeGenderPreference = (
   return null;
 };
 
+const toRadians = (value: number) => (value * Math.PI) / 180;
+
+const haversineDistanceKm = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+) => {
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+};
+
 const uploadMessageAttachment = async (req: Request, res: Response) => {
   const currentUser = await fetchCurrentUser(req, res);
   if (!currentUser) return;
@@ -361,11 +387,12 @@ const getPotentialMatches = async (req: Request, res: Response) => {
     const QUERY_PAGE_SIZE = 120;
     const MAX_SCAN_PAGES = 10;
 
-    const potentialMatches: IUserProfile[] = [];
+    const preferredGenderMatches: IUserProfile[] = [];
+    const fallbackGenderMatches: IUserProfile[] = [];
     let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
     let scannedPages = 0;
 
-    while (potentialMatches.length < FEED_SIZE && scannedPages < MAX_SCAN_PAGES) {
+    while (preferredGenderMatches.length < FEED_SIZE && scannedPages < MAX_SCAN_PAGES) {
       let query = usersCollection
         .orderBy(admin.firestore.FieldPath.documentId())
         .limit(QUERY_PAGE_SIZE);
@@ -382,10 +409,21 @@ const getPotentialMatches = async (req: Request, res: Response) => {
       snapshot.forEach((doc) => {
         const candidate = { id: doc.id, ...doc.data() } as IUserProfile;
         const candidateGender = typeof candidate.gender === 'string' ? candidate.gender.trim().toUpperCase() : '';
-        const matchesPreferredGender = !preferredGender || candidateGender === preferredGender;
+        if (excludedUids.has(candidate.id)) return;
 
-        if (!excludedUids.has(candidate.id) && matchesPreferredGender) {
-          potentialMatches.push(candidate);
+        if (!preferredGender) {
+          preferredGenderMatches.push(candidate);
+          return;
+        }
+
+        if (candidateGender === preferredGender) {
+          preferredGenderMatches.push(candidate);
+          return;
+        }
+
+        // Fallback pool: opposite gender users not already liked/passed/matched.
+        if (candidateGender === 'MALE' || candidateGender === 'FEMALE') {
+          fallbackGenderMatches.push(candidate);
         }
       });
 
@@ -393,21 +431,63 @@ const getPotentialMatches = async (req: Request, res: Response) => {
       scannedPages += 1;
     }
 
-    console.log(`? Potential matches returned: ${potentialMatches.length}`);
+    const usedFallbackWithoutPreference = Boolean(preferredGender && preferredGenderMatches.length === 0);
+    const baseMatches = usedFallbackWithoutPreference ? fallbackGenderMatches : preferredGenderMatches;
+    const selectedMatches = baseMatches.slice(0, FEED_SIZE);
+
+    const canComputeDistanceForCurrentUser =
+      typeof currentUser.latitude === 'number' &&
+      typeof currentUser.longitude === 'number';
+
+    const matchesWithDistance = selectedMatches.map((candidate) => {
+      if (
+        canComputeDistanceForCurrentUser &&
+        typeof candidate.latitude === 'number' &&
+        typeof candidate.longitude === 'number'
+      ) {
+        return {
+          ...candidate,
+          distance: haversineDistanceKm(
+            currentUser.latitude as number,
+            currentUser.longitude as number,
+            candidate.latitude,
+            candidate.longitude
+          ),
+        };
+      }
+
+      return candidate;
+    });
+
+    matchesWithDistance.sort((a, b) => {
+      const aDistance = typeof a.distance === 'number' ? a.distance : Number.POSITIVE_INFINITY;
+      const bDistance = typeof b.distance === 'number' ? b.distance : Number.POSITIVE_INFINITY;
+      if (aDistance !== bDistance) return aDistance - bDistance;
+
+      const aAge = typeof a.age === 'number' ? a.age : Number.POSITIVE_INFINITY;
+      const bAge = typeof b.age === 'number' ? b.age : Number.POSITIVE_INFINITY;
+      return aAge - bAge;
+    });
+
+    console.log(`? Potential matches returned: ${matchesWithDistance.length}`);
     res.status(200).json(
-      potentialMatches.map((u) => ({
+      matchesWithDistance.map((u) => ({
         id: u.id,
         name: (typeof u.name === 'string' && u.name.trim()) ? u.name.trim() : 'FaithBliss User',
         age: u.age,
         gender: u.gender,
         denomination: u.denomination,
         location: u.location,
+        latitude: u.latitude,
+        longitude: u.longitude,
         profilePhoto1: u.profilePhoto1,
-        profilePhoto2: (u as any).profilePhoto2,
-        profilePhoto3: (u as any).profilePhoto3,
-        bio: (typeof (u as any).bio === 'string' && (u as any).bio.trim())
-          ? (u as any).bio.trim()
+        profilePhoto2: u.profilePhoto2,
+        profilePhoto3: u.profilePhoto3,
+        bio: (typeof u.bio === 'string' && u.bio.trim())
+          ? u.bio.trim()
           : '',
+        distance: typeof u.distance === 'number' ? Math.round(u.distance) : undefined,
+        usedFallbackWithoutPreference,
       }))
     );
   } catch (error) {
