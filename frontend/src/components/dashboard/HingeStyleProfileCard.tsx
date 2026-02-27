@@ -40,6 +40,7 @@ export const HingeStyleProfileCard = ({
 }: HingeStyleProfileCardProps) => {
   const navigate = useNavigate();
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [currentPhotoAspectRatio, setCurrentPhotoAspectRatio] = useState(1);
   const [isMobileView, setIsMobileView] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(max-width: 767px)').matches;
@@ -56,8 +57,8 @@ export const HingeStyleProfileCard = ({
     const [prefix, suffix] = url.split('/upload/');
     if (!prefix || !suffix) return url;
 
-    // Keep original framing while requesting a high-clarity source for high-DPI displays.
-    const deliveryTransform = 'f_auto,q_auto:best,dpr_auto';
+    // Request a larger high-clarity source so images stay sharp on dense mobile screens.
+    const deliveryTransform = 'f_auto,q_auto:best,dpr_auto,c_limit,w_2000,e_sharpen:60';
     return `${prefix}/upload/${deliveryTransform}/${suffix}`;
   };
 
@@ -155,7 +156,40 @@ export const HingeStyleProfileCard = ({
     }
   }, [currentPhotoIndex, photos.length]);
 
+  useEffect(() => {
+    const currentPhotoUrl = photos[currentPhotoIndex];
+    if (!currentPhotoUrl) return;
+
+    let isCancelled = false;
+    const image = new Image();
+    image.onload = () => {
+      if (isCancelled) return;
+      if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+        setCurrentPhotoAspectRatio(image.naturalWidth / image.naturalHeight);
+      }
+    };
+    image.onerror = () => {
+      if (!isCancelled) {
+        setCurrentPhotoAspectRatio(1);
+      }
+    };
+    image.src = currentPhotoUrl;
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [photos, currentPhotoIndex]);
+
   if (isMobileView) {
+    const isPortraitImage = currentPhotoAspectRatio < 0.95;
+    const mobileStageHeightClass = isCompactHeight
+      ? isPortraitImage
+        ? 'min-h-[190px] max-h-[36vh]'
+        : 'min-h-[170px] max-h-[30vh]'
+      : isPortraitImage
+        ? 'min-h-[240px] max-h-[50vh]'
+        : 'min-h-[220px] max-h-[42vh]';
+
     return (
       <div className="flex h-full w-full flex-col bg-[radial-gradient(circle_at_10%_10%,rgba(236,72,153,0.17),transparent_38%),radial-gradient(circle_at_90%_0%,rgba(59,130,246,0.16),transparent_35%),linear-gradient(180deg,#020617_0%,#0f172a_100%)] px-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 text-white">
         <div className={`flex items-center gap-2 overflow-x-auto ${isCompactHeight ? 'mb-2 pb-0.5' : 'mb-3 pb-1'}`}>
@@ -228,11 +262,7 @@ export const HingeStyleProfileCard = ({
             ))}
           </div>
 
-          <div
-            className={`relative mt-2 w-full flex-1 overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/80 ${
-              isCompactHeight ? 'min-h-[180px] max-h-[34vh]' : 'min-h-[240px] max-h-[46vh]'
-            }`}
-          >
+          <div className={`relative mt-2 w-full flex-1 overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/80 ${mobileStageHeightClass}`}>
             <AnimatePresence mode="wait" initial={false}>
               <motion.img
                 key={`${profileId}-${currentPhotoIndex}-bg-mobile`}
