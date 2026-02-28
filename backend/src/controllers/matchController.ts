@@ -486,6 +486,14 @@ const getPotentialMatches = async (req: Request, res: Response) => {
         bio: (typeof u.bio === 'string' && u.bio.trim())
           ? u.bio.trim()
           : '',
+        personalPromptQuestion:
+          typeof u.personalPromptQuestion === 'string' && u.personalPromptQuestion.trim()
+            ? u.personalPromptQuestion.trim()
+            : '',
+        personalPromptAnswer:
+          typeof u.personalPromptAnswer === 'string' && u.personalPromptAnswer.trim()
+            ? u.personalPromptAnswer.trim()
+            : '',
         distance: typeof u.distance === 'number' ? Math.round(u.distance) : undefined,
         usedFallbackWithoutPreference,
       }))

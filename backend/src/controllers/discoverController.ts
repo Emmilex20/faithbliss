@@ -17,6 +17,8 @@ interface IUserProfile extends DocumentData {
   profilePhoto2?: string;
   profilePhoto3?: string;
   bio?: string;
+  personalPromptQuestion?: string;
+  personalPromptAnswer?: string;
   faithJourney?: string;
   churchAttendance?: string;
   sundayActivity?: string;
@@ -314,6 +316,8 @@ export const filterProfiles = async (req: Request, res: Response) => {
       profilePhoto2: u.profilePhoto2,
       profilePhoto3: u.profilePhoto3,
       bio: u.bio,
+      personalPromptQuestion: u.personalPromptQuestion,
+      personalPromptAnswer: u.personalPromptAnswer,
       faithJourney: u.faithJourney,
       churchAttendance: u.churchAttendance || u.sundayActivity,
       relationshipGoals: u.relationshipGoals,
@@ -425,6 +429,8 @@ export const discoverByInterests = async (req: Request, res: Response) => {
       profilePhoto2: u.profilePhoto2,
       profilePhoto3: u.profilePhoto3,
       bio: u.bio,
+      personalPromptQuestion: u.personalPromptQuestion,
+      personalPromptAnswer: u.personalPromptAnswer,
       faithJourney: u.faithJourney,
       churchAttendance: u.churchAttendance || u.sundayActivity,
       relationshipGoals: u.relationshipGoals,

@@ -550,6 +550,7 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
         user={currentUserData} 
         showFilters={showFilters}
         showSidePanel={showSidePanel}
+                    showBottomNav={false}
                     onToggleFilters={handleToggleFilters}
                     onToggleSidePanel={() => setShowSidePanel(!showSidePanel)}
                     topContent={

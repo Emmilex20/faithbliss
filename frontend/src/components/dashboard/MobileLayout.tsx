@@ -11,6 +11,7 @@ interface MobileLayoutProps {
   showSidePanel: boolean;
   onToggleFilters: () => void;
   onToggleSidePanel: () => void;
+  showBottomNav?: boolean;
   topContent?: ReactNode;
   children: ReactNode;
 }
@@ -23,6 +24,7 @@ export const MobileLayout = ({
   showSidePanel,
   onToggleFilters,
   onToggleSidePanel,
+  showBottomNav = true,
   children
 }: MobileLayoutProps) => {
   return (
@@ -40,13 +42,13 @@ export const MobileLayout = ({
       />
 
       {/* Mobile Profile Display */}
-      <div className="flex h-[calc(100dvh-62px)] sm:h-[calc(100dvh-74px)] flex-col px-0 pb-[88px] pt-0">
+      <div className={`flex h-[calc(100dvh-62px)] sm:h-[calc(100dvh-74px)] flex-col px-0 pt-0 ${showBottomNav ? 'pb-[88px]' : 'pb-0'}`}>
         <div className="relative mx-auto h-full w-full flex-1">
           {children}
         </div>
       </div>
 
-      <MobileBottomNav userImage={userImage} userName={userName} />
+      {showBottomNav ? <MobileBottomNav userImage={userImage} userName={userName} /> : null}
     </div>
   );
 };
