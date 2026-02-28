@@ -322,6 +322,7 @@ export const filterProfiles = async (req: Request, res: Response) => {
       churchAttendance: u.churchAttendance || u.sundayActivity,
       relationshipGoals: u.relationshipGoals,
       hobbies: u.hobbies,
+      interests: u.interests,
       values: u.values,
       favoriteVerse: u.favoriteVerse,
       profession: u.profession,

@@ -483,6 +483,8 @@ const getPotentialMatches = async (req: Request, res: Response) => {
         profilePhoto1: u.profilePhoto1,
         profilePhoto2: u.profilePhoto2,
         profilePhoto3: u.profilePhoto3,
+        hobbies: Array.isArray(u.hobbies) ? u.hobbies : [],
+        interests: Array.isArray(u.interests) ? u.interests : [],
         bio: (typeof u.bio === 'string' && u.bio.trim())
           ? u.bio.trim()
           : '',

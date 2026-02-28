@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Heart, Minus, MoreHorizontal, Plus, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
+import { Heart, Minus, MoreHorizontal, Plus, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import type { User } from '@/services/api';
@@ -52,7 +52,6 @@ export const HingeStyleProfileCard = ({
   onOpenFilterSection,
 }: HingeStyleProfileCardProps) => {
   const navigate = useNavigate();
-  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [currentPhotoAspectRatio, setCurrentPhotoAspectRatio] = useState(1);
   const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
   const [viewerPhotoIndex, setViewerPhotoIndex] = useState<number | null>(null);
@@ -129,17 +128,9 @@ export const HingeStyleProfileCard = ({
 
   const cardPhotos = useMemo(() => rawPhotos.map(toCardCloudinary), [rawPhotos]);
   const viewerPhotos = useMemo(() => rawPhotos.map(toViewerCloudinary), [rawPhotos]);
-  const allPhotoIndexes = useMemo(() => rawPhotos.map((_, index) => index), [rawPhotos]);
-  const mobilePrimaryPhotoIndexes = useMemo(
-    () => (allPhotoIndexes.length > 1 ? allPhotoIndexes.filter((index) => index !== 1) : allPhotoIndexes),
-    [allPhotoIndexes]
-  );
-
-  const nextPhoto = () => setCurrentPhotoIndex((prev) => (prev + 1) % cardPhotos.length);
-  const prevPhoto = () => setCurrentPhotoIndex((prev) => (prev - 1 + cardPhotos.length) % cardPhotos.length);
-  const currentViewerPhotoIndex = viewerPhotoIndex ?? currentPhotoIndex;
+  const currentViewerPhotoIndex = viewerPhotoIndex ?? 0;
   const currentViewerPhoto = viewerPhotos[currentViewerPhotoIndex] || viewerPhotos[0];
-  const viewerCanNavigate = viewerPhotoIndex === null && viewerPhotos.length > 1;
+  const viewerCanNavigate = false;
 
   const clampViewerOffset = useCallback((offset: { x: number; y: number }, scale: number) => {
     const stage = viewerStageRef.current;
@@ -236,19 +227,7 @@ export const HingeStyleProfileCard = ({
       viewerScale <= 1.02 &&
       viewerCanNavigate
     ) {
-      const dx = pointerEnd.x - pointerStart.x;
-      const dy = pointerEnd.y - pointerStart.y;
-      const absDx = Math.abs(dx);
-      const absDy = Math.abs(dy);
-
-      // Natural gallery behavior: swipe left => next, swipe right => previous.
-      if (absDx > 42 && absDx > absDy * 1.35) {
-        if (dx < 0) {
-          nextPhoto();
-        } else {
-          prevPhoto();
-        }
-      }
+      // Fullscreen preview is single-photo only.
     }
 
     if (activePointersRef.current.size < 2) {
@@ -347,19 +326,7 @@ export const HingeStyleProfileCard = ({
       viewerScale <= 1.02 &&
       viewerCanNavigate
     ) {
-      const endTouch = event.changedTouches[0];
-      const dx = endTouch.clientX - touchSwipeStartRef.current.x;
-      const dy = endTouch.clientY - touchSwipeStartRef.current.y;
-      const absDx = Math.abs(dx);
-      const absDy = Math.abs(dy);
-
-      if (absDx > 42 && absDx > absDy * 1.35) {
-        if (dx < 0) {
-          nextPhoto();
-        } else {
-          prevPhoto();
-        }
-      }
+      // Fullscreen preview is single-photo only.
     }
 
     if (event.touches.length < 2) {
@@ -455,10 +422,6 @@ export const HingeStyleProfileCard = ({
   ];
 
   useEffect(() => {
-    setCurrentPhotoIndex(0);
-  }, [profileId]);
-
-  useEffect(() => {
     if (typeof window === 'undefined') return undefined;
 
     const mediaQuery = window.matchMedia('(max-width: 767px)');
@@ -485,13 +448,7 @@ export const HingeStyleProfileCard = ({
   }, []);
 
   useEffect(() => {
-    if (currentPhotoIndex > cardPhotos.length - 1) {
-      setCurrentPhotoIndex(0);
-    }
-  }, [currentPhotoIndex, cardPhotos.length]);
-
-  useEffect(() => {
-    const currentPhotoUrl = rawPhotos[currentPhotoIndex];
+    const currentPhotoUrl = rawPhotos[0];
     if (!currentPhotoUrl) return;
 
     let isCancelled = false;
@@ -512,25 +469,21 @@ export const HingeStyleProfileCard = ({
     return () => {
       isCancelled = true;
     };
-  }, [rawPhotos, currentPhotoIndex]);
-
-  useEffect(() => {
-    if (!isMobileView) return;
-    if (currentPhotoIndex !== 1) return;
-    if (mobilePrimaryPhotoIndexes.length === 0) return;
-    setCurrentPhotoIndex(mobilePrimaryPhotoIndexes[0]);
-  }, [currentPhotoIndex, isMobileView, mobilePrimaryPhotoIndexes]);
+  }, [rawPhotos]);
 
   if (isMobileView) {
     const mobileCoverPosition = currentPhotoAspectRatio < 0.95 ? '50% 24%' : '50% 35%';
     const aboutMeBody = profile.bio?.trim() || 'Still filling this out.';
     const promptQuestion = profile.personalPromptQuestion?.trim() || '';
     const promptAnswer = profile.personalPromptAnswer?.trim() || '';
-    const secondaryMobilePhoto = cardPhotos[1] ?? null;
-    const mobileCurrentCarouselIndex = Math.max(0, mobilePrimaryPhotoIndexes.indexOf(currentPhotoIndex));
-    const currentMobilePhotoIndex = mobilePrimaryPhotoIndexes[mobileCurrentCarouselIndex] ?? 0;
-    const currentMobilePhoto = cardPhotos[currentMobilePhotoIndex] ?? cardPhotos[0];
-    const showMobileCarouselControls = mobilePrimaryPhotoIndexes.length > 1;
+    const mobileInterests = ((profile.interests && profile.interests.length > 0)
+      ? profile.interests
+      : (profile.hobbies || [])
+    )
+      .map((item) => item?.trim())
+      .filter((item): item is string => Boolean(item))
+      .slice(0, 8);
+    const currentMobilePhoto = cardPhotos[0] ?? '/default-avatar.png';
     const mobileSectionLabelClass = 'pr-4 text-[0.72rem] font-bold uppercase tracking-[0.12em] text-slate-500';
     const mobileBodyTextClass = isCompactHeight
       ? 'mt-2 text-[1.4rem] font-semibold leading-[1.12] tracking-[-0.03em] text-slate-950'
@@ -538,16 +491,6 @@ export const HingeStyleProfileCard = ({
     const mobilePromptTextClass = isCompactHeight
       ? 'mt-2 text-[1.28rem] font-serif font-semibold leading-[1.16] tracking-[-0.02em] text-slate-950'
       : 'mt-3 text-[1.52rem] font-serif font-semibold leading-[1.14] tracking-[-0.025em] text-slate-950';
-    const goToNextMobilePhoto = () => {
-      if (mobilePrimaryPhotoIndexes.length <= 1) return;
-      const nextIndex = (mobileCurrentCarouselIndex + 1) % mobilePrimaryPhotoIndexes.length;
-      setCurrentPhotoIndex(mobilePrimaryPhotoIndexes[nextIndex]);
-    };
-    const goToPreviousMobilePhoto = () => {
-      if (mobilePrimaryPhotoIndexes.length <= 1) return;
-      const nextIndex = (mobileCurrentCarouselIndex - 1 + mobilePrimaryPhotoIndexes.length) % mobilePrimaryPhotoIndexes.length;
-      setCurrentPhotoIndex(mobilePrimaryPhotoIndexes[nextIndex]);
-    };
 
     return (
       <>
@@ -582,7 +525,7 @@ export const HingeStyleProfileCard = ({
           <article className="flex min-h-0 flex-1 flex-col bg-transparent">
             <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-4 pt-2">
               <div className="mb-3 flex items-start justify-between gap-3">
-                <h2 className={`${isCompactHeight ? 'text-[2.08rem]' : 'text-[2.3rem]'} min-w-0 flex-1 truncate font-black leading-[0.94] tracking-[-0.05em] text-slate-950`}>
+                <h2 className={`${isCompactHeight ? 'text-[1.9rem]' : 'text-[2.08rem]'} min-w-0 flex-1 truncate font-bold leading-[0.96] tracking-[-0.035em] text-slate-950`}>
                   {mobileDisplayName}
                   {profile.age ? `, ${profile.age}` : ''}
                 </h2>
@@ -606,30 +549,12 @@ export const HingeStyleProfileCard = ({
                 </div>
               </div>
 
-              <div className="mb-2 flex items-center gap-1.5 rounded-full bg-slate-100 px-2 py-1.5">
-                {mobilePrimaryPhotoIndexes.map((photoIndex, index) => (
-                  <button
-                    key={photoIndex}
-                    type="button"
-                    onPointerDown={stopEvent}
-                    onMouseDown={stopEvent}
-                    onTouchStart={stopEvent}
-                    onClick={(event) => {
-                      stopEvent(event);
-                      setCurrentPhotoIndex(photoIndex);
-                    }}
-                    className={`h-1.5 flex-1 rounded-full transition-colors ${index === mobileCurrentCarouselIndex ? 'bg-slate-900' : 'bg-slate-300'}`}
-                    aria-label={`Photo ${index + 1}`}
-                  />
-                ))}
-              </div>
-
               <div
                 className={`relative w-full cursor-zoom-in overflow-hidden rounded-[26px] bg-slate-100 shadow-[0_14px_34px_rgba(15,23,42,0.08)] ${isCompactHeight ? 'aspect-[4/5] min-h-[352px]' : 'aspect-[4/5] min-h-[420px]'}`}
-                onClick={() => openImageViewer(currentMobilePhotoIndex)}
+                onClick={() => openImageViewer(0)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
-                    openImageViewer(currentMobilePhotoIndex);
+                    openImageViewer(0);
                   }
                 }}
                 role="button"
@@ -638,7 +563,7 @@ export const HingeStyleProfileCard = ({
               >
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.img
-                    key={`${profileId}-${currentMobilePhotoIndex}-mobile`}
+                    key={`${profileId}-0-mobile`}
                     src={currentMobilePhoto}
                     alt={profile.name}
                     className="absolute inset-0 h-full w-full object-cover object-center [image-rendering:auto] [backface-visibility:hidden] [transform:translateZ(0)]"
@@ -652,43 +577,6 @@ export const HingeStyleProfileCard = ({
                     decoding="async"
                   />
                 </AnimatePresence>
-
-                {showMobileCarouselControls && (
-                  <>
-                    <button
-                      type="button"
-                      onPointerDown={stopEvent}
-                      onMouseDown={stopEvent}
-                      onTouchStart={stopEvent}
-                      onClick={(event) => {
-                        stopEvent(event);
-                        goToPreviousMobilePhoto();
-                      }}
-                      className="absolute inset-y-0 left-0 z-20 flex w-[18%] items-center justify-start pl-2"
-                      aria-label="Previous photo"
-                    >
-                      <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/40 bg-black/22 text-white shadow-[0_12px_24px_rgba(15,23,42,0.16)] backdrop-blur-md">
-                        <ChevronLeft className="h-5 w-5" />
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onPointerDown={stopEvent}
-                      onMouseDown={stopEvent}
-                      onTouchStart={stopEvent}
-                      onClick={(event) => {
-                        stopEvent(event);
-                        goToNextMobilePhoto();
-                      }}
-                      className="absolute inset-y-0 right-0 z-20 flex w-[18%] items-center justify-end pr-2"
-                      aria-label="Next photo"
-                    >
-                      <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/40 bg-black/22 text-white shadow-[0_12px_24px_rgba(15,23,42,0.16)] backdrop-blur-md">
-                        <ChevronRight className="h-5 w-5" />
-                      </span>
-                    </button>
-                  </>
-                )}
 
                 <button
                   type="button"
@@ -727,25 +615,20 @@ export const HingeStyleProfileCard = ({
                 </div>
               ) : null}
 
-              {secondaryMobilePhoto ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    openImageViewer(1);
-                  }}
-                  className="mt-4 block w-full overflow-hidden rounded-[26px] bg-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]"
-                  aria-label={`Open ${mobileDisplayName}'s second photo`}
-                >
-                  <img
-                    src={secondaryMobilePhoto}
-                    alt={`${mobileDisplayName} photo 2`}
-                    className={`${isCompactHeight ? 'h-[16.5rem]' : 'h-[19rem]'} w-full object-cover`}
-                    style={{ objectPosition: mobileCoverPosition }}
-                    loading="lazy"
-                    decoding="async"
-                    draggable={false}
-                  />
-                </button>
+              {mobileInterests.length > 0 ? (
+                <div className="mt-4 rounded-[26px] bg-slate-100 px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                  <p className={mobileSectionLabelClass}>Interests</p>
+                  <div className="mt-3 flex flex-wrap gap-2.5">
+                    {mobileInterests.map((interest) => (
+                      <span
+                        key={interest}
+                        className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3.5 py-2 text-[0.76rem] font-semibold tracking-[-0.01em] text-slate-700 shadow-[0_6px_14px_rgba(15,23,42,0.06)]"
+                      >
+                        {interest}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               ) : null}
 
               <Link
@@ -861,33 +744,6 @@ export const HingeStyleProfileCard = ({
                   />
                 </AnimatePresence>
 
-                {viewerCanNavigate && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        prevPhoto();
-                      }}
-                      className="absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full border border-white/35 bg-black/45 p-2 text-white backdrop-blur-sm"
-                      aria-label="Previous photo"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        nextPhoto();
-                      }}
-                      className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full border border-white/35 bg-black/45 p-2 text-white backdrop-blur-sm"
-                      aria-label="Next photo"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                  </>
-                )}
-
                   <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-black/40 px-3 py-1 text-[11px] text-white/85 backdrop-blur-md">
                     Pinch to zoom - Drag to pan - Double tap to reset
                   </div>
@@ -905,8 +761,8 @@ export const HingeStyleProfileCard = ({
       <div className="relative h-full bg-slate-700">
         <AnimatePresence mode="wait" initial={false}>
           <motion.img
-            key={`${profileId}-${currentPhotoIndex}-blur`}
-            src={cardPhotos[currentPhotoIndex]}
+            key={`${profileId}-0-blur`}
+            src={cardPhotos[0]}
             alt={profile.name}
             className="absolute inset-0 h-full w-full object-cover blur-xl brightness-50"
             initial={{ opacity: 0.45, scale: 1.03 }}
@@ -921,8 +777,8 @@ export const HingeStyleProfileCard = ({
 
         <AnimatePresence mode="wait" initial={false}>
           <motion.img
-            key={`${profileId}-${currentPhotoIndex}`}
-            src={cardPhotos[currentPhotoIndex]}
+            key={`${profileId}-0`}
+            src={cardPhotos[0]}
             alt={profile.name}
             className="absolute inset-0 h-full w-full object-cover object-center [image-rendering:auto] [backface-visibility:hidden] [transform:translateZ(0)]"
             initial={{ opacity: 0.45 }}
@@ -935,64 +791,11 @@ export const HingeStyleProfileCard = ({
           />
         </AnimatePresence>
 
-        <div className="absolute inset-x-0 top-0 z-30 p-3 sm:p-3 swiper-no-swiping">
-          <div className="flex items-center gap-1.5 rounded-full bg-black/30 px-3 py-2 backdrop-blur-sm">
-            {cardPhotos.map((_, index) => (
-              <button
-                key={index}
-                type="button"
-                onPointerDown={stopEvent}
-                onMouseDown={stopEvent}
-                onTouchStart={stopEvent}
-                onClick={(event) => {
-                  stopEvent(event);
-                  setCurrentPhotoIndex(index);
-                }}
-                className={`h-1.5 flex-1 rounded-full ${index === currentPhotoIndex ? 'bg-white' : 'bg-white/35'}`}
-                aria-label={`Photo ${index + 1}`}
-              />
-            ))}
-          </div>
-        </div>
-
-        {cardPhotos.length > 1 && (
-          <>
-            <button
-              type="button"
-              onPointerDown={stopEvent}
-              onMouseDown={stopEvent}
-              onTouchStart={stopEvent}
-              onClick={(event) => {
-                stopEvent(event);
-                prevPhoto();
-              }}
-              className="absolute left-3 top-1/2 z-30 -translate-y-1/2 rounded-2xl border border-white/30 bg-black/28 p-2.5 text-white shadow-[0_12px_24px_rgba(2,6,23,0.22)] backdrop-blur-md transition-all duration-200 hover:bg-black/45 swiper-no-swiping"
-              aria-label="Previous photo"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <button
-              type="button"
-              onPointerDown={stopEvent}
-              onMouseDown={stopEvent}
-              onTouchStart={stopEvent}
-              onClick={(event) => {
-                stopEvent(event);
-                nextPhoto();
-              }}
-              className="absolute right-3 top-1/2 z-30 -translate-y-1/2 rounded-2xl border border-white/30 bg-black/28 p-2.5 text-white shadow-[0_12px_24px_rgba(2,6,23,0.22)] backdrop-blur-md transition-all duration-200 hover:bg-black/45 swiper-no-swiping"
-              aria-label="Next photo"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
-          </>
-        )}
-
         <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/75 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-24 sm:px-4 sm:pb-5 sm:pt-20">
           <div className="mb-2 inline-flex items-center rounded-full bg-emerald-500/85 px-3 py-1 text-sm font-semibold text-white">
             {distanceBadge}
           </div>
-          <h2 className="text-[2.2rem] font-bold leading-tight text-white sm:text-4xl">
+          <h2 className="text-[2rem] font-semibold leading-tight text-white sm:text-[2.7rem]">
             {profile.name}
             {profile.age ? `, ${profile.age}` : ''}
           </h2>
