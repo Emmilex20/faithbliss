@@ -92,7 +92,7 @@ const ensureJsonLd = (pathname: string) => {
       name: SITE_NAME,
       logo: {
         '@type': 'ImageObject',
-        url: `${SITE_URL}/logo.svg`,
+        url: `${SITE_URL}/FaithBliss-Logo%20Source.svg`,
       },
     },
   };

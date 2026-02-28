@@ -3,7 +3,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef, useState } from 'react';
-import { Bell, Filter, Sparkles, ArrowLeft, Download } from 'lucide-react';
+import { Bell, Filter, ArrowLeft, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useNotificationUnreadCount } from '@/hooks/useAPI';
 import { useRequireAuth } from '@/hooks/useAuth';
@@ -133,6 +133,7 @@ export const TopBar = ({
       ? `Edit your profile, ${userName}`
       : `${title} page`
     : userName;
+  const showTitleBlock = Boolean(title);
 
   return (
     <div className="bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 px-3 py-2.5 sm:px-4 sm:py-4 sticky top-0 z-50">
@@ -140,7 +141,7 @@ export const TopBar = ({
 
       <div className="max-w-7xl mx-auto relative z-10">
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-0">
             {showBackButton ? (
               <button
                 onClick={onBack}
@@ -163,22 +164,28 @@ export const TopBar = ({
 
             <Link
               to="/dashboard"
-              className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer"
+              className="flex items-center -ml-5 sm:-ml-6 hover:opacity-80 transition-opacity cursor-pointer"
             >
-              <div className="bg-gradient-to-r from-pink-500 to-purple-600 p-1.5 sm:p-2 rounded-2xl shrink-0">
-                <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-              </div>
+              <img
+                src="/FaithBliss-Logo%20Source.svg"
+                alt="FaithBliss"
+                className="-mt-1 h-12 w-36 shrink-0 object-cover object-left sm:-mt-1.5 sm:h-14 sm:w-44"
+                loading="eager"
+                decoding="async"
+              />
             </Link>
           </div>
 
-          <div className="min-w-0">
-            <h1 className="text-[15px] sm:text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent truncate text-center sm:text-left">
-              {title || 'FaithBliss'}
-            </h1>
-            <p className="text-xs text-gray-400 hidden md:block truncate">
-              {subtitleText}
-            </p>
-          </div>
+          {showTitleBlock ? (
+            <div className="min-w-0">
+              <h1 className="truncate text-center text-[15px] font-bold text-white sm:text-left sm:text-xl">
+                {title}
+              </h1>
+              <p className="text-xs text-gray-400 hidden md:block truncate">
+                {subtitleText}
+              </p>
+            </div>
+          ) : <div />}
 
           <div className="relative flex items-center gap-2 justify-end">
             {installPromptEvent && (

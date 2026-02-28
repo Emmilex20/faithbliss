@@ -1,12 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="FaithBliss">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="FaithBliss">
   <defs>
-    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ec4899" />
-      <stop offset="100%" stop-color="#7c3aed" />
+    <linearGradient id="faithblissMark" x1="18" y1="16" x2="110" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ec4899" />
+      <stop offset="1" stop-color="#7c3aed" />
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#grad)" />
-  <path d="M256 92v320" stroke="#ffffff" stroke-width="38" stroke-linecap="round" />
-  <path d="M164 184h184" stroke="#ffffff" stroke-width="38" stroke-linecap="round" />
-  <path d="M256 426c53-29 91-76 91-126 0-30-19-52-45-52-18 0-34 8-46 24-12-16-28-24-46-24-26 0-45 22-45 52 0 50 38 97 91 126z" fill="#ffffff" />
+  <path
+    d="M36 18c-14.4 0-26 11.6-26 26v34c0 18.8 15.2 34 34 34h18c30.9 0 56-25.1 56-56S92.9 18 62 18H36Z"
+    fill="none"
+    stroke="url(#faithblissMark)"
+    stroke-width="12"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M46 36v34M29 53h34"
+    fill="none"
+    stroke="url(#faithblissMark)"
+    stroke-width="12"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
 </svg>

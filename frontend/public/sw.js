@@ -5,6 +5,7 @@ const APP_SHELL = [
   '/site.webmanifest',
   '/logo-mark.svg',
   '/logo.svg',
+  '/FaithBliss-Logo%20Source.svg',
   '/favicon.svg',
 ];
 
