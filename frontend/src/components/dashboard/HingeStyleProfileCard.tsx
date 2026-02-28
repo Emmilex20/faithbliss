@@ -128,6 +128,11 @@ export const HingeStyleProfileCard = ({
 
   const cardPhotos = useMemo(() => rawPhotos.map(toCardCloudinary), [rawPhotos]);
   const viewerPhotos = useMemo(() => rawPhotos.map(toViewerCloudinary), [rawPhotos]);
+  const allPhotoIndexes = useMemo(() => rawPhotos.map((_, index) => index), [rawPhotos]);
+  const mobilePrimaryPhotoIndexes = useMemo(
+    () => (allPhotoIndexes.length > 1 ? allPhotoIndexes.filter((index) => index !== 1) : allPhotoIndexes),
+    [allPhotoIndexes]
+  );
 
   const nextPhoto = () => setCurrentPhotoIndex((prev) => (prev + 1) % cardPhotos.length);
   const prevPhoto = () => setCurrentPhotoIndex((prev) => (prev - 1 + cardPhotos.length) % cardPhotos.length);
@@ -504,18 +509,40 @@ export const HingeStyleProfileCard = ({
     };
   }, [rawPhotos, currentPhotoIndex]);
 
+  useEffect(() => {
+    if (!isMobileView) return;
+    if (currentPhotoIndex !== 1) return;
+    if (mobilePrimaryPhotoIndexes.length === 0) return;
+    setCurrentPhotoIndex(mobilePrimaryPhotoIndexes[0]);
+  }, [currentPhotoIndex, isMobileView, mobilePrimaryPhotoIndexes]);
+
   if (isMobileView) {
     const mobileCoverPosition = currentPhotoAspectRatio < 0.95 ? '50% 24%' : '50% 35%';
     const aboutMeBody = profile.bio?.trim() || 'Still filling this out.';
     const promptQuestion = profile.personalPromptQuestion?.trim() || '';
     const promptAnswer = profile.personalPromptAnswer?.trim() || '';
-    const detailItems = [
-      profile.profession?.trim(),
-      profile.faithJourney ? formatLabel(profile.faithJourney) : '',
-      profile.relationshipGoals?.[0] ? formatLabel(profile.relationshipGoals[0]) : '',
-      profile.denomination ? formatLabel(profile.denomination) : '',
-    ].filter(Boolean);
-    const interestPreview = (profile.interests || []).slice(0, 5);
+    const secondaryMobilePhoto = cardPhotos[1] ?? null;
+    const mobileCurrentCarouselIndex = Math.max(0, mobilePrimaryPhotoIndexes.indexOf(currentPhotoIndex));
+    const currentMobilePhotoIndex = mobilePrimaryPhotoIndexes[mobileCurrentCarouselIndex] ?? 0;
+    const currentMobilePhoto = cardPhotos[currentMobilePhotoIndex] ?? cardPhotos[0];
+    const showMobileCarouselControls = mobilePrimaryPhotoIndexes.length > 1;
+    const mobileSectionLabelClass = 'pr-4 text-[0.72rem] font-bold uppercase tracking-[0.12em] text-slate-500';
+    const mobileBodyTextClass = isCompactHeight
+      ? 'mt-2 text-[1.4rem] font-semibold leading-[1.12] tracking-[-0.03em] text-slate-950'
+      : 'mt-3 text-[1.7rem] font-semibold leading-[1.1] tracking-[-0.035em] text-slate-950';
+    const mobilePromptTextClass = isCompactHeight
+      ? 'mt-2 text-[1.28rem] font-serif font-semibold leading-[1.16] tracking-[-0.02em] text-slate-950'
+      : 'mt-3 text-[1.52rem] font-serif font-semibold leading-[1.14] tracking-[-0.025em] text-slate-950';
+    const goToNextMobilePhoto = () => {
+      if (mobilePrimaryPhotoIndexes.length <= 1) return;
+      const nextIndex = (mobileCurrentCarouselIndex + 1) % mobilePrimaryPhotoIndexes.length;
+      setCurrentPhotoIndex(mobilePrimaryPhotoIndexes[nextIndex]);
+    };
+    const goToPreviousMobilePhoto = () => {
+      if (mobilePrimaryPhotoIndexes.length <= 1) return;
+      const nextIndex = (mobileCurrentCarouselIndex - 1 + mobilePrimaryPhotoIndexes.length) % mobilePrimaryPhotoIndexes.length;
+      setCurrentPhotoIndex(mobilePrimaryPhotoIndexes[nextIndex]);
+    };
 
     return (
       <>
@@ -524,7 +551,7 @@ export const HingeStyleProfileCard = ({
             <button
               type="button"
               onClick={() => onOpenFilterSection?.('distance')}
-              className={`inline-flex shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-900 shadow-sm ${
+              className={`inline-flex shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-white to-slate-100 text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:text-slate-950 hover:shadow-[0_14px_28px_rgba(15,23,42,0.12)] ${
                 isCompactHeight ? 'h-9 w-9' : 'h-10 w-10'
               }`}
               aria-label="Filter options"
@@ -548,9 +575,9 @@ export const HingeStyleProfileCard = ({
           </div>
 
           <article className="flex min-h-0 flex-1 flex-col bg-transparent">
-            <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-24 pt-2">
+            <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-4 pt-2">
               <div className="mb-3 flex items-start justify-between gap-3">
-                <h2 className={`${isCompactHeight ? 'text-[2rem]' : 'text-[2.15rem]'} min-w-0 flex-1 truncate font-bold leading-none text-slate-950`}>
+                <h2 className={`${isCompactHeight ? 'text-[2.08rem]' : 'text-[2.3rem]'} min-w-0 flex-1 truncate font-black leading-[0.94] tracking-[-0.05em] text-slate-950`}>
                   {mobileDisplayName}
                   {profile.age ? `, ${profile.age}` : ''}
                 </h2>
@@ -558,7 +585,7 @@ export const HingeStyleProfileCard = ({
                   <button
                     type="button"
                     onClick={onGoBack}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-slate-100"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white/90 text-slate-500 shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:text-slate-900 hover:shadow-[0_12px_24px_rgba(15,23,42,0.1)]"
                     aria-label="Go back"
                   >
                     <RotateCcw className="h-4 w-4" />
@@ -566,7 +593,7 @@ export const HingeStyleProfileCard = ({
                   <button
                     type="button"
                     onClick={() => navigate(`/profile/${profileId}`)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-slate-100"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white/90 text-slate-500 shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:text-slate-900 hover:shadow-[0_12px_24px_rgba(15,23,42,0.1)]"
                     aria-label="More options"
                   >
                     <MoreHorizontal className="h-4 w-4" />
@@ -574,34 +601,26 @@ export const HingeStyleProfileCard = ({
                 </div>
               </div>
 
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="min-w-0 truncate text-sm text-slate-500">{locationText}</p>
-                <p className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-emerald-600">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  Active today
-                </p>
-              </div>
-
-              <div className="mb-3 flex items-center gap-1.5 rounded-full bg-slate-100 px-2 py-1.5">
-                {cardPhotos.map((_, index) => (
+              <div className="mb-2 flex items-center gap-1.5 rounded-full bg-slate-100 px-2 py-1.5">
+                {mobilePrimaryPhotoIndexes.map((photoIndex, index) => (
                   <button
-                    key={index}
+                    key={photoIndex}
                     type="button"
                     onPointerDown={stopEvent}
                     onMouseDown={stopEvent}
                     onTouchStart={stopEvent}
                     onClick={(event) => {
                       stopEvent(event);
-                      setCurrentPhotoIndex(index);
+                      setCurrentPhotoIndex(photoIndex);
                     }}
-                    className={`h-1.5 flex-1 rounded-full transition-colors ${index === currentPhotoIndex ? 'bg-slate-900' : 'bg-slate-300'}`}
+                    className={`h-1.5 flex-1 rounded-full transition-colors ${index === mobileCurrentCarouselIndex ? 'bg-slate-900' : 'bg-slate-300'}`}
                     aria-label={`Photo ${index + 1}`}
                   />
                 ))}
               </div>
 
               <div
-                className={`relative w-full cursor-zoom-in overflow-hidden rounded-[26px] bg-slate-100 shadow-[0_14px_34px_rgba(15,23,42,0.08)] ${isCompactHeight ? 'aspect-[4/5] min-h-[300px]' : 'aspect-[4/5] min-h-[360px]'}`}
+                className={`relative w-full cursor-zoom-in overflow-hidden rounded-[26px] bg-slate-100 shadow-[0_14px_34px_rgba(15,23,42,0.08)] ${isCompactHeight ? 'aspect-[4/5] min-h-[352px]' : 'aspect-[4/5] min-h-[420px]'}`}
                 onClick={openImageViewer}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -614,8 +633,8 @@ export const HingeStyleProfileCard = ({
               >
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.img
-                    key={`${profileId}-${currentPhotoIndex}-mobile`}
-                    src={cardPhotos[currentPhotoIndex]}
+                    key={`${profileId}-${currentMobilePhotoIndex}-mobile`}
+                    src={currentMobilePhoto}
                     alt={profile.name}
                     className="absolute inset-0 h-full w-full object-cover object-center [image-rendering:auto] [backface-visibility:hidden] [transform:translateZ(0)]"
                     style={{ objectPosition: mobileCoverPosition }}
@@ -629,7 +648,7 @@ export const HingeStyleProfileCard = ({
                   />
                 </AnimatePresence>
 
-                {cardPhotos.length > 1 && (
+                {showMobileCarouselControls && (
                   <>
                     <button
                       type="button"
@@ -638,12 +657,12 @@ export const HingeStyleProfileCard = ({
                       onTouchStart={stopEvent}
                       onClick={(event) => {
                         stopEvent(event);
-                        prevPhoto();
+                        goToPreviousMobilePhoto();
                       }}
                       className="absolute inset-y-0 left-0 z-20 flex w-[18%] items-center justify-start pl-2"
                       aria-label="Previous photo"
                     >
-                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/28 text-white backdrop-blur-sm">
+                      <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/40 bg-black/22 text-white shadow-[0_12px_24px_rgba(15,23,42,0.16)] backdrop-blur-md">
                         <ChevronLeft className="h-5 w-5" />
                       </span>
                     </button>
@@ -654,12 +673,12 @@ export const HingeStyleProfileCard = ({
                       onTouchStart={stopEvent}
                       onClick={(event) => {
                         stopEvent(event);
-                        nextPhoto();
+                        goToNextMobilePhoto();
                       }}
                       className="absolute inset-y-0 right-0 z-20 flex w-[18%] items-center justify-end pr-2"
                       aria-label="Next photo"
                     >
-                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/28 text-white backdrop-blur-sm">
+                      <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/40 bg-black/22 text-white shadow-[0_12px_24px_rgba(15,23,42,0.16)] backdrop-blur-md">
                         <ChevronRight className="h-5 w-5" />
                       </span>
                     </button>
@@ -675,63 +694,56 @@ export const HingeStyleProfileCard = ({
                     stopEvent(event);
                     onLike();
                   }}
-                  className="absolute bottom-4 right-4 z-20 inline-flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-950 shadow-[0_18px_35px_rgba(15,23,42,0.16)]"
+                  className="absolute bottom-4 right-4 z-20 inline-flex h-[3.9rem] w-[3.9rem] items-center justify-center rounded-full border border-black/5 bg-white text-slate-950 shadow-[0_16px_30px_rgba(15,23,42,0.14)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_36px_rgba(15,23,42,0.18)]"
                   aria-label="Like"
                 >
-                  <Heart className="h-6 w-6" />
+                  <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-[1.15rem] bg-gradient-to-br from-fuchsia-500 via-pink-500 to-rose-500 shadow-[0_10px_18px_rgba(236,72,153,0.35)]">
+                    <span className="absolute inset-[1px] rounded-[1rem] bg-gradient-to-br from-white/18 to-transparent" />
+                    <Heart className="relative h-5 w-5 fill-white text-white stroke-[2.4]" />
+                  </span>
                 </button>
               </div>
 
               <div className="relative mt-4 rounded-[26px] bg-slate-100 px-5 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                <p className="pr-4 text-sm font-semibold text-slate-600">About me</p>
-                <p className={`${isCompactHeight ? 'mt-2 text-[1.65rem]' : 'mt-3 text-[2rem]'} pr-3 font-semibold leading-tight text-slate-950`}>
+                <p className={mobileSectionLabelClass}>About me</p>
+                <p className={`${mobileBodyTextClass} pr-3`}>
                   {aboutMeBody}
                 </p>
               </div>
 
               {promptQuestion || promptAnswer ? (
                 <div className="relative mt-4 rounded-[26px] bg-slate-100 px-5 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                  <p className="pr-4 text-sm font-semibold text-slate-600">
+                  <p className={mobileSectionLabelClass}>
                     {promptQuestion || 'Personal prompt'}
                   </p>
-                  <p className={`${isCompactHeight ? 'mt-2 text-[1.4rem]' : 'mt-3 text-[1.65rem]'} pr-3 font-semibold leading-tight text-slate-950`}>
+                  <p className={`${mobilePromptTextClass} pr-3`}>
                     {promptAnswer || 'No response added yet.'}
                   </p>
                 </div>
               ) : null}
 
-              <div className="mt-4 rounded-[26px] bg-slate-100 px-5 py-5">
-                <p className="text-sm font-semibold text-slate-600">A little more about {mobileDisplayName}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {detailItems.length > 0 ? (
-                    detailItems.map((item) => (
-                      <span
-                        key={item}
-                        className="inline-flex items-center rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm"
-                      >
-                        {item}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-sm text-slate-500">No extra details yet.</span>
-                  )}
-                </div>
-                {interestPreview.length > 0 ? (
-                  <div className="mt-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Interests</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {interestPreview.map((interest) => (
-                        <span
-                          key={interest}
-                          className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
-                        >
-                          {interest}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
+              {secondaryMobilePhoto ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentPhotoIndex(1);
+                    resetViewerTransform();
+                    setIsImageViewerOpen(true);
+                  }}
+                  className="mt-4 block w-full overflow-hidden rounded-[26px] bg-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]"
+                  aria-label={`Open ${mobileDisplayName}'s second photo`}
+                >
+                  <img
+                    src={secondaryMobilePhoto}
+                    alt={`${mobileDisplayName} photo 2`}
+                    className={`${isCompactHeight ? 'h-[16.5rem]' : 'h-[19rem]'} w-full object-cover`}
+                    style={{ objectPosition: mobileCoverPosition }}
+                    loading="lazy"
+                    decoding="async"
+                    draggable={false}
+                  />
+                </button>
+              ) : null}
 
               <Link
                 to={`/profile/${profileId}`}
@@ -740,7 +752,7 @@ export const HingeStyleProfileCard = ({
                 View Full Profile
               </Link>
 
-              <div className="pointer-events-none sticky bottom-4 z-30 mt-4 flex justify-start">
+              <div className="pointer-events-none sticky bottom-3 z-30 mt-3 flex justify-start">
                 <button
                   type="button"
                   onPointerDown={stopEvent}
@@ -750,10 +762,13 @@ export const HingeStyleProfileCard = ({
                     stopEvent(event);
                     onPass();
                   }}
-                  className="pointer-events-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-950 shadow-[0_18px_35px_rgba(15,23,42,0.16)]"
+                  className="pointer-events-auto inline-flex h-[3.9rem] w-[3.9rem] items-center justify-center rounded-full border border-black/5 bg-white text-slate-950 shadow-[0_16px_30px_rgba(15,23,42,0.14)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_36px_rgba(15,23,42,0.18)]"
                   aria-label="Pass"
                 >
-                  <X className="h-7 w-7" />
+                  <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-[1.15rem] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 shadow-[0_10px_18px_rgba(15,23,42,0.26)]">
+                    <span className="absolute inset-[1px] rounded-[1rem] border border-white/10" />
+                    <X className="relative h-5 w-5 text-white stroke-[2.8]" />
+                  </span>
                 </button>
               </div>
             </div>
@@ -948,7 +963,7 @@ export const HingeStyleProfileCard = ({
                 stopEvent(event);
                 prevPhoto();
               }}
-              className="absolute left-3 top-1/2 z-30 -translate-y-1/2 rounded-full border border-white/25 bg-black/40 p-2 text-white transition hover:bg-black/60 swiper-no-swiping"
+              className="absolute left-3 top-1/2 z-30 -translate-y-1/2 rounded-2xl border border-white/30 bg-black/28 p-2.5 text-white shadow-[0_12px_24px_rgba(2,6,23,0.22)] backdrop-blur-md transition-all duration-200 hover:bg-black/45 swiper-no-swiping"
               aria-label="Previous photo"
             >
               <ChevronLeft className="h-5 w-5" />
@@ -962,7 +977,7 @@ export const HingeStyleProfileCard = ({
                 stopEvent(event);
                 nextPhoto();
               }}
-              className="absolute right-3 top-1/2 z-30 -translate-y-1/2 rounded-full border border-white/25 bg-black/40 p-2 text-white transition hover:bg-black/60 swiper-no-swiping"
+              className="absolute right-3 top-1/2 z-30 -translate-y-1/2 rounded-2xl border border-white/30 bg-black/28 p-2.5 text-white shadow-[0_12px_24px_rgba(2,6,23,0.22)] backdrop-blur-md transition-all duration-200 hover:bg-black/45 swiper-no-swiping"
               aria-label="Next photo"
             >
               <ChevronRight className="h-5 w-5" />
