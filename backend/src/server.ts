@@ -110,9 +110,9 @@ app.use((err: any, _req: Request, res: Response, _next: any) => {
   });
 });
 
-connectDB().then(() => {
-  httpServer.listen(PORT, () => {
-    startStoryCleanupService();
-    console.log(`Server running on port ${PORT} (HTTP + WebSocket)`);
-  });
+httpServer.listen(PORT, () => {
+  startStoryCleanupService();
+  console.log(`Server running on port ${PORT} (HTTP + WebSocket)`);
 });
+
+connectDB();
