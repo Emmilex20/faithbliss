@@ -1,4 +1,3 @@
-/* eslint-disable no-irregular-whitespace */
 // src/components/TopBar.tsx (Vite/React Conversion)
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -169,7 +168,7 @@ export const TopBar = ({
               <img
                 src="/FaithBliss-Logo%20Source.svg"
                 alt="FaithBliss"
-                className="-mt-1 h-12 w-36 shrink-0 object-cover object-left sm:-mt-1.5 sm:h-14 sm:w-44"
+                className="-mt-2.5 h-12 w-36 shrink-0 object-cover object-left sm:-mt-2 sm:h-14 sm:w-44"
                 loading="eager"
                 decoding="async"
               />
