@@ -55,6 +55,7 @@ export const HingeStyleProfileCard = ({
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [currentPhotoAspectRatio, setCurrentPhotoAspectRatio] = useState(1);
   const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
+  const [viewerPhotoIndex, setViewerPhotoIndex] = useState<number | null>(null);
   const [viewerScale, setViewerScale] = useState(1);
   const [viewerOffset, setViewerOffset] = useState({ x: 0, y: 0 });
   const [isMobileView, setIsMobileView] = useState(() => {
@@ -136,7 +137,9 @@ export const HingeStyleProfileCard = ({
 
   const nextPhoto = () => setCurrentPhotoIndex((prev) => (prev + 1) % cardPhotos.length);
   const prevPhoto = () => setCurrentPhotoIndex((prev) => (prev - 1 + cardPhotos.length) % cardPhotos.length);
-  const currentViewerPhoto = viewerPhotos[currentPhotoIndex] || viewerPhotos[0];
+  const currentViewerPhotoIndex = viewerPhotoIndex ?? currentPhotoIndex;
+  const currentViewerPhoto = viewerPhotos[currentViewerPhotoIndex] || viewerPhotos[0];
+  const viewerCanNavigate = viewerPhotoIndex === null && viewerPhotos.length > 1;
 
   const clampViewerOffset = useCallback((offset: { x: number; y: number }, scale: number) => {
     const stage = viewerStageRef.current;
@@ -231,7 +234,7 @@ export const HingeStyleProfileCard = ({
       pointerEnd &&
       activePointersRef.current.size === 0 &&
       viewerScale <= 1.02 &&
-      viewerPhotos.length > 1
+      viewerCanNavigate
     ) {
       const dx = pointerEnd.x - pointerStart.x;
       const dy = pointerEnd.y - pointerStart.y;
@@ -342,7 +345,7 @@ export const HingeStyleProfileCard = ({
       touchSwipeStartRef.current &&
       event.changedTouches.length > 0 &&
       viewerScale <= 1.02 &&
-      viewerPhotos.length > 1
+      viewerCanNavigate
     ) {
       const endTouch = event.changedTouches[0];
       const dx = endTouch.clientX - touchSwipeStartRef.current.x;
@@ -377,16 +380,18 @@ export const HingeStyleProfileCard = ({
     }
   };
 
-  const openImageViewer = (event?: React.SyntheticEvent) => {
+  const openImageViewer = (photoIndex: number, event?: React.SyntheticEvent) => {
     if (event) {
       event.stopPropagation();
     }
+    setViewerPhotoIndex(photoIndex);
     resetViewerTransform();
     setIsImageViewerOpen(true);
   };
 
   const closeImageViewer = useCallback(() => {
     setIsImageViewerOpen(false);
+    setViewerPhotoIndex(null);
     resetViewerTransform();
   }, [resetViewerTransform]);
 
@@ -419,7 +424,7 @@ export const HingeStyleProfileCard = ({
     if (isImageViewerOpen) {
       resetViewerTransform();
     }
-  }, [currentPhotoIndex, isImageViewerOpen, resetViewerTransform]);
+  }, [currentViewerPhotoIndex, isImageViewerOpen, resetViewerTransform]);
   const profileWithExtras = profile as User & { _id?: string; distance?: number };
   const profileId = profileWithExtras.id || profileWithExtras._id || 'missing';
   const profileLatitude = typeof profileWithExtras.latitude === 'number' ? profileWithExtras.latitude : null;
@@ -621,10 +626,10 @@ export const HingeStyleProfileCard = ({
 
               <div
                 className={`relative w-full cursor-zoom-in overflow-hidden rounded-[26px] bg-slate-100 shadow-[0_14px_34px_rgba(15,23,42,0.08)] ${isCompactHeight ? 'aspect-[4/5] min-h-[352px]' : 'aspect-[4/5] min-h-[420px]'}`}
-                onClick={openImageViewer}
+                onClick={() => openImageViewer(currentMobilePhotoIndex)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
-                    openImageViewer();
+                    openImageViewer(currentMobilePhotoIndex);
                   }
                 }}
                 role="button"
@@ -726,9 +731,7 @@ export const HingeStyleProfileCard = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setCurrentPhotoIndex(1);
-                    resetViewerTransform();
-                    setIsImageViewerOpen(true);
+                    openImageViewer(1);
                   }}
                   className="mt-4 block w-full overflow-hidden rounded-[26px] bg-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]"
                   aria-label={`Open ${mobileDisplayName}'s second photo`}
@@ -795,7 +798,7 @@ export const HingeStyleProfileCard = ({
                     <X className="h-4 w-4" />
                   </button>
                   <div className="min-w-0 flex-1 truncate text-center text-xs font-semibold sm:text-sm">
-                    {mobileDisplayName} - {currentPhotoIndex + 1}/{viewerPhotos.length}
+                    {mobileDisplayName}
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
                     <button
@@ -839,7 +842,7 @@ export const HingeStyleProfileCard = ({
                 >
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.img
-                    key={`${profileId}-${currentPhotoIndex}-viewer`}
+                    key={`${profileId}-${currentViewerPhotoIndex}-viewer`}
                     src={currentViewerPhoto}
                     alt={profile.name}
                     className="h-full w-full select-none object-contain"
@@ -858,7 +861,7 @@ export const HingeStyleProfileCard = ({
                   />
                 </AnimatePresence>
 
-                {viewerPhotos.length > 1 && (
+                {viewerCanNavigate && (
                   <>
                     <button
                       type="button"
