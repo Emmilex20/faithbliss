@@ -506,7 +506,7 @@ const ExploreContent = () => {
                 <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/20 to-transparent" />
 
                 {/* Count badge (top-right) */}
-                <div className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/45 px-2.5 py-1 text-[12px] font-semibold text-white backdrop-blur-md transition duration-300 ease-out group-active:-translate-y-0.5 sm:group-hover:-translate-y-0.5">
+                <div className="absolute right-3 top-3 hidden items-center gap-1 rounded-full bg-black/45 px-2.5 py-1 text-[12px] font-semibold text-white backdrop-blur-md transition duration-300 ease-out group-active:-translate-y-0.5 sm:inline-flex sm:group-hover:-translate-y-0.5">
                   <Users className="h-3.5 w-3.5" />
                   {loadingCounts ? '...' : count}
                 </div>
