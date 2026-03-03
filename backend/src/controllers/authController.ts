@@ -21,6 +21,7 @@ export interface IUserProfile extends DocumentData {
     location?: string;
     profilePhoto1?: string;
     onboardingCompleted: boolean;
+    profileFits?: string[];
     // Add other fields...
     likes?: string[]; // Array of Firestore UIDs
     passes?: string[];
@@ -163,8 +164,13 @@ const completeOnboarding = async (req: Request, res: Response) => {
     const { 
         birthday, location, latitude, longitude, faithJourney, sundayActivity,
         preferredGender, minAge, maxAge, maxDistance,
-        lookingFor, hobbies, values, bio, interests, ...otherFields
+        lookingFor, hobbies, values, bio, interests, profileFits, ...otherFields
     } = req.body;
+
+    const parsedProfileFits = safeParseJSON(profileFits);
+    if (profileFits !== undefined && parsedProfileFits.length < 3) {
+        return res.status(400).json({ message: 'Please select at least 3 profile fit options.' });
+    }
 
     const updateFields: Partial<IUserProfile> = {
         // General Profile fields
@@ -184,6 +190,7 @@ const completeOnboarding = async (req: Request, res: Response) => {
         lookingFor: safeParseJSON(lookingFor),
         hobbies: safeParseJSON(hobbies),
         values: safeParseJSON(values),
+        profileFits: profileFits === undefined ? undefined : parsedProfileFits,
         
         // Matching Preferences
         preferredGender,

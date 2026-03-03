@@ -227,6 +227,7 @@ export interface UpdateProfileDto {
   hobbies?: string[];
   interests?: string[];
   values?: string[];
+  profileFits?: string[];
   favoriteVerse?: string;
   drinkingHabit?: string;
   smokingHabit?: string;
@@ -257,6 +258,7 @@ export interface CompleteOnboardingDto {
   baptismStatus: string;
   spiritualGifts: string[];
   interests: string[];
+  profileFits?: string[];
   relationshipGoals: string[];
   lifestyle: string;
   bio: string;
@@ -921,16 +923,24 @@ export const DiscoveryAPI = {
     return apiRequest(`/api/discover/interest/${encodeURIComponent(interest)}`);
   },
 
-  getUsersByInterests: async (interests: string[]): Promise<User[]> => {
+  getUsersByInterests: async (interests: string[]): Promise<User[]> => {
     const normalized = (Array.isArray(interests) ? interests : [])
       .map((value) => (typeof value === 'string' ? value.trim() : ''))
       .filter((value) => value.length > 0);
     const query = new URLSearchParams();
     if (normalized.length > 0) {
       query.set('interests', normalized.join(','));
-    }
-    return apiRequest(`/api/discover/interests${query.toString() ? `?${query.toString()}` : ''}`);
-  },
+    }
+    return apiRequest(`/api/discover/interests${query.toString() ? `?${query.toString()}` : ''}`);
+  },
+
+  getUsersByProfileFit: async (fit: string): Promise<User[]> => {
+    return apiRequest(`/api/discover/profile-fits?fit=${encodeURIComponent(fit)}`);
+  },
+
+  getProfileFitCounts: async (): Promise<Record<string, number>> => {
+    return apiRequest('/api/discover/profile-fit-counts');
+  },
 
   getActiveUsers: async (): Promise<User[]> => {
     // FIX: Added /api prefix

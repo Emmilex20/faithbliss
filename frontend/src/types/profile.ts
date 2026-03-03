@@ -29,6 +29,7 @@ export interface ProfileData {
   hobbies?: string[]; // This maps to interests in UpdateProfileDto
   interests?: string[];
   values?: string[];
+  profileFits?: string[];
   favoriteVerse?: string;
   drinkingHabit?: string;
   smokingHabit?: string;

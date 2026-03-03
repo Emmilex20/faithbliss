@@ -11,6 +11,7 @@ interface IUserProfile extends DocumentData {
     email: string;
     profilePhoto1?: string;
     onboardingCompleted: boolean;
+    profileFits?: string[];
     // ... all other fields
     latitude?: number | null;
     longitude?: number | null;
@@ -90,8 +91,14 @@ export const completeOnboarding = async (req: Request, res: Response) => {
             churchAttendance, denomination, occupation, education, baptismStatus,
             spiritualGifts, lifestyle, favoriteVerse, phoneNumber, countryCode,
             preferredFaithJourney, preferredChurchAttendance, preferredRelationshipGoals, preferredDenomination,
+            profileFits,
             ...otherFields
         } = req.body;
+
+        const parsedProfileFits = safeParseJSON(profileFits);
+        if (profileFits !== undefined && parsedProfileFits.length < 3) {
+            return res.status(400).json({ message: 'Please select at least 3 profile fit options.' });
+        }
 
         const updateFields: Partial<IUserProfile> = {
             ...otherFields,
@@ -114,6 +121,7 @@ export const completeOnboarding = async (req: Request, res: Response) => {
             relationshipGoals: safeParseJSON(relationshipGoals), hobbies: safeParseJSON(hobbies),
             values: safeParseJSON(values), interests: safeParseJSON(interests),
             spiritualGifts: safeParseJSON(spiritualGifts),
+            profileFits: profileFits === undefined ? undefined : parsedProfileFits,
             
             // Preferences
             preferredGender, preferredFaithJourney, preferredChurchAttendance,

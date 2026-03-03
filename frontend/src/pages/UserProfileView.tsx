@@ -327,6 +327,10 @@ const ProfilePage = () => {
               </div>
             </InfoCard>
 
+            <InfoCard title="Which Fits Them Best">
+              <ChipList items={profile.profileFits} emptyText="No profile fit selections listed" />
+            </InfoCard>
+
             <InfoCard title="Interests and Personal Details">
               <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
                 <div className="rounded-2xl border border-slate-200/70 bg-slate-50 p-4">

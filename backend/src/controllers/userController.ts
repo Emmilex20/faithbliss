@@ -18,6 +18,7 @@ interface IFirestoreUser {
     denomination: string;
     likes?: string[];
     matches?: string[];
+    profileFits?: string[];
     // ... all other fields
 }
 
@@ -107,16 +108,17 @@ const getUserById = async (req: CustomRequest, res: Response) => {
         const user = userDoc.data() as IFirestoreUser;
 
         // Return only necessary profile fields
-        return res.status(200).json({
-            id: userDoc.id, 
-            name: user.name,
-            profilePhoto1: user.profilePhoto1,
-            age: user.age,
-            gender: user.gender,
-            location: user.location,
-            bio: user.bio,
-            denomination: user.denomination,
-        });
+        return res.status(200).json({
+            id: userDoc.id, 
+            name: user.name,
+            profilePhoto1: user.profilePhoto1,
+            age: user.age,
+            gender: user.gender,
+            location: user.location,
+            bio: user.bio,
+            denomination: user.denomination,
+            profileFits: Array.isArray(user.profileFits) ? user.profileFits : [],
+        });
 
     } catch (error) {
         const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
@@ -217,6 +219,12 @@ const updateUserProfile = async (req: Request, res: Response) => {
         .filter(Boolean)
         .slice(0, maxItems)
         .map((item) => item.slice(0, maxLen));
+      return cleaned;
+    };
+
+    const toProfileFits = (value: unknown): string[] | undefined => {
+      const cleaned = toStringArray(value, 8, 80);
+      if (cleaned === undefined) return undefined;
       return cleaned;
     };
 
@@ -324,6 +332,14 @@ const updateUserProfile = async (req: Request, res: Response) => {
       const value = toStringArray(body[field]);
       if (value !== undefined) normalizedUpdates[field] = value;
     });
+
+    const profileFits = toProfileFits(body.profileFits);
+    if (profileFits !== undefined) {
+      if (profileFits.length < 3) {
+        return res.status(400).json({ message: 'Please select at least 3 profile fit options.' });
+      }
+      normalizedUpdates.profileFits = profileFits;
+    }
 
     normalizedUpdates.updatedAt = admin.firestore.FieldValue.serverTimestamp();
 

@@ -46,6 +46,7 @@ export interface User {
   hobbies?: string[];
   interests?: string[];
   values?: string[];
+  profileFits?: string[];
   favoriteVerse?: string;
   drinkingHabit?: string;
   smokingHabit?: string;

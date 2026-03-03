@@ -18,6 +18,7 @@ import type { ProfileData } from '@/types/profile';
 import type { UpdateProfileDto } from '@/services/api';
 import { updateProfileClient, uploadSpecificPhotoClient } from '@/services/api-client';
 import { analyzePhotoFaces, validatePhotoFileBasics } from '@/utils/photoValidation';
+import { MIN_PROFILE_FITS, PROFILE_FIT_OPTIONS } from '@/constants/profileFitOptions';
 
 const ProfilePage: React.FC = () => {
   const { accessToken, user: authUser } = useAuthContext();
@@ -100,6 +101,7 @@ const ProfilePage: React.FC = () => {
       hobbies: mergedHobbies,
       interests: mergedInterests,
       values: user.values || [],
+      profileFits: user.profileFits || [],
       favoriteVerse: user.favoriteVerse || '',
       drinkingHabit: user.drinkingHabit || '',
       smokingHabit: user.smokingHabit || '',
@@ -131,6 +133,11 @@ const ProfilePage: React.FC = () => {
   // âœ… Save handler
   const handleSave = async () => {
     if (!profileData || !accessToken) return;
+    if (!Array.isArray(profileData.profileFits) || profileData.profileFits.length < MIN_PROFILE_FITS) {
+      setSaveMessage(`Pick at least ${MIN_PROFILE_FITS} options in "Which fits you best" before saving.`);
+      setTimeout(() => setSaveMessage(''), 3000);
+      return;
+    }
     setIsSaving(true);
     try {
       const updatePayload: UpdateProfileDto = {
@@ -149,6 +156,7 @@ const ProfilePage: React.FC = () => {
         hobbies: profileData.interests || profileData.hobbies,
         interests: profileData.interests || profileData.hobbies,
         values: profileData.values,
+        profileFits: profileData.profileFits,
         drinkingHabit: profileData.drinkingHabit,
         smokingHabit: profileData.smokingHabit,
         workoutHabit: profileData.workoutHabit,
@@ -294,6 +302,37 @@ const ProfilePage: React.FC = () => {
           {isPremium ? `${activeTier} subscriber` : 'Free member'}
         </div>
       </div>
+      {profileData && (
+        <div className="max-w-4xl mx-auto px-4 pt-4">
+          <div className="rounded-3xl border border-gray-700/50 bg-gray-800/50 p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Which Fits You Best</h2>
+                <p className="text-sm text-gray-400">
+                  Choose at least {MIN_PROFILE_FITS}. This is visible on your profile.
+                </p>
+              </div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-pink-200">
+                {profileData.profileFits?.length || 0}/{PROFILE_FIT_OPTIONS.length} selected
+              </p>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {(profileData.profileFits || []).length > 0 ? (
+                profileData.profileFits?.map((fit) => (
+                  <span
+                    key={fit}
+                    className="rounded-full border border-pink-400/30 bg-pink-500/10 px-3 py-1 text-sm font-medium text-pink-100"
+                  >
+                    {fit}
+                  </span>
+                ))
+              ) : (
+                <p className="text-sm text-slate-400">No selections yet. Add at least three in the Basics tab.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <ProfileTabs activeSection={activeSection} setActiveSection={setActiveSection} />
 
       <div className="max-w-4xl mx-auto p-4 pb-20">

@@ -8,6 +8,7 @@ interface IUserProfile extends DocumentData {
   email?: string;
   gender?: string;
   preferredGender?: string;
+  profileFits?: string[];
   interests?: string[];
   hobbies?: string[];
   age?: number;
@@ -157,6 +158,15 @@ const parseInterestQuery = (value: unknown): string[] => {
   }
 
   return [];
+};
+
+const parseProfileFitQuery = (value: unknown): string | null => {
+  if (Array.isArray(value)) {
+    const first = value.find((item) => typeof item === 'string');
+    return first ? toLowerTrimmed(first) : null;
+  }
+
+  return toLowerTrimmed(value);
 };
 
 const buildExcludedUserIds = async (currentUser: IUserProfile): Promise<Set<string>> => {
@@ -443,6 +453,154 @@ export const discoverByInterests = async (req: Request, res: Response) => {
       fieldOfStudy: u.fieldOfStudy,
       matchedInterests: u.matchedInterests,
       interestMatchCount: u.interestMatchCount,
+      usedFallbackWithoutPreference,
+    }))
+  );
+};
+
+export const getProfileFitCounts = async (_req: Request, res: Response) => {
+  try {
+    const snapshot = await usersCollection
+      .where('onboardingCompleted', '==', true)
+      .get();
+
+    const counts: Record<string, number> = {};
+
+    snapshot.forEach((doc) => {
+      const candidate = doc.data() as IUserProfile;
+      const profileFits = Array.isArray(candidate.profileFits) ? candidate.profileFits : [];
+      const uniqueFits = new Set<string>();
+
+      profileFits.forEach((fit) => {
+        const normalized = toLowerTrimmed(fit);
+        if (normalized) uniqueFits.add(normalized);
+      });
+
+      uniqueFits.forEach((fit) => {
+        counts[fit] = (counts[fit] || 0) + 1;
+      });
+    });
+
+    return res.status(200).json(counts);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ message: `Failed to load profile fit counts: ${message}` });
+  }
+};
+
+export const discoverByProfileFit = async (req: Request, res: Response) => {
+  const uid = req.userId;
+  if (!uid) {
+    return res.status(401).json({ message: 'Unauthorized: Firebase UID missing.' });
+  }
+
+  const userDoc = await usersCollection.doc(uid).get();
+  if (!userDoc.exists) {
+    return res.status(404).json({ message: 'User profile not found.' });
+  }
+
+  const currentUser = { id: userDoc.id, ...userDoc.data() } as IUserProfile;
+  const selectedFit = parseProfileFitQuery(req.query.fit);
+
+  if (!selectedFit) {
+    return res.status(400).json({ message: 'Provide a profile fit using the fit query parameter.' });
+  }
+
+  const preferredGender = normalizeGenderPreference(
+    currentUser.preferredGender,
+    currentUser.lookingFor
+  );
+  const excluded = await buildExcludedUserIds(currentUser);
+
+  const snapshot = await usersCollection
+    .where('onboardingCompleted', '==', true)
+    .get();
+
+  const collectResults = (enforceGender: boolean) => {
+    const data: IUserProfile[] = [];
+
+    snapshot.forEach((doc) => {
+      if (excluded.has(doc.id)) return;
+
+      const candidate = { id: doc.id, ...doc.data() } as IUserProfile;
+      const candidateGender = normalizeGender(candidate.gender);
+      if (enforceGender && preferredGender && candidateGender !== preferredGender) return;
+
+      const candidateFits = Array.isArray(candidate.profileFits)
+        ? candidate.profileFits
+        : [];
+      const normalizedFits = new Set(
+        candidateFits
+          .map((fit) => toLowerTrimmed(fit))
+          .filter((fit): fit is string => Boolean(fit))
+      );
+
+      if (!normalizedFits.has(selectedFit)) return;
+
+      if (
+        typeof currentUser.latitude === 'number' &&
+        typeof currentUser.longitude === 'number' &&
+        typeof candidate.latitude === 'number' &&
+        typeof candidate.longitude === 'number'
+      ) {
+        candidate.distance = haversineKm(
+          currentUser.latitude,
+          currentUser.longitude,
+          candidate.latitude,
+          candidate.longitude
+        );
+      }
+
+      data.push(candidate);
+    });
+
+    return data;
+  };
+
+  let results = collectResults(true);
+  const usedFallbackWithoutPreference = Boolean(preferredGender && results.length === 0);
+  if (usedFallbackWithoutPreference) {
+    results = collectResults(false);
+  }
+
+  results.sort((a, b) => {
+    const aDistance = typeof a.distance === 'number' ? a.distance : Number.POSITIVE_INFINITY;
+    const bDistance = typeof b.distance === 'number' ? b.distance : Number.POSITIVE_INFINITY;
+    if (aDistance !== bDistance) return aDistance - bDistance;
+
+    const aAge = typeof a.age === 'number' ? a.age : Number.POSITIVE_INFINITY;
+    const bAge = typeof b.age === 'number' ? b.age : Number.POSITIVE_INFINITY;
+    return aAge - bAge;
+  });
+
+  return res.status(200).json(
+    results.map((u) => ({
+      id: u.id,
+      name: u.name,
+      age: u.age,
+      gender: u.gender,
+      denomination: u.denomination,
+      location: u.location,
+      latitude: u.latitude,
+      longitude: u.longitude,
+      profilePhoto1: u.profilePhoto1,
+      profilePhoto2: u.profilePhoto2,
+      profilePhoto3: u.profilePhoto3,
+      bio: u.bio,
+      personalPromptQuestion: u.personalPromptQuestion,
+      personalPromptAnswer: u.personalPromptAnswer,
+      faithJourney: u.faithJourney,
+      churchAttendance: u.churchAttendance || u.sundayActivity,
+      relationshipGoals: u.relationshipGoals,
+      hobbies: u.hobbies,
+      interests: u.interests,
+      values: u.values,
+      favoriteVerse: u.favoriteVerse,
+      profession: u.profession,
+      fieldOfStudy: u.fieldOfStudy,
+      lookingFor: u.lookingFor,
+      profileFits: Array.isArray(u.profileFits) ? u.profileFits : [],
+      distance: typeof u.distance === 'number' ? Math.round(u.distance) : undefined,
       usedFallbackWithoutPreference,
     }))
   );

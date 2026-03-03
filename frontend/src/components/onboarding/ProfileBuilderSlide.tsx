@@ -6,6 +6,7 @@ import { CountryCodeSelect, countries, defaultCountry } from '@/components/Count
 import type { Country } from '@/components/CountryCodeSelect';
 import AppDropdown from '@/components/AppDropdown';
 import SelectWithOtherInput from './SelectWithOtherInput';
+import { MIN_PROFILE_FITS, PROFILE_FIT_OPTIONS } from '@/constants/profileFitOptions';
 
 interface ProfileBuilderSlideProps {
   onboardingData: OnboardingData;
@@ -248,7 +249,10 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
     setOnboardingData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleMultiSelect = (name: 'personality' | 'hobbies' | 'values' | 'spiritualGifts', value: string) => {
+  const handleMultiSelect = (
+    name: 'personality' | 'hobbies' | 'values' | 'spiritualGifts' | 'profileFits',
+    value: string
+  ) => {
     setOnboardingData((prev) => {
       const list = prev[name] || [];
       const nextList = list.includes(value) ? list.filter((item: string) => item !== value) : [...list, value];
@@ -490,6 +494,49 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
             phoneNumber={onboardingData.phoneNumber}
             onPhoneChange={handlePhoneChange}
           />
+        </div>
+
+        <div className="space-y-4">
+          <RequiredLabel>Which of these fits you the most?</RequiredLabel>
+          <p className="text-sm text-slate-400">
+            Pick at least {MIN_PROFILE_FITS}. These will be shown on your profile.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {PROFILE_FIT_OPTIONS.map((option) => {
+              const isSelected = onboardingData.profileFits?.includes(option.title);
+              return (
+                <button
+                  key={option.title}
+                  type="button"
+                  onClick={() => handleMultiSelect('profileFits', option.title)}
+                  className={`rounded-2xl border p-4 text-left transition ${
+                    isSelected
+                      ? 'border-pink-400 bg-pink-500/15 shadow-[0_14px_28px_rgba(236,72,153,0.18)]'
+                      : 'border-white/10 bg-slate-900/35 hover:border-pink-300/50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{option.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-300">{option.description}</p>
+                    </div>
+                    <span
+                      className={`mt-0.5 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${
+                        isSelected
+                          ? 'border-pink-300 bg-pink-500 text-white'
+                          : 'border-white/20 text-slate-400'
+                      }`}
+                    >
+                      {isSelected ? 'OK' : ''}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-slate-400">
+            Selected: {onboardingData.profileFits?.length || 0}/{PROFILE_FIT_OPTIONS.length}
+          </p>
         </div>
 
         <div className="space-y-4">

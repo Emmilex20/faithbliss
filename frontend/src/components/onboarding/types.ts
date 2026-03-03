@@ -26,6 +26,7 @@ export interface OnboardingData {
   personality: string[];
   hobbies: string[];
   values: string[];
+  profileFits: string[];
   favoriteVerse: string;
   height?: string;
   language?: string;

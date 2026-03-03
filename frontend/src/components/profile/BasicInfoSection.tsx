@@ -4,6 +4,7 @@ import { BIO_MAX_LENGTH, PROFILE_PROMPT_OPTIONS, PROMPT_ANSWER_MAX_LENGTH } from
 import { CountryCodeSelect, countries, defaultCountry } from '@/components/CountryCodeSelect';
 import type { Country } from '@/components/CountryCodeSelect';
 import AppDropdown from '@/components/AppDropdown';
+import { MIN_PROFILE_FITS, PROFILE_FIT_OPTIONS } from '@/constants/profileFitOptions';
 
 interface BasicInfoSectionProps {
   profileData: ProfileData;
@@ -94,6 +95,17 @@ const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps
         if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age -= 1;
       }
       return { ...prev, birthday: value, age: Math.max(18, age || 18) };
+    });
+  };
+
+  const toggleProfileFit = (fit: string) => {
+    setProfileData((prev) => {
+      if (!prev) return null;
+      const current = Array.isArray(prev.profileFits) ? prev.profileFits : [];
+      const next = current.includes(fit)
+        ? current.filter((item) => item !== fit)
+        : [...current, fit];
+      return { ...prev, profileFits: next };
     });
   };
 
@@ -271,6 +283,36 @@ const BasicInfoSection = ({ profileData, setProfileData }: BasicInfoSectionProps
         </div>
 
         <div className="mt-6 space-y-4">
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-gray-300">Which of these fits you the most?</label>
+            <p className="mb-3 text-xs text-slate-400">
+              Pick at least {MIN_PROFILE_FITS}. This appears on your public profile.
+            </p>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {PROFILE_FIT_OPTIONS.map((option) => {
+                const isSelected = Array.isArray(profileData.profileFits) && profileData.profileFits.includes(option.title);
+                return (
+                  <button
+                    key={option.title}
+                    type="button"
+                    onClick={() => toggleProfileFit(option.title)}
+                    className={`rounded-2xl border p-4 text-left transition ${
+                      isSelected
+                        ? 'border-pink-400 bg-pink-500/20 text-white'
+                        : 'border-white/15 bg-slate-800/30 text-slate-200 hover:border-pink-300/60'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold">{option.title}</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-300">{option.description}</p>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-xs text-slate-400">
+              Selected: {profileData.profileFits?.length || 0}/{PROFILE_FIT_OPTIONS.length}
+            </p>
+          </div>
+
           <div>
             <label className="mb-2 block text-sm font-semibold text-gray-300">Languages spoken</label>
             <p className="mb-3 text-xs text-slate-400">Select all that apply.</p>

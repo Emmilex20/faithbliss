@@ -20,6 +20,7 @@ import InterestsSelectionSlide from '../components/onboarding/InterestsSelection
 import ShareMoreAboutYouSlide from '../components/onboarding/ShareMoreAboutYouSlide';
 
 import { uploadPhotosToCloudinary } from '../api/cloudinaryUpload';
+import { MIN_PROFILE_FITS } from '../constants/profileFitOptions';
 
 // --- TYPE ---
 type OnboardingUpdateData = Partial<Omit<OnboardingData, 'photos' | 'customDenomination'>> & {
@@ -43,9 +44,16 @@ const getStepValidationError = (step: number, data: OnboardingData): string | nu
 
   if (
     step === 2 &&
-    (!data.birthday || !data.location || !data.faithJourney || !data.churchAttendance)
+    (
+      !data.birthday ||
+      !data.location ||
+      !data.faithJourney ||
+      !data.churchAttendance ||
+      !Array.isArray(data.profileFits) ||
+      data.profileFits.length < MIN_PROFILE_FITS
+    )
   ) {
-    return 'Please fill out all required profile information.';
+    return `Please fill out all required profile information and pick at least ${MIN_PROFILE_FITS} options that fit you.`;
   }
 
   if (step === 3 && data.relationshipGoals.length === 0) {
@@ -121,6 +129,7 @@ const OnboardingPage = () => {
     personality: [],
     hobbies: [],
     values: [],
+    profileFits: [],
     favoriteVerse: '',
     height: '',
     language: '',

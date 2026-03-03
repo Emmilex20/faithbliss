@@ -62,6 +62,7 @@ interface OnboardingData {
     hobbies?: string[]; // Added
     interests?: string[]; // Added
     values?: string[]; // Added
+    profileFits?: string[]; // Added
     favoriteVerse?: string; // Added
     drinkingHabit?: string; // Added
     smokingHabit?: string; // Added
@@ -160,6 +161,7 @@ const sanitizeOnboardingPayload = (payload: OnboardingData): Record<string, any>
         "hobbies",
         "values",
         "interests",
+        "profileFits",
         "languageSpoken",
         "communicationStyle",
         "loveStyle",
@@ -263,6 +265,7 @@ const fetchUserDataFromFirestore = async (fbUser: FirebaseAuthUser): Promise<Use
         hobbies: backendData.hobbies,
         interests: backendData.interests,
         values: backendData.values,
+        profileFits: backendData.profileFits,
         favoriteVerse: backendData.favoriteVerse,
         drinkingHabit: backendData.drinkingHabit,
         smokingHabit: backendData.smokingHabit,
@@ -854,6 +857,7 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
             hobbies: data.hobbies,
             interests: data.interests,
             values: data.values,
+            profileFits: data.profileFits,
             favoriteVerse: data.favoriteVerse,
             drinkingHabit: data.drinkingHabit,
             smokingHabit: data.smokingHabit,

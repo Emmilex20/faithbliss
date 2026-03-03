@@ -32,6 +32,7 @@ export const TopBar = ({
   user,
   showFilterButton = false,
   showFilters = false,
+  showSidePanel = false,
   onToggleFilters,
   onToggleSidePanel,
   title,
@@ -133,6 +134,10 @@ export const TopBar = ({
       : `${title} page`
     : userName;
   const showTitleBlock = Boolean(title);
+  const handleSidePanelToggle = () => {
+    setShowMobileProfileMenu(false);
+    onToggleSidePanel?.();
+  };
 
   return (
     <div className="bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 px-3 py-2.5 sm:px-4 sm:py-4 sticky top-0 z-50">
@@ -143,6 +148,7 @@ export const TopBar = ({
           <div className="flex items-center gap-0">
             {showBackButton ? (
               <button
+                type="button"
                 onClick={onBack}
                 className="p-2 hover:bg-white/10 rounded-2xl transition-all hover:scale-105"
               >
@@ -150,8 +156,11 @@ export const TopBar = ({
               </button>
             ) : (
               <button
-                onClick={onToggleSidePanel}
-                className="p-1.5 sm:p-2 hover:bg-white/10 rounded-2xl transition-all hover:scale-105 lg:hidden"
+                type="button"
+                onClick={handleSidePanelToggle}
+                aria-label={showSidePanel ? 'Close navigation menu' : 'Open navigation menu'}
+                aria-expanded={showSidePanel}
+                className="relative z-20 shrink-0 p-1.5 sm:p-2 hover:bg-white/10 rounded-2xl transition-all hover:scale-105 lg:hidden"
               >
                 <div className="w-6 h-6 flex flex-col justify-center space-y-1">
                   <div className="w-full h-0.5 bg-gray-300 rounded"></div>
@@ -163,7 +172,7 @@ export const TopBar = ({
 
             <Link
               to="/dashboard"
-              className="flex items-center -ml-5 sm:-ml-6 hover:opacity-80 transition-opacity cursor-pointer"
+              className="flex items-center ml-1 sm:-ml-6 hover:opacity-80 transition-opacity cursor-pointer"
             >
               <img
                 src="/FaithBliss-Logo%20Source.svg"
@@ -189,6 +198,7 @@ export const TopBar = ({
           <div className="relative flex items-center gap-2 justify-end">
             {installPromptEvent && (
               <button
+                type="button"
                 onClick={handleInstallApp}
                 disabled={isInstallPrompting}
                 className="hidden md:inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold tracking-wide bg-pink-500/20 text-pink-100 hover:bg-pink-500/30 border border-pink-300/30 transition-all disabled:opacity-70"
@@ -200,6 +210,7 @@ export const TopBar = ({
 
             {notificationsAvailable && notificationsPermission !== 'granted' && (
               <button
+                type="button"
                 onClick={handleEnableNotifications}
                 className="hidden md:inline-flex items-center px-3 py-2 rounded-full text-xs font-semibold tracking-wide bg-white/10 hover:bg-white/20 border border-white/15 transition-all"
               >
@@ -208,7 +219,7 @@ export const TopBar = ({
             )}
 
             <Link to="/notifications">
-              <button className="relative p-2 sm:p-3 hover:bg-white/10 rounded-2xl transition-all hover:scale-105 group">
+              <button type="button" className="relative p-2 sm:p-3 hover:bg-white/10 rounded-2xl transition-all hover:scale-105 group">
                 <Bell className="w-5 h-5 sm:w-6 sm:h-6 text-gray-300 group-hover:text-white transition-colors" />
                 {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-pink-500 to-red-500 rounded-full flex items-center justify-center">
@@ -220,6 +231,7 @@ export const TopBar = ({
 
             {showFilterButton && onToggleFilters && (
               <button
+                type="button"
                 onClick={onToggleFilters}
                 className={`hidden sm:inline-flex p-2 sm:p-3 rounded-2xl transition-all hover:scale-105 ${
                   showFilters
@@ -232,6 +244,7 @@ export const TopBar = ({
             )}
 
             <button
+              type="button"
               onClick={() => setShowMobileProfileMenu((prev) => !prev)}
               className="p-2 sm:p-3 hover:bg-white/10 rounded-2xl transition-all hover:scale-105 group lg:hidden"
             >
@@ -263,6 +276,7 @@ export const TopBar = ({
                   Profile
                 </Link>
                 <button
+                  type="button"
                   onClick={async () => {
                     setShowMobileProfileMenu(false);
                     await logout();
