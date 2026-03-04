@@ -25,6 +25,7 @@ import type {
   CallIceCandidatePayload,
   CallOfferPayload,
   CallRejectPayload,
+  CallStatePayload,
   CallType,
   MessageReactionUpdatePayload,
   UserPresencePayload,
@@ -540,6 +541,8 @@ const MessagesContent = () => {
   const [callDurationSeconds, setCallDurationSeconds] = useState(0);
   const [isCallMicMuted, setIsCallMicMuted] = useState(false);
   const [isCallCameraOff, setIsCallCameraOff] = useState(false);
+  const [isRemoteCallMicMuted, setIsRemoteCallMicMuted] = useState(false);
+  const [isRemoteCallCameraOff, setIsRemoteCallCameraOff] = useState(false);
   const [callCameraFacingMode, setCallCameraFacingMode] = useState<'user' | 'environment'>('user');
   const [callQualityLabel, setCallQualityLabel] = useState<'Excellent' | 'Good' | 'Weak' | 'Offline'>('Excellent');
   const [isCallMinimized, setIsCallMinimized] = useState(false);
@@ -796,6 +799,8 @@ const MessagesContent = () => {
     setCallDurationSeconds(0);
     setIsCallMicMuted(false);
     setIsCallCameraOff(false);
+    setIsRemoteCallMicMuted(false);
+    setIsRemoteCallCameraOff(false);
     setCallCameraFacingMode('user');
     setCallQualityLabel('Excellent');
     setIsCallMinimized(false);
@@ -1173,27 +1178,54 @@ const MessagesContent = () => {
   const switchCallCameraFacing = useCallback(async () => {
     if (callMode !== 'video') return;
     const currentStream = localCallStreamRef.current;
-    if (!currentStream) return;
+    if (!currentStream || !navigator.mediaDevices?.getUserMedia) return;
 
     const nextFacingMode = callCameraFacingMode === 'user' ? 'environment' : 'user';
 
     try {
-      const replacementStream = await getCallUserMedia('video', nextFacingMode);
+      let replacementStream: MediaStream | null = null;
+      try {
+        replacementStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: { exact: nextFacingMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        });
+      } catch {
+        try {
+          replacementStream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              facingMode: nextFacingMode,
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+          });
+        } catch {
+          replacementStream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: true,
+          });
+        }
+      }
+
+      if (!replacementStream) {
+        throw new Error('No replacement stream available.');
+      }
+
       const nextVideoTrack = replacementStream.getVideoTracks()[0];
 
-      replacementStream.getAudioTracks().forEach((track) => track.stop());
-
       if (!nextVideoTrack) {
+        replacementStream.getTracks().forEach((track) => track.stop());
         throw new Error('No replacement camera track available.');
       }
 
       nextVideoTrack.enabled = !isCallCameraOff;
 
-      currentStream.getVideoTracks().forEach((track) => {
-        currentStream.removeTrack(track);
-        track.stop();
-      });
-      currentStream.addTrack(nextVideoTrack);
+      const audioTracks = currentStream.getAudioTracks();
+      const nextStream = new MediaStream([...audioTracks, nextVideoTrack]);
 
       const videoSender = peerConnectionRef.current
         ?.getSenders()
@@ -1202,17 +1234,24 @@ const MessagesContent = () => {
         await videoSender.replaceTrack(nextVideoTrack);
       }
 
+      const previousVideoTracks = currentStream.getVideoTracks();
+      previousVideoTracks.forEach((track) => {
+        track.stop();
+      });
+
+      localCallStreamRef.current = nextStream;
+      setLocalCallStream(nextStream);
+
       if (localCallVideoRef.current) {
-        localCallVideoRef.current.srcObject = currentStream;
+        localCallVideoRef.current.srcObject = nextStream;
       }
 
-      setLocalCallStream(new MediaStream(currentStream.getTracks()));
       setCallCameraFacingMode(nextFacingMode);
     } catch (error) {
       console.error('Failed to switch call camera:', error);
       showError('Unable to switch camera right now.', 'Camera Error');
     }
-  }, [callCameraFacingMode, callMode, getCallUserMedia, isCallCameraOff, showError]);
+  }, [callCameraFacingMode, callMode, isCallCameraOff, showError]);
 
   const clampMinimizedCallPosition = useCallback((x: number, y: number) => {
     if (typeof window === 'undefined') return { x, y };
@@ -1513,6 +1552,25 @@ const MessagesContent = () => {
       window.removeEventListener('offline', updateQuality);
     };
   }, [callStatus, remoteCallStream]);
+
+  useEffect(() => {
+    if (!webSocketService || !activeCallPeerId || (callStatus !== 'connecting' && callStatus !== 'active')) {
+      return;
+    }
+
+    webSocketService.sendCallState(activeCallPeerId, {
+      matchId: activeCallMatchId || undefined,
+      micMuted: isCallMicMuted,
+      cameraOff: isCallCameraOff,
+    });
+  }, [
+    activeCallMatchId,
+    activeCallPeerId,
+    callStatus,
+    isCallCameraOff,
+    isCallMicMuted,
+    webSocketService,
+  ]);
 
   useEffect(() => {
     if (callStatus === 'ringing') {
@@ -2280,11 +2338,25 @@ const MessagesContent = () => {
       cleanupCallSession();
     };
 
+    const handleCallState = (payload: CallStatePayload) => {
+      if (!payload?.fromUserId) return;
+      if (payload.fromUserId !== activeCallPeerIdRef.current) return;
+
+      if (typeof payload.micMuted === 'boolean') {
+        setIsRemoteCallMicMuted(payload.micMuted);
+      }
+
+      if (typeof payload.cameraOff === 'boolean') {
+        setIsRemoteCallCameraOff(payload.cameraOff);
+      }
+    };
+
     webSocketService.onCallOffer(handleCallOffer);
     webSocketService.onCallAnswer(handleCallAnswer);
     webSocketService.onCallIceCandidate(handleCallIceCandidate);
     webSocketService.onCallReject(handleCallReject);
     webSocketService.onCallEnd(handleCallEnd);
+    webSocketService.onCallState(handleCallState);
 
     return () => {
       webSocketService.off('call:offer', handleCallOffer);
@@ -2292,6 +2364,7 @@ const MessagesContent = () => {
       webSocketService.off('call:ice-candidate', handleCallIceCandidate);
       webSocketService.off('call:reject', handleCallReject);
       webSocketService.off('call:end', handleCallEnd);
+      webSocketService.off('call:state', handleCallState);
     };
   }, [callMode, cleanupCallSession, currentUserId, flushPendingIceCandidates, sendMissedCallMessage, showError, webSocketService]);
 
@@ -3026,6 +3099,32 @@ const MessagesContent = () => {
           <div className={`pointer-events-none absolute inset-0 transition-all duration-300 ${selectedBackground.overlayClass}`} />
           <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/55" />
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.06),transparent_30%),linear-gradient(180deg,rgba(244,114,182,0.08),transparent_24%,transparent_62%,rgba(12,18,30,0.38)_100%)] mix-blend-screen" />
+
+          {(isCallMicMuted || isRemoteCallMicMuted) && (
+            <div className="absolute right-4 top-20 z-20 flex flex-col items-end gap-2">
+              {isCallMicMuted ? (
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/45 px-3 py-1.5 text-[11px] font-medium text-white/90 backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
+                  <MicOff className="h-3.5 w-3.5 text-rose-300" />
+                  <span>You are muted</span>
+                </div>
+              ) : null}
+              {isRemoteCallMicMuted ? (
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/45 px-3 py-1.5 text-[11px] font-medium text-white/90 backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
+                  <MicOff className="h-3.5 w-3.5 text-amber-200" />
+                  <span>{callPeerName.split(' ')[0]} muted</span>
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {isRemoteCallCameraOff ? (
+            <div className="pointer-events-none absolute inset-x-0 top-24 z-20 flex justify-center px-4">
+              <div className="inline-flex max-w-[88%] items-center gap-2 rounded-2xl border border-white/15 bg-black/50 px-4 py-2.5 text-center text-sm font-medium text-white/95 backdrop-blur-xl shadow-[0_16px_34px_rgba(0,0,0,0.24)]">
+                <VideoOff className="h-4 w-4 text-amber-200" />
+                <span>{callPeerName} turned off their camera</span>
+              </div>
+            </div>
+          ) : null}
 
           <div className={`absolute left-4 right-4 flex items-start justify-between ${isCompactMobileCallView ? 'top-3 gap-2.5' : 'top-4 gap-3'}`}>
             <div className={`flex items-center rounded-2xl border border-white/15 bg-black/35 backdrop-blur-xl ${isCompactMobileCallView ? 'gap-2 px-2.5 py-2' : 'gap-3 px-3 py-2'}`}>

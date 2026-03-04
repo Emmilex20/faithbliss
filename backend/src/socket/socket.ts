@@ -652,6 +652,28 @@ export const initializeSocketIO = (io: Server) => {
             });
         });
 
+        socket.on('call:state', (payload: unknown) => {
+            const data = sanitizeRecord(payload);
+            if (!data) {
+                return socket.emit('error', 'Invalid call state payload.');
+            }
+
+            const targetUserId = sanitizeTargetUserId(data.targetUserId);
+            if (!targetUserId) {
+                return socket.emit('error', 'Invalid call state payload.');
+            }
+
+            const micMuted = typeof data.micMuted === 'boolean' ? data.micMuted : undefined;
+            const cameraOff = typeof data.cameraOff === 'boolean' ? data.cameraOff : undefined;
+
+            io.to(targetUserId).emit('call:state', {
+                fromUserId: userId,
+                matchId: sanitizeOptionalString(data.matchId),
+                micMuted,
+                cameraOff,
+            });
+        });
+
         // --------------------------------------------------------
         // 6. Handle Disconnect
         // --------------------------------------------------------

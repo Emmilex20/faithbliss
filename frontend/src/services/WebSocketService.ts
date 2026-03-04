@@ -72,6 +72,13 @@ export interface CallEndPayload {
   reason?: string;
 }
 
+export interface CallStatePayload {
+  fromUserId: string;
+  matchId?: string;
+  micMuted?: boolean;
+  cameraOff?: boolean;
+}
+
 export interface UserPresencePayload {
   userId: string;
   isOnline: boolean;
@@ -253,6 +260,16 @@ class WebSocketService {
     });
   }
 
+  public sendCallState(
+    targetUserId: string,
+    payload: { matchId?: string; micMuted?: boolean; cameraOff?: boolean }
+  ): void {
+    this.socket?.emit('call:state', {
+      targetUserId,
+      ...payload,
+    });
+  }
+
   public onCallOffer(callback: (payload: CallOfferPayload) => void): void {
     this.socket?.on('call:offer', callback);
   }
@@ -271,6 +288,10 @@ class WebSocketService {
 
   public onCallEnd(callback: (payload: CallEndPayload) => void): void {
     this.socket?.on('call:end', callback);
+  }
+
+  public onCallState(callback: (payload: CallStatePayload) => void): void {
+    this.socket?.on('call:state', callback);
   }
 
   public onUserPresence(callback: (payload: UserPresencePayload) => void): void {
