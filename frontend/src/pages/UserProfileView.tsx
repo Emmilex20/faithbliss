@@ -8,21 +8,16 @@ import { useMatches, useMatching } from '@/hooks/useAPI';
 import {
   BadgeCheck,
   Briefcase,
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Church,
-  Cigarette,
-  Dumbbell,
   Flame,
-  GlassWater,
   GraduationCap,
   Heart,
   HeartHandshake,
   Languages,
   MapPin,
   MessageCircle,
-  PawPrint,
   Ruler,
   Sparkles,
   Target,
@@ -55,21 +50,6 @@ const formatValue = (value?: string | null): string => {
     .replace(/_/g, ' ')
     .toLowerCase()
     .replace(/\b\w/g, (char) => char.toUpperCase());
-};
-
-const formatBirthday = (value?: string | Date | null): string => {
-  if (!value) return 'Not provided';
-
-  const parsed = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return typeof value === 'string' ? value : 'Not provided';
-  }
-
-  return parsed.toLocaleDateString(undefined, {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
 };
 
 const DashboardPanel = ({
@@ -455,7 +435,6 @@ const ProfilePage = () => {
               <DetailTile label="Age" value={profile.age ? String(profile.age) : 'Not provided'} />
               <DetailTile label="Gender" value={formatValue(profile.gender)} icon={<VenusAndMars className="h-3.5 w-3.5" />} />
               <DetailTile label="Location" value={profile.location || 'Not provided'} icon={<MapPin className="h-3.5 w-3.5" />} />
-              <DetailTile label="Birthday" value={formatBirthday(profile.birthday)} icon={<CalendarDays className="h-3.5 w-3.5" />} />
             </div>
           </DashboardPanel>
 
@@ -493,7 +472,7 @@ const ProfilePage = () => {
             </div>
           </DashboardPanel>
 
-          <DashboardPanel eyebrow="Connection" title="Relationship and Lifestyle">
+          <DashboardPanel eyebrow="Connection" title="Relationship">
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               <div className="rounded-[30px] border border-slate-200 bg-slate-50 p-4">
                 <p className="flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">
@@ -515,12 +494,7 @@ const ProfilePage = () => {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <DetailTile label="Lifestyle" value={formatValue(profile.lifestyle)} />
-              <DetailTile label="Drinking Habit" value={formatValue(profile.drinkingHabit)} icon={<GlassWater className="h-3.5 w-3.5" />} />
-              <DetailTile label="Smoking Habit" value={formatValue(profile.smokingHabit)} icon={<Cigarette className="h-3.5 w-3.5" />} />
-              <DetailTile label="Workout Habit" value={formatValue(profile.workoutHabit)} icon={<Dumbbell className="h-3.5 w-3.5" />} />
-              <DetailTile label="Pet Preference" value={formatValue(profile.petPreference)} icon={<PawPrint className="h-3.5 w-3.5" />} />
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <DetailTile label="Love Language" value={loveStyleList.length ? loveStyleList.map(formatValue).join(', ') : 'Not provided'} />
             </div>
 
@@ -538,7 +512,6 @@ const ProfilePage = () => {
               <DetailTile label="Field of Study" value={profile.fieldOfStudy || 'Not provided'} icon={<GraduationCap className="h-3.5 w-3.5" />} />
               <DetailTile label="Education Level" value={formatValue(profile.educationLevel)} />
               <DetailTile label="Height" value={profile.height || 'Not provided'} icon={<Ruler className="h-3.5 w-3.5" />} />
-              <DetailTile label="Zodiac Sign" value={formatValue(profile.zodiacSign)} />
               <DetailTile label="Primary Language" value={profile.language || 'Not provided'} icon={<Languages className="h-3.5 w-3.5" />} />
             </div>
 
