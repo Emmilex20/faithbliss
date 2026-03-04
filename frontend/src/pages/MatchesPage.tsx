@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -34,13 +34,7 @@ const MatchesPage = () => {
   const { mutual, sent, received, loading, error, refetch } = useMatches();
   const { likeUser } = useMatching();
 
-  // Normalize API response
-  const [mutualMatches, setMutualMatches] = useState<Match[]>([]);
-  const [sentRequests, setSentRequests] = useState<Match[]>([]);
-  const [receivedRequests, setReceivedRequests] = useState<Match[]>([]);
-
-  useEffect(() => {
-    // Helper function to handle different API response structures (Array or { matches: Array })
+  const { mutualMatches, sentRequests, receivedRequests } = useMemo(() => {
     const normalize = (data: any): Match[] => {
       if (!data) return [];
       if (Array.isArray(data)) return data;
@@ -66,9 +60,16 @@ const MatchesPage = () => {
       return id ? !mutualIds.has(String(id)) : true;
     });
 
-    setMutualMatches(mutualList);
-    setSentRequests(sentList);
-    setReceivedRequests(receivedList);
+    return {
+      mutualMatches: mutualList,
+      sentRequests: sentList,
+      receivedRequests: receivedList,
+    };
+  }, [mutual, sent, received]);
+
+  /*
+
+  
 
     console.log("🧠 Processed Matches", {
       mutualCount: mutualList.length,
@@ -77,6 +78,7 @@ const MatchesPage = () => {
     });
   }, [mutual, sent, received]);
 
+  */
   const MatchCard = ({
     match,
     canMessage,
@@ -94,10 +96,6 @@ const MatchesPage = () => {
     return (
       <motion.div
         layout
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -20 }}
-        transition={{ duration: 0.3 }}
         className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-6 hover:bg-white/15 transition-all duration-300 group"
       >
         <div className="flex items-center gap-4 mb-4">
@@ -343,7 +341,7 @@ const MatchesPage = () => {
         </div>
 
         {/* Content */}
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={activeTab}
             initial={{ opacity: 0, y: 15 }}

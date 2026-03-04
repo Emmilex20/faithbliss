@@ -533,19 +533,27 @@ export const HingeStyleProfileCard = ({
           stopEvent(event);
           onLike();
         }}
-        className={`${positionClassName} z-20 inline-flex h-[3.8rem] w-[3.8rem] items-center justify-center rounded-full bg-transparent text-slate-950 transition-all duration-200 hover:-translate-y-0.5`}
+        className={`${positionClassName} z-30 inline-flex h-[4.1rem] w-[4.1rem] select-none touch-manipulation items-center justify-center rounded-full bg-transparent text-slate-950 transition-all duration-200 hover:-translate-y-0.5`}
         aria-label="Like"
+        style={{
+          WebkitTapHighlightColor: 'transparent',
+          WebkitTouchCallout: 'none',
+          WebkitUserSelect: 'none',
+          touchAction: 'manipulation',
+        }}
       >
-        <span className="relative inline-flex h-[2.6rem] w-[2.6rem] items-center justify-center rounded-[1.05rem] bg-gradient-to-br from-fuchsia-500 via-pink-500 to-rose-500 shadow-[0_6px_12px_rgba(236,72,153,0.24)]">
-          <span className="absolute inset-[1px] rounded-[1rem] bg-gradient-to-br from-white/18 to-transparent" />
-          <Heart className="relative h-5 w-5 fill-white text-white stroke-[2.3]" />
+        <span className="relative inline-flex h-[3.2rem] w-[3.2rem] items-center justify-center rounded-full border border-white/70 bg-white/82 backdrop-blur-md shadow-[0_14px_24px_rgba(15,23,42,0.22),0_0_0_1px_rgba(255,255,255,0.18)]">
+          <span className="relative inline-flex h-[2.45rem] w-[2.45rem] items-center justify-center rounded-[1rem] bg-gradient-to-br from-fuchsia-500 via-pink-500 to-rose-500 shadow-[0_8px_14px_rgba(236,72,153,0.2)]">
+            <span className="absolute inset-[1px] rounded-[0.95rem] bg-gradient-to-br from-white/18 to-transparent" />
+            <Heart className="relative h-[1.05rem] w-[1.05rem] fill-white text-white stroke-[2.35]" />
+          </span>
         </span>
       </button>
     );
     const renderInlineMobilePhoto = (photoUrl: string, photoIndex: number) => (
       <div
         key={`${profileId}-${photoIndex}-inline`}
-        className={`relative mt-4 w-full cursor-zoom-in overflow-hidden rounded-[26px] bg-slate-100 shadow-[0_14px_34px_rgba(15,23,42,0.08)] ${isCompactHeight ? 'aspect-[4/5] min-h-[352px]' : 'aspect-[4/5] min-h-[420px]'}`}
+        className={`relative isolate mt-4 w-full cursor-zoom-in overflow-hidden rounded-[26px] bg-slate-100 shadow-[0_14px_34px_rgba(15,23,42,0.08)] ${isCompactHeight ? 'aspect-[4/5] min-h-[352px]' : 'aspect-[4/5] min-h-[420px]'}`}
         onClick={() => openImageViewer(photoIndex)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
@@ -634,7 +642,7 @@ export const HingeStyleProfileCard = ({
               </div>
 
               <div
-                className={`relative w-full cursor-zoom-in overflow-hidden rounded-[26px] bg-slate-100 shadow-[0_14px_34px_rgba(15,23,42,0.08)] ${isCompactHeight ? 'aspect-[4/5] min-h-[352px]' : 'aspect-[4/5] min-h-[420px]'}`}
+                className={`relative isolate w-full cursor-zoom-in overflow-hidden rounded-[26px] bg-slate-100 shadow-[0_14px_34px_rgba(15,23,42,0.08)] ${isCompactHeight ? 'aspect-[4/5] min-h-[352px]' : 'aspect-[4/5] min-h-[420px]'}`}
                 onClick={() => openImageViewer(0)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
