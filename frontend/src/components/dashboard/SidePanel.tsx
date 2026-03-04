@@ -124,6 +124,18 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
             </div>
           </Link>
 
+          <Link to="/community" onClick={onClose}>
+            <div className="flex items-center space-x-4 p-4 hover:bg-gray-800/50 rounded-2xl transition-colors cursor-pointer group">
+              <div className="p-2 bg-violet-500/20 rounded-xl group-hover:bg-violet-500/30 transition-colors">
+                <Users className="w-5 h-5 text-violet-300" />
+              </div>
+              <div>
+                <h4 className="text-white font-semibold">Community</h4>
+                <p className="text-gray-400 text-sm">Fellowship and events</p>
+              </div>
+            </div>
+          </Link>
+
           <div className="mt-4 border-t border-gray-700/50 pt-4 lg:mt-0 lg:border-t-0 lg:pt-0">
             <h5 className="mb-3 px-4 text-xs font-semibold uppercase tracking-wider text-gray-400 lg:hidden">Account</h5>
 
@@ -135,18 +147,6 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
                 <div>
                   <h4 className="text-white font-semibold">My Profile</h4>
                   <p className="text-gray-400 text-sm">Edit profile & photos</p>
-                </div>
-              </div>
-            </Link>
-
-            <Link to="/community" onClick={onClose}>
-              <div className="flex items-center space-x-4 p-4 hover:bg-gray-800/50 rounded-2xl transition-colors cursor-pointer group">
-                <div className="p-2 bg-violet-500/20 rounded-xl group-hover:bg-violet-500/30 transition-colors">
-                  <Users className="w-5 h-5 text-violet-300" />
-                </div>
-                <div>
-                  <h4 className="text-white font-semibold">Community</h4>
-                  <p className="text-gray-400 text-sm">Fellowship and events</p>
                 </div>
               </div>
             </Link>
@@ -167,24 +167,24 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
               </div>
             </div>
             </Link>
+
+            <Link to="/premium" onClick={onClose}>
+              <div className="flex items-center space-x-4 p-4 hover:bg-gray-800/50 rounded-2xl transition-colors cursor-pointer group">
+                <div className="p-2 bg-yellow-500/20 rounded-xl group-hover:bg-yellow-500/30 transition-colors">
+                  <Star className="w-5 h-5 text-yellow-400" />
+                </div>
+                <div>
+                  <h4 className="text-white font-semibold">Premium Features</h4>
+                  <p className="text-gray-400 text-sm">Explore exclusive benefits</p>
+                </div>
+              </div>
+            </Link>
           </div>
         </div>
 
         {/* Secondary Navigation */}
         <div className="border-t border-gray-700/50 pt-4">
           <h5 className="text-gray-400 text-xs uppercase tracking-wider font-semibold mb-3 px-4">More</h5>
-
-          <Link to="/premium" onClick={onClose}>
-            <div className="flex items-center space-x-4 p-4 hover:bg-gray-800/50 rounded-2xl transition-colors cursor-pointer group">
-              <div className="p-2 bg-yellow-500/20 rounded-xl group-hover:bg-yellow-500/30 transition-colors">
-                <Star className="w-5 h-5 text-yellow-400" />
-              </div>
-              <div>
-                <h4 className="text-white font-semibold">Premium Features</h4>
-                <p className="text-gray-400 text-sm">Explore exclusive benefits</p>
-              </div>
-            </div>
-          </Link>
 
         <div className="border-t border-gray-700/50 pt-4 mt-4">
           <Link to="/settings" onClick={onClose}>
