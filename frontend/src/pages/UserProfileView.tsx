@@ -6,6 +6,7 @@ import { SidePanel } from '@/components/dashboard/SidePanel';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useMatches, useMatching } from '@/hooks/useAPI';
 import {
+  ArrowLeft,
   BadgeCheck,
   Briefcase,
   ChevronLeft,
@@ -270,6 +271,17 @@ const ProfilePage = () => {
   const content = (
     <div className="profile-page mx-auto w-full max-w-[88rem] px-3 pb-28 pt-5 sm:px-5 sm:pb-24 lg:px-8">
       <div className="rounded-[40px] border border-slate-200 bg-[#f8f8f7] p-3 shadow-[0_20px_45px_rgba(15,23,42,0.05)] sm:rounded-[44px] sm:p-4">
+        <div className="mb-4 flex items-center">
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard')}
+            className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:text-slate-900"
+            aria-label="Back to dashboard"
+            title="Back to dashboard"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+        </div>
         <div className="grid gap-4 lg:grid-cols-[minmax(320px,0.95fr)_1.35fr] lg:gap-6">
         <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
           <section className="overflow-hidden rounded-[38px] border border-slate-200 bg-white shadow-[0_20px_50px_rgba(15,23,42,0.08)]">

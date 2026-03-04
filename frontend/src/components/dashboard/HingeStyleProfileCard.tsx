@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Heart, Minus, MoreHorizontal, Plus, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -410,6 +410,13 @@ export const HingeStyleProfileCard = ({
       .replace(/\s+/g, ' ')
       .trim()
       .replace(/\b\w/g, (char) => char.toUpperCase());
+  const formattedGender = profile.gender ? formatLabel(profile.gender) : '';
+  const formattedDenomination = profile.denomination ? formatLabel(String(profile.denomination)) : '';
+  const favoriteVerse = profile.favoriteVerse?.trim() || '';
+  const spiritualGifts = (Array.isArray(profile.spiritualGifts) ? profile.spiritualGifts : [])
+    .map((gift) => gift?.trim())
+    .filter((gift): gift is string => Boolean(gift))
+    .slice(0, 4);
   const mobileDisplayName = profile.name?.trim().split(/\s+/)[0] || profile.name || 'User';
   const primaryGoal = profile.relationshipGoals?.[0] || profile.lookingFor?.[0] || '';
   const ageFilterLabel = profile.age ? `Age ${profile.age}` : 'Age';
@@ -483,12 +490,13 @@ export const HingeStyleProfileCard = ({
       .map((item) => item?.trim())
       .filter((item): item is string => Boolean(item))
       .slice(0, 8);
+    const mobileHeight = profile.height ? profile.height.split('(')[0].trim() : '';
     const currentMobilePhoto = cardPhotos[0] ?? '/default-avatar.png';
     const remainingMobilePhotos = cardPhotos.slice(1);
-    const promptInlinePhotos =
-      remainingMobilePhotos.length > 2 ? remainingMobilePhotos.slice(0, 2) : remainingMobilePhotos.slice(0, 1);
-    const postInterestsPhotos =
-      remainingMobilePhotos.length > 2 ? remainingMobilePhotos.slice(2) : remainingMobilePhotos.slice(1);
+    const secondInlinePhoto = remainingMobilePhotos[0];
+    const laterDetailPhoto = remainingMobilePhotos.length > 2 ? remainingMobilePhotos[1] : undefined;
+    const usedPreInterestPhotoCount = (secondInlinePhoto ? 1 : 0) + (laterDetailPhoto ? 1 : 0);
+    const postInterestsPhotos = remainingMobilePhotos.slice(usedPreInterestPhotoCount);
     const mobileSectionLabelClass = 'pr-4 text-[0.72rem] font-bold uppercase tracking-[0.12em] text-slate-500';
     const mobileBodyTextClass = isCompactHeight
       ? 'mt-2 text-[1.4rem] font-semibold leading-[1.12] tracking-[-0.03em] text-slate-950'
@@ -496,6 +504,26 @@ export const HingeStyleProfileCard = ({
     const mobilePromptTextClass = isCompactHeight
       ? 'mt-2 text-[1.28rem] font-serif font-semibold leading-[1.16] tracking-[-0.02em] text-slate-950'
       : 'mt-3 text-[1.52rem] font-serif font-semibold leading-[1.14] tracking-[-0.025em] text-slate-950';
+    const renderMobileInfoSection = ({
+      title,
+      value,
+      children,
+    }: {
+      title: string;
+      value?: string;
+      children?: ReactNode;
+    }) => {
+      if (!value && !children) return null;
+
+      return (
+        <div className="relative mt-4 rounded-[26px] bg-slate-100 px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+          {renderMobileLikeButton()}
+          <p className={mobileSectionLabelClass}>{title}</p>
+          {value ? <p className="mt-3 pr-14 text-[1.18rem] font-semibold leading-7 text-slate-900">{value}</p> : null}
+          {children}
+        </div>
+      );
+    };
     const renderMobileLikeButton = (positionClassName = 'absolute top-4 right-4') => (
       <button
         type="button"
@@ -646,6 +674,33 @@ export const HingeStyleProfileCard = ({
                 </p>
               </div>
 
+              {renderMobileInfoSection({
+                title: 'Gender & location',
+                children: (
+                  <div className="mt-3 space-y-3 pr-14">
+                    {formattedGender ? (
+                      <div>
+                        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Gender</p>
+                        <p className="mt-1 text-[1.12rem] font-semibold leading-7 text-slate-900">{formattedGender}</p>
+                      </div>
+                    ) : null}
+                    {locationText ? (
+                      <div>
+                        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Location</p>
+                        <p className="mt-1 text-[1.12rem] font-semibold leading-7 text-slate-900">{locationText}</p>
+                      </div>
+                    ) : null}
+                  </div>
+                ),
+              })}
+
+              {secondInlinePhoto ? renderInlineMobilePhoto(secondInlinePhoto, 1) : null}
+
+              {renderMobileInfoSection({ title: 'Height', value: mobileHeight })}
+              {renderMobileInfoSection({ title: 'Denomination', value: formattedDenomination })}
+
+              {laterDetailPhoto ? renderInlineMobilePhoto(laterDetailPhoto, 2) : null}
+
               {promptQuestion || promptAnswer ? (
                 <div className="relative mt-4 rounded-[26px] bg-slate-100 px-5 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
                   {renderMobileLikeButton()}
@@ -657,8 +712,26 @@ export const HingeStyleProfileCard = ({
                   </p>
                 </div>
               ) : null}
+              {renderMobileInfoSection({
+                title: 'Spiritual gifts',
+                children: spiritualGifts.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-2.5">
+                    {spiritualGifts.map((gift) => (
+                      <span
+                        key={gift}
+                        className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3.5 py-2 text-[0.76rem] font-semibold tracking-[-0.01em] text-slate-700 shadow-[0_6px_14px_rgba(15,23,42,0.06)]"
+                      >
+                        {gift}
+                      </span>
+                    ))}
+                  </div>
+                ) : undefined,
+              })}
 
-              {promptInlinePhotos.map((photoUrl, offset) => renderInlineMobilePhoto(photoUrl, offset + 1))}
+              {renderMobileInfoSection({
+                title: 'Favorite verse',
+                value: favoriteVerse ? `"${favoriteVerse}"` : '',
+              })}
 
               {mobileInterests.length > 0 ? (
                 <div className="mt-4 rounded-[26px] bg-slate-100 px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
@@ -677,7 +750,7 @@ export const HingeStyleProfileCard = ({
               ) : null}
 
               {postInterestsPhotos.map((photoUrl, offset) =>
-                renderInlineMobilePhoto(photoUrl, promptInlinePhotos.length + offset + 1)
+                renderInlineMobilePhoto(photoUrl, usedPreInterestPhotoCount + offset + 1)
               )}
 
               <Link
@@ -853,6 +926,50 @@ export const HingeStyleProfileCard = ({
           <p className="mt-2 line-clamp-3 max-w-xl text-sm text-slate-200 sm:text-base">
             {profile.bio?.trim() || 'No bio available yet.'}
           </p>
+
+          {formattedGender || profile.height || locationText || formattedDenomination ? (
+            <div className="mt-3 flex max-w-xl flex-wrap gap-2">
+              {formattedGender ? (
+                <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
+                  {formattedGender}
+                </span>
+              ) : null}
+              {profile.height ? (
+                <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
+                  {profile.height.split('(')[0].trim()}
+                </span>
+              ) : null}
+              {locationText ? (
+                <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
+                  {locationText}
+                </span>
+              ) : null}
+              {formattedDenomination ? (
+                <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
+                  {formattedDenomination}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+
+          {spiritualGifts.length > 0 ? (
+            <div className="mt-3 flex max-w-xl flex-wrap gap-2">
+              {spiritualGifts.map((gift) => (
+                <span
+                  key={gift}
+                  className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/85"
+                >
+                  {gift}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          {favoriteVerse ? (
+            <p className="mt-3 max-w-xl text-sm italic text-slate-100">
+              "{favoriteVerse}"
+            </p>
+          ) : null}
 
           <Link
             to={`/profile/${profileId}`}
