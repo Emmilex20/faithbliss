@@ -20,6 +20,8 @@ import { API, type User } from '@/services/api';
 // Insert scrollbar styles
 insertScrollbarStyles();
 
+const DASHBOARD_PASSED_PROFILES_STORAGE_KEY_PREFIX = 'faithbliss_dashboard_passed_profiles';
+
 export const DashboardPage = ({ user: activeUser }: { user: User }) => {
   const navigate = useNavigate();
   const { showSuccess, showInfo } = useToast();
@@ -39,6 +41,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const hasCompletedInitialLoadRef = useRef(false);
     const [showForcedOnboardingPrompt, setShowForcedOnboardingPrompt] = useState(false);
     const ONBOARDING_PAUSE_STORAGE_KEY = 'faithbliss_onboarding_pause_state';
+    const [persistedPassedProfileIds, setPersistedPassedProfileIds] = useState<string[]>([]);
 
   // Fetch real potential matches from backend
   const { 
@@ -58,30 +61,51 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const currentUserData = userProfile || activeUser;
     const userName = currentUserData.name || "User";
     const userImage = currentUserData.profilePhoto1 || undefined; // Uses profilePhoto1 from the User interface
+    const passedProfilesStorageKey = useMemo(() => {
+        const currentUserId = currentUserData?.id ? String(currentUserData.id) : '';
+        return currentUserId ? `${DASHBOARD_PASSED_PROFILES_STORAGE_KEY_PREFIX}:${currentUserId}` : '';
+    }, [currentUserData?.id]);
+
+    useEffect(() => {
+        if (!passedProfilesStorageKey) {
+            setPersistedPassedProfileIds([]);
+            return;
+        }
+
+        try {
+            const raw = localStorage.getItem(passedProfilesStorageKey);
+            const parsed = raw ? JSON.parse(raw) : [];
+            const items = Array.isArray(parsed)
+                ? parsed.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+                : [];
+            setPersistedPassedProfileIds(items);
+        } catch {
+            setPersistedPassedProfileIds([]);
+        }
+    }, [passedProfilesStorageKey]);
 
     const activeProfiles = useMemo(() => {
-        // Function to check for valid ID
-        // Note: Filters out any null/undefined entries AND entries missing 'id'/'_id'
         const hasValidId = (p: User) => p && (p.id || (p as any)._id);
         const hasDisplayName = (p: User) => typeof p.name === 'string' && p.name.trim().length > 0;
         const currentUserId = currentUserData?.id ? String(currentUserData.id) : null;
+        const passedIdSet = new Set(persistedPassedProfileIds);
 
-        if (filteredProfiles !== null) {
-            // Filtered mode: honor even an empty array so "no matches" is preserved.
-            return filteredProfiles
-                .filter(hasValidId)
-                .filter(hasDisplayName)
-                .filter(p => !currentUserId || String(p.id || (p as any)._id) !== currentUserId);
-        }
-        
-        // Use potential matches only; if empty, show the "no profiles" state.
-        const safeProfiles = Array.isArray(profiles) ? profiles : [];
-        return safeProfiles
+        const sourceProfiles =
+            filteredProfiles !== null
+                ? filteredProfiles
+                : (Array.isArray(profiles) ? profiles : []);
+
+        const baseProfiles = sourceProfiles
             .filter(hasValidId)
             .filter(hasDisplayName)
-            .filter(p => !currentUserId || String(p.id || (p as any)._id) !== currentUserId);
-        
-    }, [profiles, filteredProfiles, currentUserData]);
+            .filter((profile) => !currentUserId || String(profile.id || (profile as any)._id) !== currentUserId);
+
+        const unpassedProfiles = baseProfiles.filter(
+            (profile) => !passedIdSet.has(String(profile.id || (profile as any)._id))
+        );
+
+        return unpassedProfiles.length > 0 ? unpassedProfiles : baseProfiles;
+    }, [profiles, filteredProfiles, currentUserData?.id, persistedPassedProfileIds]);
 
 
     useEffect(() => {
@@ -320,6 +344,28 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     goToNextProfile();
 
     const key = String(userIdToPass);
+    if (passedProfilesStorageKey) {
+      try {
+        const existingRaw = localStorage.getItem(passedProfilesStorageKey);
+        const existingParsed = existingRaw ? JSON.parse(existingRaw) : [];
+        const existingPassedProfileIds = Array.isArray(existingParsed)
+          ? existingParsed.filter(
+              (value): value is string =>
+                typeof value === 'string' && value.trim().length > 0
+            )
+          : [];
+        const nextPersistedPassedProfileIds = Array.from(
+          new Set([...existingPassedProfileIds, key])
+        ).slice(-500);
+        localStorage.setItem(
+          passedProfilesStorageKey,
+          JSON.stringify(nextPersistedPassedProfileIds)
+        );
+      } catch {
+        // Ignore localStorage access errors.
+      }
+    }
+
     if (pendingActionIdsRef.current.has(key)) return;
     pendingActionIdsRef.current.add(key);
 
