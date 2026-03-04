@@ -9,15 +9,11 @@ export const AuthGate: React.FC = () => {
   const location = useLocation();
   const path = location.pathname;
 
-  const obStatus = user?.onboardingCompleted ? 'Complete' : user ? 'Pending' : 'N/A';
-  console.log(`E. AUTH_GATE CHECK: Path=${path}, Loading=${isLoading}, Auth=${isAuthenticated}, Onboarding=${obStatus}`);
-
   if (isLoading) {
     return null;
   }
 
   if (!isAuthenticated) {
-    console.log('F. AUTH_GATE REDIRECT: User is NOT authenticated. Redirecting to /login.');
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
@@ -34,26 +30,21 @@ export const AuthGate: React.FC = () => {
     }
 
     if (allowPausedDashboardAccess) {
-      console.log('H1. AUTH_GATE ACCESS: Onboarding paused, allowing temporary dashboard access.');
       return <Outlet />;
     }
 
     if (!path.startsWith('/onboarding')) {
-      console.log('G. AUTH_GATE REDIRECT: Onboarding is PENDING. Redirecting to /onboarding.');
       return <Navigate to="/onboarding" replace />;
     }
 
-    console.log('H. AUTH_GATE ACCESS: Onboarding is PENDING, allowing access to /onboarding.');
     return <Outlet />;
   }
 
   if (user && user.onboardingCompleted) {
     if (path.startsWith('/onboarding')) {
-      console.log('I. AUTH_GATE REDIRECT: Onboarding is COMPLETE. Redirecting AWAY from /onboarding to /dashboard.');
       return <Navigate to="/dashboard" replace />;
     }
 
-    console.log('J. AUTH_GATE ACCESS: Onboarding is COMPLETE, allowing access.');
     return <Outlet />;
   }
 
@@ -67,7 +58,6 @@ export const PublicOnlyRoute: React.FC = () => {
 
   if (isAuthenticated) {
     const targetPath = user && !user.onboardingCompleted ? '/onboarding' : '/dashboard';
-    console.log(`K. PUBLIC_GATE REDIRECT: Logged in. Redirecting from public route to ${targetPath}.`);
     return <Navigate to={targetPath} replace />;
   }
 

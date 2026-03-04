@@ -35,12 +35,23 @@ import { AuthProvider } from './contexts/AuthContext.tsx';
 import { AuthGate, PublicOnlyRoute } from './components/AuthGate.tsx';
 
 const isFirebaseNetworkFailure = (reason: unknown): boolean => {
-  const code = (reason as { code?: unknown })?.code;
-  const message = (reason as { message?: unknown })?.message;
-  return (
-    (typeof code === 'string' && code === 'auth/network-request-failed')
-    || (typeof message === 'string' && message.includes('auth/network-request-failed'))
-  );
+  const candidates = [
+    reason,
+    (reason as { reason?: unknown })?.reason,
+    (reason as { error?: unknown })?.error,
+  ];
+
+  return candidates.some((candidate) => {
+    const code = (candidate as { code?: unknown })?.code;
+    const message = (candidate as { message?: unknown })?.message;
+    return (
+      (typeof code === 'string' && code === 'auth/network-request-failed')
+      || (typeof message === 'string' && (
+        message.includes('auth/network-request-failed')
+        || message.toLowerCase().includes('network request failed')
+      ))
+    );
+  });
 };
 
 if (typeof window !== 'undefined') {

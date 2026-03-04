@@ -105,9 +105,26 @@ interface OnboardingData {
     [key: string]: any; // Allow for dynamic fields to be passed
 }
 
+const GOOGLE_REDIRECT_PENDING_KEY = "faithbliss_google_redirect_pending";
+
 const isFirebaseNetworkError = (error: unknown): boolean => {
-    const code = (error as { code?: unknown })?.code;
-    return typeof code === "string" && code === "auth/network-request-failed";
+    const candidates = [
+        error,
+        (error as { reason?: unknown })?.reason,
+        (error as { error?: unknown })?.error,
+    ];
+
+    return candidates.some((candidate) => {
+        const code = (candidate as { code?: unknown })?.code;
+        const message = (candidate as { message?: unknown })?.message;
+        return (
+            (typeof code === "string" && code === "auth/network-request-failed")
+            || (typeof message === "string" && (
+                message.includes("auth/network-request-failed")
+                || message.toLowerCase().includes("network request failed")
+            ))
+        );
+    });
 };
 
 const isBrowserOffline = (): boolean => {
@@ -118,6 +135,41 @@ const isBrowserOffline = (): boolean => {
 const getAuthErrorMessage = (error: unknown, fallback: string): string => {
     const message = (error as { message?: unknown })?.message;
     return typeof message === "string" && message.trim() ? message : fallback;
+};
+
+const getStoredUserSnapshot = (): User | null => {
+    if (typeof window === "undefined") return null;
+
+    const raw = localStorage.getItem("user");
+    if (!raw) return null;
+
+    try {
+        const parsed = JSON.parse(raw) as User;
+        return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+        return null;
+    }
+};
+
+const getStoredAccessToken = (): string | null => {
+    if (typeof window === "undefined") return null;
+    const token = localStorage.getItem("accessToken");
+    return typeof token === "string" && token.trim() ? token : null;
+};
+
+const hasPendingGoogleRedirect = (): boolean => {
+    if (typeof window === "undefined") return false;
+    return sessionStorage.getItem(GOOGLE_REDIRECT_PENDING_KEY) === "1";
+};
+
+const markGoogleRedirectPending = (): void => {
+    if (typeof window === "undefined") return;
+    sessionStorage.setItem(GOOGLE_REDIRECT_PENDING_KEY, "1");
+};
+
+const clearPendingGoogleRedirect = (): void => {
+    if (typeof window === "undefined") return;
+    sessionStorage.removeItem(GOOGLE_REDIRECT_PENDING_KEY);
 };
 
 const sanitizeText = (value: unknown, maxLen: number): string | undefined => {
@@ -277,15 +329,11 @@ const fetchUserDataFromFirestore = async (fbUser: FirebaseAuthUser): Promise<Use
     const docSnap = await getDoc(docRef);
 
     if (!docSnap.exists()) {
-        console.log(` Firestore: Profile document for ${fbUser.uid} not found. Returning minimal data.`);
         return null;
     }
 
     const backendData = docSnap.data();
     
-    //  DEBUG LOG 2: Successful retrieval
-    console.log(` Firestore: Profile retrieved for ${fbUser.uid}.`);
-
     //  FIX 2: Map ALL fields from backendData to the complete User interface
     return {
         id: fbUser.uid, 
@@ -430,11 +478,25 @@ export function useAuth() {
 
     const syncUserFromFirebase = useCallback(async (fbUser: FirebaseAuthUser) => {
         // 1. Get the current, secure ID Token (still needed for any future custom backend calls)
-        const token = await fbUser.getIdToken(); 
-        setAccessToken(token);
-        localStorage.setItem("accessToken", token);
-        
-        console.log(` Firebase Token Retrieved: ${token.substring(0, 20)}...`);
+        let token: string | null = null;
+        try {
+            token = await fbUser.getIdToken();
+            setAccessToken(token);
+            localStorage.setItem("accessToken", token);
+        } catch (tokenError) {
+            if (!isFirebaseNetworkError(tokenError)) {
+                throw tokenError;
+            }
+
+            token = getStoredAccessToken();
+            if (token) {
+                console.warn("Using cached Firebase token due to a temporary network issue.");
+                setAccessToken(token);
+            } else {
+                console.warn("Firebase token refresh failed due to network and no cached token is available.");
+                setAccessToken(null);
+            }
+        }
 
         const persistUser = (userToPersist: User) => {
             setUser(userToPersist);
@@ -459,7 +521,6 @@ export function useAuth() {
             let userToStore = await fetchUserDataFromFirestore(fbUser);
 
             if (!userToStore) {
-                console.log(" Firestore profile missing. Creating a profile for OAuth user...");
                 try {
                     await ensureUserProfile(fbUser);
                     userToStore = await fetchUserDataFromFirestore(fbUser);
@@ -473,10 +534,31 @@ export function useAuth() {
                 return;
             }
 
+            const cachedUser = getStoredUserSnapshot();
+            if (cachedUser?.id === fbUser.uid) {
+                console.warn("Using cached user profile because Firestore returned no profile during a network issue.");
+                persistUser({
+                    ...cachedUser,
+                    email: fbUser.email || cachedUser.email,
+                    id: fbUser.uid,
+                });
+                return;
+            }
+
             // Fallback to minimal user if Firestore is unavailable
             persistUser(minimalUser);
         } catch (error) {
             console.error(" Firestore sync failed, using minimal user:", error);
+            const cachedUser = getStoredUserSnapshot();
+            if (cachedUser?.id === fbUser.uid) {
+                console.warn("Using cached user profile due to Firestore sync failure.");
+                persistUser({
+                    ...cachedUser,
+                    email: fbUser.email || cachedUser.email,
+                    id: fbUser.uid,
+                });
+                return;
+            }
             persistUser(minimalUser);
         }
     }, []);
@@ -489,11 +571,9 @@ export function useAuth() {
         setIsLoading(true);
 
         const unsubscribe = onAuthStateChanged(auth, async (fbUser: FirebaseAuthUser | null) => {
-            console.log(" onAuthStateChanged fired. User:", fbUser ? { uid: fbUser.uid, email: fbUser.email, providerData: fbUser.providerData } : null);
             if (fbUser) {
                 try {
                     if (isInitialSignUp) {
-                        console.log(" Auth State Listener: Detected initial sign-up, skipping profile sync (POST already ran).");
                         setIsInitialSignUp(false);
                         setIsLoading(false);
                         return;
@@ -503,6 +583,18 @@ export function useAuth() {
                 } catch (e: any) {
                     if (isFirebaseNetworkError(e)) {
                         console.warn("Firebase sync skipped due to temporary network issue.");
+                        const cachedUser = getStoredUserSnapshot();
+                        const cachedToken = getStoredAccessToken();
+                        if (cachedUser?.id === fbUser.uid) {
+                            setUser({
+                                ...cachedUser,
+                                email: fbUser.email || cachedUser.email,
+                                id: fbUser.uid,
+                            });
+                        }
+                        if (cachedToken) {
+                            setAccessToken(cachedToken);
+                        }
                     } else {
                         // If token fetch or Firestore sync fails for non-network reasons, force logout
                         console.error("Firebase/Firestore sync failed:", e);
@@ -534,18 +626,13 @@ export function useAuth() {
     const directLogin = useCallback(
         async (credentials: LoginCredentials) => {
             setIsLoggingIn(true);
-            console.log("A. Attempting login for:", credentials.email);
             try {
                 await setPersistence(auth, browserLocalPersistence); 
-                console.log("B. Persistence set, calling sign-in...");
-                
                 await signInWithEmailAndPassword(
                     auth,
                     credentials.email,
                     credentials.password
                 );
-                
-                console.log("C. Login successful (will trigger toast & useEffect)");
                 showSuccess("Welcome back!", "Login Successful");
                 
             } catch (error: any) {
@@ -554,7 +641,6 @@ export function useAuth() {
                 throw error;
             } finally {
                 setIsLoggingIn(false);
-                console.log("E. directLogin: Login attempt finished.");
             }
         },
         [showSuccess, showError]
@@ -661,12 +747,10 @@ export function useAuth() {
             }
 
             try {
-                console.log("G. Firestore: Attempting to complete onboarding for user:", fbUser.uid);
                 const sanitizedPayload = sanitizeOnboardingPayload(onboardingData);
                 await API.Auth.completeOnboarding(sanitizedPayload);
 
                 const refreshedUser = await fetchUserDataFromFirestore(fbUser);
-                console.log("H. Backend + Firestore: Onboarding completed successfully.");
 
                 // After successful update, manually update the local user state
                 setUser(prevUser => {
@@ -713,6 +797,7 @@ export function useAuth() {
         try {
             await signOut(auth);
 
+            clearPendingGoogleRedirect();
             clearAppStorage();
             // Clear cookies in the browser
             document.cookie.split(";").forEach((c) => {
@@ -755,15 +840,19 @@ export function useAuth() {
 // -----------------------------------------------------------
     useEffect(() => {
         const handleRedirectResult = async () => {
+            if (!hasPendingGoogleRedirect()) {
+                return;
+            }
+
+            let shouldClearPendingRedirect = true;
             try {
                 if (isBrowserOffline()) {
                     console.warn("Skipping getRedirectResult while offline.");
+                    shouldClearPendingRedirect = false;
                     setIsLoading(false);
                     return;
                 }
-                console.log(" Checking getRedirectResult... currentUser:", auth.currentUser ? { uid: auth.currentUser.uid, email: auth.currentUser.email } : null);
                 const result = await getRedirectResult(auth);
-                console.log(" getRedirectResult result:", result ? { uid: result.user.uid, email: result.user.email, providerData: result.user.providerData } : null);
                 if (result?.user) {
                     // In some cases onAuthStateChanged can be late or skipped after redirect.
                     // Sync user here to ensure auth state is hydrated.
@@ -775,10 +864,15 @@ export function useAuth() {
             } catch (error: any) {
                 if (isFirebaseNetworkError(error)) {
                     console.warn("Google redirect check deferred due to network issue.");
+                    shouldClearPendingRedirect = false;
                 } else {
                     console.error("Google redirect handling failed:", error);
                 }
                 setIsLoading(false);
+            } finally {
+                if (shouldClearPendingRedirect) {
+                    clearPendingGoogleRedirect();
+                }
             }
         };
 
@@ -805,6 +899,7 @@ export function useAuth() {
                 try {
                     const result = await signInWithPopup(auth, provider);
                     if (result?.user) {
+                        clearPendingGoogleRedirect();
                         await ensureUserProfile(result.user);
                         await syncUserFromFirebase(result.user);
                     }
@@ -815,6 +910,7 @@ export function useAuth() {
                         popupError?.code === "auth/operation-not-supported-in-this-environment" ||
                         popupError?.code === "auth/popup-closed-by-user"
                     ) {
+                        markGoogleRedirectPending();
                         await signInWithRedirect(auth, provider);
                     } else {
                         throw popupError;
@@ -863,13 +959,10 @@ export function useAuth() {
             // We only redirect if we are on a known transient or incorrect core route.
             if (isTransientRoute || isOnWrongCoreRoute) {
                 if (location.pathname !== target) {
-                    console.log(` Redirecting: ${location.pathname} -> ${target}`);
                     navigate(target, { replace: true });
                     return;
                 }
             }
-            
-            console.log(` Navigation Stable: Allowed access to ${location.pathname}.`);
         }
     }, [isLoading, user, navigate, location.pathname]);
 
@@ -959,7 +1052,6 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
             profilePhotoCount: getProfilePhotoCount(data as Record<string, any>),
         };
 
-        console.log(` Firestore: Successfully fetched user profile for UID: ${userId}`);
         return profile;
     } catch (error: any) {
         console.error(` Failed to fetch user profile for UID: ${userId}`, error);
