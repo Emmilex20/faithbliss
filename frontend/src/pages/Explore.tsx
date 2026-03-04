@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowLeft,
@@ -245,6 +246,7 @@ const CardArtwork = ({ index }: { index: number }) => {
 const normalizeKey = (value: string) => value.trim().toLowerCase();
 
 const ExploreContent = () => {
+  const navigate = useNavigate();
   const { user } = useAuthContext();
   const { likeUser, passUser } = useMatching();
   const { showError, showInfo } = useToast();
@@ -430,6 +432,18 @@ const ExploreContent = () => {
   const gridView = (
     <div className="px-1 pb-8 pt-4 sm:px-6 sm:pt-6 md:px-8">
       <div className="mx-auto w-full max-w-none space-y-5 sm:max-w-7xl sm:space-y-6">
+        <div className="flex items-center justify-start">
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard')}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition hover:bg-white/15"
+            aria-label="Back to dashboard"
+            title="Back to dashboard"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+        </div>
+
         {/* Header - keep, but slightly closer to Tinder */}
         <section className="rounded-[1.75rem] border border-white/10 bg-white/5 p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -534,6 +548,14 @@ const ExploreContent = () => {
     <div className="relative flex h-[calc(100dvh-62px)] flex-col pt-16 sm:h-[calc(100dvh-74px)] sm:pt-20 lg:min-h-[calc(100vh-84px)] lg:h-auto lg:pt-0">
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between px-3 pt-4 sm:px-4 sm:pt-4 lg:px-8">
         <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard')}
+            className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition hover:bg-white/15"
+            aria-label="Back to dashboard"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
           <button
             type="button"
             onClick={resetToGrid}

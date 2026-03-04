@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
+  ArrowLeft,
   Heart,
   MessageCircle,
   User,
@@ -20,6 +21,7 @@ import { HeartBeatLoader } from "../components/HeartBeatLoader";
 import type { Match } from "../types/Match";
 
 const MatchesPage = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"mutual" | "sent" | "received">(
     "mutual"
   );
@@ -182,6 +184,17 @@ const MatchesPage = () => {
     const errorContent = (
       <div className="pt-20 pb-8 px-4">
         <div className="max-w-4xl mx-auto">
+          <div className="mb-6 flex items-center justify-start">
+            <button
+              type="button"
+              onClick={() => navigate("/dashboard")}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition hover:bg-white/15"
+              aria-label="Back to dashboard"
+              title="Back to dashboard"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          </div>
           <div className="text-center p-8">
             <p className="text-red-400 mb-4">Failed to load matches: {String(error)}</p>
             <button
@@ -272,6 +285,18 @@ const MatchesPage = () => {
   const content = (
     <div className="pt-20 pb-8 px-4">
       <div className="max-w-4xl mx-auto">
+        <div className="mb-6 flex items-center justify-start">
+          <button
+            type="button"
+            onClick={() => navigate("/dashboard")}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition hover:bg-white/15"
+            aria-label="Back to dashboard"
+            title="Back to dashboard"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+        </div>
+
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
