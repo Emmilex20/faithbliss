@@ -160,7 +160,7 @@ const ImageUploadSlide = ({ onboardingData, setOnboardingData, isVisible }: Imag
 
       {onboardingData.photos.length < MIN_ONBOARDING_PHOTOS && (
         <p className="text-center font-semibold text-red-500">
-          You must upload at least {MIN_ONBOARDING_PHOTOS} photos to continue.
+          Kindly upload at least {MIN_ONBOARDING_PHOTOS} photos to continue.
         </p>
       )}
     </motion.div>

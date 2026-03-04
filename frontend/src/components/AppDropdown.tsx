@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChevronDown, Search } from 'lucide-react';
+import { createPortal } from 'react-dom';
 
 export interface AppDropdownOption {
   value: string;
@@ -46,15 +47,40 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
   maxMenuHeightClassName,
 }) => {
   const wrapperRef = React.useRef<HTMLDivElement>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const menuRef = React.useRef<HTMLDivElement>(null);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const [isOpen, setIsOpen] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState('');
+  const [menuPosition, setMenuPosition] = React.useState({
+    top: 0,
+    left: 0,
+    width: 0,
+    maxHeight: 320,
+  });
+
+  const updateMenuPosition = React.useCallback(() => {
+    if (!triggerRef.current || typeof window === 'undefined') return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const viewportPadding = 10;
+    const availableBelow = window.innerHeight - rect.bottom - viewportPadding;
+    const maxHeight = Math.max(160, Math.min(420, availableBelow));
+
+    setMenuPosition({
+      top: rect.bottom + 8,
+      left: rect.left,
+      width: rect.width,
+      maxHeight,
+    });
+  }, []);
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (!wrapperRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
+      const target = event.target as Node;
+      if (wrapperRef.current?.contains(target) || menuRef.current?.contains(target)) {
+        return;
       }
+      setIsOpen(false);
     };
 
     const handleEscape = (event: KeyboardEvent) => {
@@ -63,24 +89,35 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
       }
     };
 
+    const handleViewportChange = () => {
+      if (isOpen) {
+        updateMenuPosition();
+      }
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEscape);
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
     };
-  }, []);
+  }, [isOpen, updateMenuPosition]);
 
   React.useEffect(() => {
     if (!isOpen) {
       setSearchTerm('');
       return;
     }
+    updateMenuPosition();
     if (searchable) {
       searchInputRef.current?.focus();
     }
-  }, [isOpen, searchable]);
+  }, [isOpen, searchable, updateMenuPosition]);
 
   const selectedOption = React.useMemo(() => options.find((option) => option.value === value), [options, value]);
 
@@ -90,9 +127,74 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
     return options.filter((option) => option.label.toLowerCase().includes(lowered));
   }, [options, searchTerm, searchable]);
 
+  const menuNode = isOpen ? (
+    <div
+      ref={menuRef}
+      style={{
+        position: 'fixed',
+        top: menuPosition.top,
+        left: menuPosition.left,
+        width: menuPosition.width,
+        zIndex: 1200,
+      }}
+      className={cx(
+        'overflow-hidden rounded-2xl border border-slate-600 bg-slate-950 shadow-2xl',
+        menuClassName
+      )}
+    >
+      {searchable && (
+        <div className="border-b border-slate-700/70 p-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder={searchPlaceholder}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800/90 py-2 pl-9 pr-3 text-sm text-white placeholder-slate-400 outline-none focus:border-pink-500"
+            />
+          </div>
+        </div>
+      )}
+
+      <div
+        className={cx('overflow-y-auto py-1', maxMenuHeightClassName)}
+        style={!maxMenuHeightClassName ? { maxHeight: menuPosition.maxHeight } : undefined}
+      >
+        {filteredOptions.length > 0 ? (
+          filteredOptions.map((option) => {
+            const isSelected = option.value === value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+                className={cx(
+                  'w-full px-4 py-2.5 text-left text-sm transition sm:text-base',
+                  isSelected ? 'bg-pink-500/20 text-pink-100' : 'text-slate-200 hover:bg-slate-800',
+                  optionClassName,
+                  isSelected && selectedOptionClassName
+                )}
+              >
+                {option.label}
+              </button>
+            );
+          })
+        ) : (
+          <p className="px-4 py-3 text-sm text-slate-400">{emptyText}</p>
+        )}
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div ref={wrapperRef} className={cx('relative', className)}>
       <button
+        ref={triggerRef}
         id={id}
         type="button"
         disabled={disabled}
@@ -113,58 +215,7 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
         />
       </button>
 
-      {isOpen && (
-        <div
-          className={cx(
-            'absolute left-0 right-0 top-[calc(100%+0.45rem)] z-50 overflow-hidden rounded-2xl border border-slate-600/60 bg-slate-900/98 shadow-2xl backdrop-blur-md',
-            menuClassName
-          )}
-        >
-          {searchable && (
-            <div className="border-b border-slate-700/70 p-3">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder={searchPlaceholder}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800/80 py-2 pl-9 pr-3 text-sm text-white placeholder-slate-400 outline-none focus:border-pink-500"
-                />
-              </div>
-            </div>
-          )}
-
-          <div className={cx('overflow-y-auto py-1', maxMenuHeightClassName || 'max-h-56')}>
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((option) => {
-                const isSelected = option.value === value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => {
-                      onChange(option.value);
-                      setIsOpen(false);
-                    }}
-                    className={cx(
-                      'w-full px-4 py-2.5 text-left text-sm transition sm:text-base',
-                      isSelected ? 'bg-pink-500/20 text-pink-100' : 'text-slate-200 hover:bg-slate-800',
-                      optionClassName,
-                      isSelected && selectedOptionClassName
-                    )}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })
-            ) : (
-              <p className="px-4 py-3 text-sm text-slate-400">{emptyText}</p>
-            )}
-          </div>
-        </div>
-      )}
+      {menuNode && typeof document !== 'undefined' ? createPortal(menuNode, document.body) : null}
     </div>
   );
 };
