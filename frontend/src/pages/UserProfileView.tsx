@@ -133,13 +133,14 @@ const ProfilePage = () => {
   const navigate = useNavigate();
   const { getUserProfileById, user: contextUser } = useAuthContext();
   const { likeUser, passUser } = useMatching();
-  const { mutual } = useMatches();
+  const { mutual, sent, refetch: refetchMatches } = useMatches();
 
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [profile, setProfile] = useState<User | null>(null);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<'like' | 'pass' | null>(null);
+  const [hasLikedFromProfile, setHasLikedFromProfile] = useState(false);
 
   const layoutName = contextUser?.name || 'User';
   const layoutImage = contextUser?.profilePhoto1 || undefined;
@@ -171,6 +172,10 @@ const ProfilePage = () => {
     setCurrentPhotoIndex(0);
   }, [profile?.id]);
 
+  useEffect(() => {
+    setHasLikedFromProfile(false);
+  }, [profile?.id]);
+
   const currentPhotoUrl = photos[currentPhotoIndex] || photos[0];
   const isOwnProfile = Boolean(contextUser?.id && profile?.id && contextUser.id === profile.id);
 
@@ -190,6 +195,46 @@ const ProfilePage = () => {
   }, [mutual]);
 
   const isMutual = Boolean(profile?.id && mutualIds.has(String(profile.id)));
+  const sentIds = useMemo(() => {
+    const list = Array.isArray(sent)
+      ? sent
+      : sent && typeof sent === 'object' && 'matches' in (sent as Record<string, unknown>)
+      ? ((sent as { matches?: Array<Record<string, unknown>> }).matches ?? [])
+      : [];
+
+    return new Set(
+      list
+        .map((item) => item?.likedUserId || item?.id || item?.likedUser?.id || item?.userId || item?.matchedUserId)
+        .filter(Boolean)
+        .map((id) => String(id))
+    );
+  }, [sent]);
+  const hasSentLike = Boolean(profile?.id && (hasLikedFromProfile || sentIds.has(String(profile.id))));
+  const showMessageAction = !isOwnProfile && isMutual;
+  const showPendingLikeState = !isOwnProfile && !isMutual && hasSentLike;
+
+  useEffect(() => {
+    if (!profile?.id || isOwnProfile || isMutual || !hasSentLike) return;
+
+    const intervalId = window.setInterval(() => {
+      void refetchMatches();
+    }, 12000);
+
+    const syncOnVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void refetchMatches();
+      }
+    };
+
+    window.addEventListener('focus', syncOnVisible);
+    document.addEventListener('visibilitychange', syncOnVisible);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', syncOnVisible);
+      document.removeEventListener('visibilitychange', syncOnVisible);
+    };
+  }, [hasSentLike, isMutual, isOwnProfile, profile?.id, refetchMatches]);
 
   const nextPhoto = () => {
     setCurrentPhotoIndex((prev) => (prev + 1) % photos.length);
@@ -209,6 +254,8 @@ const ProfilePage = () => {
     setActionLoading('like');
     try {
       await likeUser(profile.id);
+      setHasLikedFromProfile(true);
+      void refetchMatches();
     } finally {
       setActionLoading(null);
     }
@@ -385,7 +432,7 @@ const ProfilePage = () => {
 
           {!isOwnProfile && (
             <div className="hidden rounded-[34px] border border-slate-200 bg-white p-4 shadow-[0_18px_40px_rgba(15,23,42,0.06)] lg:block">
-              {isMutual ? (
+              {showMessageAction ? (
                 <button
                   onClick={handleMessage}
                   type="button"
@@ -394,6 +441,10 @@ const ProfilePage = () => {
                   <MessageCircle className="h-4 w-4" />
                   Message {firstName}
                 </button>
+              ) : showPendingLikeState ? (
+                <div className="rounded-2xl border border-pink-200 bg-pink-50 px-4 py-3 text-center text-sm font-semibold text-pink-700">
+                  Like sent. We&apos;ll unlock messaging when it becomes a match.
+                </div>
               ) : (
                 <div className="flex items-center justify-between gap-3">
                   <button
@@ -615,7 +666,7 @@ const ProfilePage = () => {
       {!isOwnProfile && (
         <div className="fixed inset-x-0 bottom-0 z-40 px-4 py-4 lg:hidden">
           <div className="mx-auto flex w-full max-w-4xl items-center justify-between rounded-[32px] border border-slate-200 bg-white/94 px-5 py-4 shadow-[0_16px_40px_rgba(15,23,42,0.1)] backdrop-blur-xl">
-            {isMutual ? (
+            {showMessageAction ? (
               <button
                 onClick={handleMessage}
                 type="button"
@@ -624,6 +675,10 @@ const ProfilePage = () => {
                 <MessageCircle className="h-4 w-4" />
                 Message
               </button>
+            ) : showPendingLikeState ? (
+              <div className="w-full rounded-2xl border border-pink-200 bg-pink-50 px-4 py-3 text-center text-sm font-semibold text-pink-700">
+                Like sent. We&apos;ll unlock messaging when it becomes a match.
+              </div>
             ) : (
               <>
                 <button
