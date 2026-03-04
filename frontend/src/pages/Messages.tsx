@@ -1183,36 +1183,86 @@ const MessagesContent = () => {
     const nextFacingMode = callCameraFacingMode === 'user' ? 'environment' : 'user';
 
     try {
+      const currentVideoTrack = currentStream.getVideoTracks()[0];
+      const currentDeviceId = currentVideoTrack?.getSettings().deviceId;
+      const devices = typeof navigator.mediaDevices.enumerateDevices === 'function'
+        ? await navigator.mediaDevices.enumerateDevices()
+        : [];
+      const videoInputs = devices.filter((device) => device.kind === 'videoinput');
+
+      const scoreCameraDevice = (device: MediaDeviceInfo) => {
+        const label = device.label.toLowerCase();
+        if (nextFacingMode === 'environment') {
+          if (label.includes('back') || label.includes('rear') || label.includes('environment')) return 3;
+          if (label.includes('front') || label.includes('user') || label.includes('facetime')) return 0;
+          return 1;
+        }
+
+        if (label.includes('front') || label.includes('user') || label.includes('facetime')) return 3;
+        if (label.includes('back') || label.includes('rear') || label.includes('environment')) return 0;
+        return 1;
+      };
+
+      const preferredAlternateDevice = videoInputs
+        .filter((device) => device.deviceId && device.deviceId !== currentDeviceId)
+        .sort((a, b) => scoreCameraDevice(b) - scoreCameraDevice(a))[0];
+
       let replacementStream: MediaStream | null = null;
-      try {
-        replacementStream = await navigator.mediaDevices.getUserMedia({
+      const attemptConstraints: MediaStreamConstraints[] = [];
+
+      if (preferredAlternateDevice?.deviceId) {
+        attemptConstraints.push({
+          audio: false,
+          video: {
+            deviceId: { exact: preferredAlternateDevice.deviceId },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        });
+      }
+
+      attemptConstraints.push(
+        {
           audio: false,
           video: {
             facingMode: { exact: nextFacingMode },
             width: { ideal: 1280 },
             height: { ideal: 720 },
           },
-        });
-      } catch {
+        },
+        {
+          audio: false,
+          video: {
+            facingMode: nextFacingMode,
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        },
+        {
+          audio: false,
+          video: true,
+        }
+      );
+
+      let lastError: unknown = null;
+      for (const constraints of attemptConstraints) {
         try {
-          replacementStream = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: {
-              facingMode: nextFacingMode,
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-            },
-          });
-        } catch {
-          replacementStream = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: true,
-          });
+          replacementStream = await navigator.mediaDevices.getUserMedia(constraints);
+          const track = replacementStream.getVideoTracks()[0];
+          const nextDeviceId = track?.getSettings().deviceId;
+          if (track && nextDeviceId && currentDeviceId && nextDeviceId === currentDeviceId && videoInputs.length > 1) {
+            replacementStream.getTracks().forEach((mediaTrack) => mediaTrack.stop());
+            replacementStream = null;
+            continue;
+          }
+          break;
+        } catch (error) {
+          lastError = error;
         }
       }
 
       if (!replacementStream) {
-        throw new Error('No replacement stream available.');
+        throw lastError instanceof Error ? lastError : new Error('No replacement stream available.');
       }
 
       const nextVideoTrack = replacementStream.getVideoTracks()[0];
@@ -1249,7 +1299,7 @@ const MessagesContent = () => {
       setCallCameraFacingMode(nextFacingMode);
     } catch (error) {
       console.error('Failed to switch call camera:', error);
-      showError('Unable to switch camera right now.', 'Camera Error');
+      showError('Unable to switch camera right now. Your browser may only expose one camera.', 'Camera Error');
     }
   }, [callCameraFacingMode, callMode, isCallCameraOff, showError]);
 
