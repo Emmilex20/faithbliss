@@ -1181,6 +1181,8 @@ const MessagesContent = () => {
     if (!currentStream || !navigator.mediaDevices?.getUserMedia) return;
 
     const nextFacingMode = callCameraFacingMode === 'user' ? 'environment' : 'user';
+    let exposedCameraCount: number | null = null;
+    let exposedCameraLabels: string[] = [];
 
     try {
       const currentVideoTrack = currentStream.getVideoTracks()[0];
@@ -1189,6 +1191,8 @@ const MessagesContent = () => {
         ? await navigator.mediaDevices.enumerateDevices()
         : [];
       const videoInputs = devices.filter((device) => device.kind === 'videoinput');
+      exposedCameraCount = videoInputs.length;
+      exposedCameraLabels = videoInputs.map((device) => device.label || '(unlabeled camera)');
 
       const scoreCameraDevice = (device: MediaDeviceInfo) => {
         const label = device.label.toLowerCase();
@@ -1299,7 +1303,17 @@ const MessagesContent = () => {
       setCallCameraFacingMode(nextFacingMode);
     } catch (error) {
       console.error('Failed to switch call camera:', error);
-      showError('Unable to switch camera right now. Your browser may only expose one camera.', 'Camera Error');
+      console.info('Call camera switch diagnostic:', {
+        currentFacingMode: callCameraFacingMode,
+        nextFacingMode,
+        exposedCameraCount,
+        exposedCameraLabels,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      const recoveryMessage = exposedCameraCount !== null && exposedCameraCount <= 1
+        ? 'Unable to switch camera right now. Try refreshing the page or closing other apps using your camera. Your browser may be limiting camera access.'
+        : 'Unable to switch camera right now. Try refreshing the page or closing other apps using your camera.';
+      showError(recoveryMessage, 'Camera Switch Unavailable');
     }
   }, [callCameraFacingMode, callMode, isCallCameraOff, showError]);
 
