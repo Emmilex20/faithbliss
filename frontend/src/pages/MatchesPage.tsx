@@ -182,7 +182,7 @@ const MatchesPage = () => {
 
   if (error) {
     const errorContent = (
-      <div className="pt-20 pb-8 px-4">
+      <div className="pt-5 sm:pt-6 lg:pt-8 pb-8 px-4">
         <div className="max-w-4xl mx-auto">
           <div className="mb-6 flex items-center justify-start">
             <button
@@ -283,7 +283,7 @@ const MatchesPage = () => {
       : receivedRequests;
 
   const content = (
-    <div className="pt-20 pb-8 px-4">
+    <div className="pt-5 sm:pt-6 lg:pt-8 pb-8 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6 flex items-center justify-start">
           <button
