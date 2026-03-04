@@ -447,20 +447,12 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
           user={currentUserData}
           onPrimary={() => {
             setShowPostOnboardingOverlay(false);
-            setShowFilters(true);
             try {
               localStorage.removeItem('faithbliss_show_post_onboarding_offer');
             } catch {
               // Ignore localStorage access errors.
             }
-          }}
-          onDismiss={() => {
-            setShowPostOnboardingOverlay(false);
-            try {
-              localStorage.removeItem('faithbliss_show_post_onboarding_offer');
-            } catch {
-              // Ignore localStorage access errors.
-            }
+            navigate('/dashboard', { replace: true });
           }}
         />
       )}

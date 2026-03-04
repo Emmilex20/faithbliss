@@ -7,6 +7,7 @@ interface LocationPermissionSlideProps {
   onboardingData: OnboardingData;
   setOnboardingData: React.Dispatch<React.SetStateAction<OnboardingData>>;
   isVisible: boolean;
+  onLocationResolved?: () => void;
 }
 
 const reverseGeocode = async (latitude: number, longitude: number): Promise<string> => {
@@ -24,6 +25,7 @@ const LocationPermissionSlide: React.FC<LocationPermissionSlideProps> = ({
   onboardingData,
   setOnboardingData,
   isVisible,
+  onLocationResolved,
 }) => {
   const [isRequesting, setIsRequesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,12 +46,16 @@ const LocationPermissionSlide: React.FC<LocationPermissionSlideProps> = ({
         try {
           const { latitude, longitude } = position.coords;
           const address = await reverseGeocode(latitude, longitude);
+          const resolvedLocation = (address || onboardingData.location || '').trim();
           setOnboardingData((prev) => ({
             ...prev,
             latitude,
             longitude,
             location: address || prev.location,
           }));
+          if (resolvedLocation) {
+            onLocationResolved?.();
+          }
         } catch {
           const { latitude, longitude } = position.coords;
           setOnboardingData((prev) => ({

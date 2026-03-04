@@ -175,6 +175,8 @@ const OnboardingPage = () => {
     }
   }, [currentStep, onboardingData, validationError]);
 
+  const canProceedToNext = !getStepValidationError(currentStep, onboardingData);
+
   // --- STEP CONTROLS ---
   const nextStep = async () => {
     setValidationError(null);
@@ -280,6 +282,9 @@ const OnboardingPage = () => {
             isVisible={currentStep === 1}
             onboardingData={onboardingData}
             setOnboardingData={setOnboardingData}
+            onLocationResolved={() => {
+              void nextStep();
+            }}
           />
           <RelationshipGoalsSlide
             isVisible={currentStep === 3}
@@ -313,6 +318,7 @@ const OnboardingPage = () => {
         currentSlide={currentStep}
         totalSlides={totalSteps}
         canGoBack={currentStep > 0}
+        canProceed={canProceedToNext}
         submitting={isCompletingOnboarding}
         validationError={validationError}
         onPrevious={prevStep}
