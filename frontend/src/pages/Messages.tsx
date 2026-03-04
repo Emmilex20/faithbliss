@@ -594,6 +594,10 @@ const MessagesContent = () => {
     if (typeof window === 'undefined') return true;
     return window.innerWidth >= 1024;
   });
+  const [isCompactCallViewport, setIsCompactCallViewport] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= 380 || window.innerHeight <= 740;
+  });
   const layoutName = layoutUser?.name || 'User';
   const layoutImage = layoutUser?.profilePhoto1 || undefined;
   const currentUserId = layoutUser?.id;
@@ -1339,13 +1343,13 @@ const MessagesContent = () => {
     const height = card?.offsetHeight || 176;
     const margin = 14;
     const maxX = Math.max(margin, window.innerWidth - width - margin);
-    const reservedBottomSpace = 218;
+    const reservedBottomSpace = isCompactCallViewport ? 192 : 218;
     const maxY = Math.max(margin, window.innerHeight - height - reservedBottomSpace);
     return {
       x: Math.min(Math.max(margin, x), maxX),
       y: Math.min(Math.max(margin, y), maxY),
     };
-  }, []);
+  }, [isCompactCallViewport]);
 
   const startLocalPreviewDrag = useCallback((clientX: number, clientY: number) => {
     const card = localPreviewContainerRef.current;
@@ -1383,7 +1387,7 @@ const MessagesContent = () => {
       const height = card?.offsetHeight || 176;
       return clampLocalPreviewPosition(
         window.innerWidth - width - 16,
-        window.innerHeight - height - 236
+        window.innerHeight - height - (isCompactCallViewport ? 208 : 236)
       );
     });
 
@@ -1398,12 +1402,13 @@ const MessagesContent = () => {
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, [callMode, callStatus, clampLocalPreviewPosition, isDesktopLayout]);
+  }, [callMode, callStatus, clampLocalPreviewPosition, isCompactCallViewport, isDesktopLayout]);
 
   useEffect(() => {
     if (callStatus === 'idle' || isDesktopLayout) return;
 
     const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType === 'touch') return;
       updateLocalPreviewDrag(event.clientX, event.clientY);
     };
     const onPointerUp = () => {
@@ -1413,10 +1418,26 @@ const MessagesContent = () => {
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerUp);
+    const onTouchMove = (event: TouchEvent) => {
+      if (!localPreviewDragStateRef.current.dragging) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      event.preventDefault();
+      updateLocalPreviewDrag(touch.clientX, touch.clientY);
+    };
+    const onTouchEnd = () => {
+      stopLocalPreviewDrag();
+    };
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
     return () => {
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerUp);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
     };
   }, [callStatus, isDesktopLayout, stopLocalPreviewDrag, updateLocalPreviewDrag]);
 
@@ -1534,6 +1555,20 @@ const MessagesContent = () => {
 
     mediaQuery.addListener(onChange);
     return () => mediaQuery.removeListener(onChange);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const updateCompactViewport = () => {
+      setIsCompactCallViewport(window.innerWidth <= 380 || window.innerHeight <= 740);
+    };
+
+    updateCompactViewport();
+    window.addEventListener('resize', updateCompactViewport);
+    return () => {
+      window.removeEventListener('resize', updateCompactViewport);
+    };
   }, []);
 
   useEffect(() => {
@@ -2923,6 +2958,7 @@ const MessagesContent = () => {
     }
 
     const isMobileCallView = !isDesktopLayout;
+    const isCompactMobileCallView = isMobileCallView && isCompactCallViewport;
     const hasLocalPreviewPosition = Boolean(localPreviewPosition);
 
     const handleCallGestureStart = (event: ReactTouchEvent<HTMLDivElement>) => {
@@ -2991,31 +3027,31 @@ const MessagesContent = () => {
           <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/55" />
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.06),transparent_30%),linear-gradient(180deg,rgba(244,114,182,0.08),transparent_24%,transparent_62%,rgba(12,18,30,0.38)_100%)] mix-blend-screen" />
 
-          <div className="absolute top-4 left-4 right-4 flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3 rounded-2xl border border-white/15 bg-black/35 px-3 py-2 backdrop-blur-xl">
+          <div className={`absolute left-4 right-4 flex items-start justify-between ${isCompactMobileCallView ? 'top-3 gap-2.5' : 'top-4 gap-3'}`}>
+            <div className={`flex items-center rounded-2xl border border-white/15 bg-black/35 backdrop-blur-xl ${isCompactMobileCallView ? 'gap-2 px-2.5 py-2' : 'gap-3 px-3 py-2'}`}>
               <OptimizedImage
                 src={callPeerAvatar}
                 alt={callPeerName}
                 width={44}
                 height={44}
-                className="w-11 h-11 rounded-full object-cover ring-2 ring-pink-400/50"
+                className={isCompactMobileCallView ? 'w-9 h-9 rounded-full object-cover ring-2 ring-pink-400/50' : 'w-11 h-11 rounded-full object-cover ring-2 ring-pink-400/50'}
               />
               <div className="min-w-0">
-                <p className="text-white font-semibold truncate">{callPeerName}</p>
-                <p className="text-xs text-white/75">{callStatusLabel}</p>
+                <p className={`text-white font-semibold truncate ${isCompactMobileCallView ? 'text-[0.95rem]' : ''}`}>{callPeerName}</p>
+                <p className={`${isCompactMobileCallView ? 'text-[11px]' : 'text-xs'} text-white/75`}>{callStatusLabel}</p>
                 {isMobileCallView ? (
-                  <p className={`mt-0.5 text-[11px] font-medium ${callQualityToneClass}`}>📶 {callQualityLabel}</p>
+                  <p className={`mt-0.5 font-medium ${isCompactMobileCallView ? 'text-[10px]' : 'text-[11px]'} ${callQualityToneClass}`}>📶 {callQualityLabel}</p>
                 ) : null}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className={`flex items-center ${isCompactMobileCallView ? 'gap-1.5' : 'gap-2'}`}>
               <button
                 type="button"
                 onClick={() => setIsCallMinimized(true)}
-                className="inline-flex items-center justify-center h-11 w-11 rounded-2xl bg-white/15 hover:bg-white/25 text-white border border-white/25 transition-colors"
+                className={`inline-flex items-center justify-center rounded-2xl bg-white/15 hover:bg-white/25 text-white border border-white/25 transition-colors ${isCompactMobileCallView ? 'h-10 w-10' : 'h-11 w-11'}`}
                 aria-label="Minimize call"
               >
-                <Minimize2 className="w-4 h-4" />
+                <Minimize2 className={isCompactMobileCallView ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
               </button>
               <button
                 type="button"
@@ -3026,10 +3062,10 @@ const MessagesContent = () => {
                   }
                   endActiveCall({ notifyPeer: true, reason: 'ended-by-user' });
                 }}
-                className="inline-flex items-center justify-center h-11 w-11 rounded-2xl bg-rose-500/80 hover:bg-rose-500 text-white border border-rose-300/45 transition-colors"
+                className={`inline-flex items-center justify-center rounded-2xl bg-rose-500/80 hover:bg-rose-500 text-white border border-rose-300/45 transition-colors ${isCompactMobileCallView ? 'h-10 w-10' : 'h-11 w-11'}`}
                 aria-label="End call"
               >
-                <PhoneOff className="w-4 h-4" />
+                <PhoneOff className={isCompactMobileCallView ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
               </button>
             </div>
           </div>
@@ -3038,16 +3074,23 @@ const MessagesContent = () => {
             <div
               ref={localPreviewContainerRef}
               data-call-control="true"
-              className={`absolute overflow-hidden border bg-black/30 ${isMobileCallView ? 'w-24 h-36 rounded-[1.35rem] border-white/35 shadow-[0_16px_40px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.14),0_0_24px_rgba(244,114,182,0.16)] backdrop-blur-md' : 'right-3 bottom-24 md:right-4 md:bottom-28 w-28 h-40 sm:w-32 sm:h-44 rounded-2xl border-white/25 shadow-2xl'} ${isLocalPreviewDragging ? '' : 'transition-[left,top,transform] duration-200 ease-out'} ${isMobileCallView ? 'cursor-grab active:cursor-grabbing' : ''}`}
+              className={`absolute overflow-hidden border bg-black/30 ${isMobileCallView ? `${isCompactMobileCallView ? 'w-20 h-28 rounded-[1.15rem]' : 'w-24 h-36 rounded-[1.35rem]'} border-white/35 shadow-[0_16px_40px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.14),0_0_24px_rgba(244,114,182,0.16)] backdrop-blur-md touch-none select-none` : 'right-3 bottom-24 md:right-4 md:bottom-28 w-28 h-40 sm:w-32 sm:h-44 rounded-2xl border-white/25 shadow-2xl'} ${isLocalPreviewDragging ? '' : 'transition-[left,top,transform] duration-200 ease-out'} ${isMobileCallView ? 'cursor-grab active:cursor-grabbing' : ''}`}
               style={isMobileCallView
                 ? (hasLocalPreviewPosition
                     ? { left: localPreviewPosition!.x, top: localPreviewPosition!.y }
-                    : { right: 16, bottom: 236 })
+                    : { right: 16, bottom: isCompactMobileCallView ? 208 : 236 })
                 : undefined}
               onPointerDown={(event) => {
                 if (!isMobileCallView) return;
+                if (event.pointerType === 'touch') return;
                 event.preventDefault();
                 startLocalPreviewDrag(event.clientX, event.clientY);
+              }}
+              onTouchStart={(event) => {
+                if (!isMobileCallView) return;
+                const touch = event.touches[0];
+                if (!touch) return;
+                startLocalPreviewDrag(touch.clientX, touch.clientY);
               }}
             >
               <div className="pointer-events-none absolute inset-0 z-10 rounded-[inherit] ring-1 ring-white/20" />
@@ -3057,13 +3100,13 @@ const MessagesContent = () => {
                   autoPlay
                   muted
                   playsInline
-                  className="h-full w-full object-cover"
+                  className="pointer-events-none h-full w-full object-cover"
                   style={callVideoFilterStyle}
                 />
               </div>
             )}
 
-          <div className="absolute inset-x-0 bottom-0 p-4 md:p-5">
+          <div className={`absolute inset-x-0 bottom-0 ${isCompactMobileCallView ? 'p-3' : 'p-4 md:p-5'}`}>
             {callStatus === 'ringing' && incomingCall ? (
               <div className="mx-auto w-full max-w-md rounded-2xl border border-white/20 bg-black/45 backdrop-blur-xl p-4">
                 <p className="text-center text-sm text-white/85 mb-3">
@@ -3089,14 +3132,14 @@ const MessagesContent = () => {
             ) : (
               <div
                 data-call-control="true"
-                className={`mx-auto w-full ${isMobileCallView ? 'max-w-[20rem] rounded-[1.8rem] border-white/18 bg-black/34 px-3.5 py-2.5 shadow-[0_22px_48px_rgba(0,0,0,0.26)]' : 'max-w-md rounded-2xl border-white/20 bg-black/45 px-4 py-3'} border backdrop-blur-2xl`}
+                className={`mx-auto w-full ${isMobileCallView ? `${isCompactMobileCallView ? 'max-w-[17.75rem] rounded-[1.55rem] px-3 py-2' : 'max-w-[20rem] rounded-[1.8rem] px-3.5 py-2.5'} border-white/18 bg-black/34 shadow-[0_22px_48px_rgba(0,0,0,0.26)]` : 'max-w-md rounded-2xl border-white/20 bg-black/45 px-4 py-3'} border backdrop-blur-2xl`}
               >
-                <div className={`flex items-center justify-center ${isMobileCallView ? 'gap-2.5' : 'gap-3'}`}>
+                <div className={`flex items-center justify-center ${isMobileCallView ? (isCompactMobileCallView ? 'gap-2' : 'gap-2.5') : 'gap-3'}`}>
                   <button
                     type="button"
                     onClick={toggleCallMic}
                     className={`inline-flex items-center justify-center border transition-all duration-150 active:scale-95 ${
-                      isMobileCallView ? 'h-12 w-12 rounded-2xl shadow-[0_10px_26px_rgba(0,0,0,0.22)]' : 'h-11 w-11 rounded-xl'
+                      isMobileCallView ? `${isCompactMobileCallView ? 'h-10 w-10 rounded-[1.15rem]' : 'h-12 w-12 rounded-2xl'} shadow-[0_10px_26px_rgba(0,0,0,0.22)]` : 'h-11 w-11 rounded-xl'
                     } ${
                       isCallMicMuted
                         ? 'bg-white/90 text-gray-900 border-white'
@@ -3104,14 +3147,14 @@ const MessagesContent = () => {
                     }`}
                     aria-label={isCallMicMuted ? 'Unmute microphone' : 'Mute microphone'}
                   >
-                    {isCallMicMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    {isCallMicMuted ? <MicOff className={isCompactMobileCallView ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> : <Mic className={isCompactMobileCallView ? 'w-3.5 h-3.5' : 'w-4 h-4'} />}
                   </button>
                   {callMode === 'video' && (
                     <button
                       type="button"
                       onClick={toggleCallCamera}
                       className={`inline-flex items-center justify-center border transition-all duration-150 active:scale-95 ${
-                        isMobileCallView ? 'h-12 w-12 rounded-2xl shadow-[0_10px_26px_rgba(0,0,0,0.22)]' : 'h-11 w-11 rounded-xl'
+                        isMobileCallView ? `${isCompactMobileCallView ? 'h-10 w-10 rounded-[1.15rem]' : 'h-12 w-12 rounded-2xl'} shadow-[0_10px_26px_rgba(0,0,0,0.22)]` : 'h-11 w-11 rounded-xl'
                       } ${
                         isCallCameraOff
                           ? 'bg-white/90 text-gray-900 border-white'
@@ -3119,20 +3162,20 @@ const MessagesContent = () => {
                       }`}
                       aria-label={isCallCameraOff ? 'Turn camera on' : 'Turn camera off'}
                     >
-                      {isCallCameraOff ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
+                      {isCallCameraOff ? <VideoOff className={isCompactMobileCallView ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> : <Video className={isCompactMobileCallView ? 'w-3.5 h-3.5' : 'w-4 h-4'} />}
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={() => endActiveCall({ notifyPeer: true, reason: 'ended-by-user' })}
-                    className={`inline-flex items-center justify-center bg-rose-500 hover:bg-rose-600 text-white transition-all duration-150 active:scale-95 ${isMobileCallView ? 'h-12 w-14 rounded-2xl shadow-[0_16px_30px_rgba(244,63,94,0.32)]' : 'h-11 w-14 rounded-xl'}`}
+                    className={`inline-flex items-center justify-center bg-rose-500 hover:bg-rose-600 text-white transition-all duration-150 active:scale-95 ${isMobileCallView ? `${isCompactMobileCallView ? 'h-10 w-12 rounded-[1.15rem]' : 'h-12 w-14 rounded-2xl'} shadow-[0_16px_30px_rgba(244,63,94,0.32)]` : 'h-11 w-14 rounded-xl'}`}
                     aria-label="Hang up call"
                   >
-                    <PhoneOff className="w-4 h-4" />
+                    <PhoneOff className={isCompactMobileCallView ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
                   </button>
                 </div>
                 {callMode === 'video' && (
-                  <div className={`mt-2.5 grid grid-cols-2 ${isMobileCallView ? 'gap-2' : 'gap-2'}`}>
+                  <div className={`grid grid-cols-2 ${isMobileCallView ? (isCompactMobileCallView ? 'mt-2 gap-1.5' : 'mt-2.5 gap-2') : 'mt-2.5 gap-2'}`}>
                     <AppDropdown
                       value={selectedVideoFilterId}
                       onChange={setSelectedVideoFilterId}
@@ -3141,7 +3184,7 @@ const MessagesContent = () => {
                         label: preset.label,
                       }))}
                       placeholder="Filter"
-                      triggerClassName={`${isMobileCallView ? 'h-11 rounded-2xl border-white/18 bg-white/8 px-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'h-9 rounded-lg border border-white/20 bg-white/10 px-2 text-xs text-white'} focus:border-pink-300/70`}
+                      triggerClassName={`${isMobileCallView ? `${isCompactMobileCallView ? 'h-9 rounded-[1rem] px-2.5 text-xs' : 'h-11 rounded-2xl px-3 text-sm'} border-white/18 bg-white/8 font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]` : 'h-9 rounded-lg border border-white/20 bg-white/10 px-2 text-xs text-white'} focus:border-pink-300/70`}
                       menuClassName="z-[140] border-white/20 bg-slate-900/98"
                       optionClassName="text-xs sm:text-sm"
                       ariaLabel="Video filter"
@@ -3154,7 +3197,7 @@ const MessagesContent = () => {
                         label: preset.label,
                       }))}
                       placeholder="Background"
-                      triggerClassName={`${isMobileCallView ? 'h-11 rounded-2xl border-white/18 bg-white/8 px-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'h-9 rounded-lg border border-white/20 bg-white/10 px-2 text-xs text-white'} focus:border-pink-300/70`}
+                      triggerClassName={`${isMobileCallView ? `${isCompactMobileCallView ? 'h-9 rounded-[1rem] px-2.5 text-xs' : 'h-11 rounded-2xl px-3 text-sm'} border-white/18 bg-white/8 font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]` : 'h-9 rounded-lg border border-white/20 bg-white/10 px-2 text-xs text-white'} focus:border-pink-300/70`}
                       menuClassName="z-[140] border-white/20 bg-slate-900/98"
                       optionClassName="text-xs sm:text-sm"
                       ariaLabel="Call background"
@@ -3162,35 +3205,35 @@ const MessagesContent = () => {
                   </div>
                 )}
                 {isMobileCallView && callMode === 'video' ? (
-                  <div className="mt-2.5 flex items-center justify-between gap-1.5 rounded-[1.2rem] border border-white/10 bg-white/[0.03] px-2.5 py-2 text-[10px] text-white/75">
+                  <div className={`flex items-center justify-between rounded-[1.2rem] border border-white/10 bg-white/[0.03] text-white/75 ${isCompactMobileCallView ? 'mt-2 gap-1 px-2 py-1.5 text-[9px]' : 'mt-2.5 gap-1.5 px-2.5 py-2 text-[10px]'}`}>
                     <button
                       type="button"
                       data-call-control="true"
                       onClick={() => void switchCallCameraFacing()}
-                      className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 transition-transform duration-150 active:scale-95"
+                      className={`inline-flex items-center rounded-full transition-transform duration-150 active:scale-95 ${isCompactMobileCallView ? 'gap-1 px-1.5 py-0.5' : 'gap-1.5 px-2 py-1'}`}
                       aria-label="Switch camera"
                     >
-                      <RefreshCcw className="h-3.5 w-3.5" />
+                      <RefreshCcw className={isCompactMobileCallView ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
                       <span>Swipe up</span>
                     </button>
                     <button
                       type="button"
                       data-call-control="true"
                       onClick={cycleCallVideoFilter}
-                      className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 transition-transform duration-150 active:scale-95"
+                      className={`inline-flex items-center rounded-full transition-transform duration-150 active:scale-95 ${isCompactMobileCallView ? 'gap-1 px-1.5 py-0.5' : 'gap-1.5 px-2 py-1'}`}
                       aria-label="Cycle video filters"
                     >
-                      <Wand2 className="h-3.5 w-3.5" />
+                      <Wand2 className={isCompactMobileCallView ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
                       <span>Swipe left</span>
                     </button>
                     <button
                       type="button"
                       data-call-control="true"
                       onClick={cycleCallBackground}
-                      className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 transition-transform duration-150 active:scale-95"
+                      className={`inline-flex items-center rounded-full transition-transform duration-150 active:scale-95 ${isCompactMobileCallView ? 'gap-1 px-1.5 py-0.5' : 'gap-1.5 px-2 py-1'}`}
                       aria-label="Cycle backgrounds"
                     >
-                      <ImageIcon className="h-3.5 w-3.5" />
+                      <ImageIcon className={isCompactMobileCallView ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
                       <span>Swipe right</span>
                     </button>
                   </div>
