@@ -1,7 +1,8 @@
 // src/pages/Help.tsx
 
 import { useState } from 'react';
-import { HelpCircle, Send } from 'lucide-react';
+import { ArrowLeft, HelpCircle, Send } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { TopBar } from '@/components/dashboard/TopBar';
 import { SidePanel } from '@/components/dashboard/SidePanel';
@@ -42,6 +43,17 @@ const HelpContent = () => {
   const mainContent = (
     <div className="px-6 py-10 lg:px-12">
       <div className="max-w-3xl space-y-6">
+        <div className="flex items-center justify-start">
+          <Link
+            to="/dashboard"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition hover:bg-white/15"
+            aria-label="Back to dashboard"
+            title="Back to dashboard"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+        </div>
+
         <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
           <div className="flex items-center gap-3">
             <div className="rounded-2xl bg-pink-500/20 p-3 text-pink-200">

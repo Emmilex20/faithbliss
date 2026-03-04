@@ -550,21 +550,13 @@ const ExploreContent = () => {
         <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
           <button
             type="button"
-            onClick={() => navigate('/dashboard')}
-            className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition hover:bg-white/15"
-            aria-label="Back to dashboard"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
             onClick={resetToGrid}
             className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition hover:bg-white/15"
             aria-label="Back to explore categories"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <div className="pointer-events-auto inline-flex max-w-[calc(100vw-5.75rem)] items-center gap-2 rounded-[1.35rem] border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-semibold uppercase leading-tight tracking-[0.18em] text-cyan-100 sm:max-w-none sm:rounded-full sm:py-1 sm:text-[11px] sm:tracking-[0.22em]">
+          <div className="pointer-events-auto inline-flex max-w-[calc(100vw-3.5rem)] items-center gap-2 rounded-[1.35rem] border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-semibold uppercase leading-tight tracking-[0.18em] text-cyan-100 sm:max-w-none sm:rounded-full sm:py-1 sm:text-[11px] sm:tracking-[0.22em]">
             <Sparkles className="h-3.5 w-3.5" />
             <span className="break-words">{selectedFit}</span>
           </div>

@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import {
+  ArrowLeft,
   Crown,
   Sparkles,
   ShieldCheck,
@@ -17,7 +18,7 @@ import { SidePanel } from '@/components/dashboard/SidePanel';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { API } from '@/services/api';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 type Plan = {
   tier: 'free' | 'premium' | 'elite';
@@ -224,6 +225,17 @@ const PremiumContent = () => {
         <div className="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-purple-500/20 blur-3xl" />
 
         <div className="relative px-6 py-12 lg:px-12 lg:py-16">
+          <div className="mb-6 flex items-center justify-start">
+            <Link
+              to="/dashboard"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition hover:bg-white/15"
+              aria-label="Back to dashboard"
+              title="Back to dashboard"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+          </div>
+
           <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
             <div className="max-w-2xl space-y-4">
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-pink-200">

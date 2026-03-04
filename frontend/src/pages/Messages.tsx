@@ -2785,11 +2785,11 @@ const MessagesContent = () => {
       } else if (!found && selectedChat === profileIdParam) {
         didAutoSelect.current = true;
       }
-    } else if (!selectedChat && !didAutoSelect.current) {
+    } else if (!selectedChat && !didAutoSelect.current && isDesktopLayout) {
       setSelectedChat(localConversations[0]?.id);
       didAutoSelect.current = true;
     }
-  }, [localConversations, profileIdParam, selectedChat]);
+  }, [isDesktopLayout, localConversations, profileIdParam, selectedChat]);
 
   const handleConversationListScroll = useCallback(() => {
     const el = conversationsListRef.current;
@@ -3712,6 +3712,22 @@ const MessagesContent = () => {
         <div className={`${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-[360px] lg:w-[390px] xl:w-[420px] flex-shrink-0 bg-gradient-to-b from-gray-900/70 to-gray-900/40 backdrop-blur-xl md:border-r border-gray-700/50 overflow-hidden min-w-0 flex-col`}>
           {/* Header */}
           <div className="p-3 md:p-4 border-b border-gray-700/50">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <Link
+                  to="/dashboard"
+                  className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white transition-all duration-300 hover:bg-white/20"
+                  aria-label="Back to dashboard"
+                  title="Back to dashboard"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </Link>
+                <div className="min-w-0">
+                  <h2 className="truncate text-base font-semibold text-white">Messages</h2>
+                  <p className="text-xs text-gray-400">Choose a conversation</p>
+                </div>
+              </div>
+            </div>
             {/* Search Bar */}
             <div className="relative">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />

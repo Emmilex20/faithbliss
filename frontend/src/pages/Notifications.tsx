@@ -225,6 +225,17 @@ const NotificationsContent = () => {
 
     return (
       <div className="max-w-5xl mx-auto px-4 pt-6 pb-12 space-y-6">
+        <div className="flex items-center justify-start">
+          <Link
+            to="/dashboard"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition hover:bg-white/15"
+            aria-label="Back to dashboard"
+            title="Back to dashboard"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+        </div>
+
         <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
           <div className="p-6 rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl">
             <p className="text-xs uppercase tracking-[0.3em] text-slate-400 mb-2">Overview</p>
