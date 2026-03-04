@@ -4,6 +4,7 @@ import { AlertCircle, UploadCloud, X } from 'lucide-react';
 import React from 'react';
 import type { OnboardingData } from './types';
 import { analyzePhotoFaces, validatePhotoFileBasics } from '@/utils/photoValidation';
+import { MIN_ONBOARDING_PHOTOS } from '@/constants/onboarding';
 
 interface ImageUploadSlideProps {
   onboardingData: OnboardingData;
@@ -104,7 +105,7 @@ const ImageUploadSlide = ({ onboardingData, setOnboardingData, isVisible }: Imag
     >
       <div className="text-center">
         <h2 className="text-3xl font-bold text-white">Upload Your Photos</h2>
-        <p className="text-gray-400">Add 2-6 photos. The first two are required. Max 5MB each.</p>
+        <p className="text-gray-400">Add 3-6 photos. The first three are required. Max 5MB each.</p>
         <p className="mt-2 text-sm text-cyan-300">Upload a clear solo photo as your first image.</p>
       </div>
 
@@ -157,8 +158,10 @@ const ImageUploadSlide = ({ onboardingData, setOnboardingData, isVisible }: Imag
         )}
       </div>
 
-      {onboardingData.photos.length < 2 && (
-        <p className="text-center font-semibold text-red-500">You must upload at least 2 photos to continue.</p>
+      {onboardingData.photos.length < MIN_ONBOARDING_PHOTOS && (
+        <p className="text-center font-semibold text-red-500">
+          You must upload at least {MIN_ONBOARDING_PHOTOS} photos to continue.
+        </p>
       )}
     </motion.div>
   );

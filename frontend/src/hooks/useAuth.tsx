@@ -8,6 +8,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useToast } from "@/contexts/ToastContext";
 import { useAuthContext } from "../contexts/AuthContext";
 import type { User } from "@/types/User";
+import { API } from "@/services/api";
 
 //  FIREBASE IMPORTS
 import {
@@ -24,7 +25,7 @@ import {
 } from "firebase/auth";
 import type { User as FirebaseAuthUser } from "firebase/auth";
 //  NEW FIREBASE IMPORTS FOR FIRESTORE
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore"; //  ADDED updateDoc
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db, serverTimestamp } from "@/firebase/config"; // Assuming db and serverTimestamp are exported
 
 // --------------------
@@ -54,16 +55,24 @@ interface OnboardingData {
     phoneNumber?: string; // Added
     countryCode?: string; // Added
     birthday?: Date | string; // Added
+    education?: string; // Legacy onboarding key
+    occupation?: string; // Legacy onboarding key
     fieldOfStudy?: string; // Added
     profession?: string; // Added
     faithJourney?: string; // Added
     sundayActivity?: string; // Added
+    churchAttendance?: string; // Added
+    baptismStatus?: string; // Added
     lookingFor?: string[]; // Added
+    relationshipGoals?: string[]; // Added
     hobbies?: string[]; // Added
     interests?: string[]; // Added
     values?: string[]; // Added
     profileFits?: string[]; // Added
+    spiritualGifts?: string[]; // Added
+    personality?: string[]; // Added
     favoriteVerse?: string; // Added
+    lifestyle?: string; // Added
     drinkingHabit?: string; // Added
     smokingHabit?: string; // Added
     workoutHabit?: string; // Added
@@ -77,6 +86,14 @@ interface OnboardingData {
     loveStyle?: string[]; // Added
     educationLevel?: string; // Added
     zodiacSign?: string; // Added
+    preferredFaithJourney?: string[] | null; // Added
+    preferredChurchAttendance?: string[] | null; // Added
+    preferredRelationshipGoals?: string[] | null; // Added
+    preferredDenomination?: string | null; // Added
+    preferredGender?: string | null; // Added
+    minAge?: number; // Added
+    maxAge?: number; // Added
+    maxDistance?: number; // Added
     preferredMinHeight?: number; // Added
     profilePhoto1?: string; // Expecting the final Cloud Storage URL
     profilePhoto2?: string;
@@ -84,6 +101,7 @@ interface OnboardingData {
     profilePhoto4?: string; 
     profilePhoto5?: string;
     profilePhoto6?: string;
+    profilePhotoCount?: number;
     [key: string]: any; // Allow for dynamic fields to be passed
 }
 
@@ -130,9 +148,12 @@ const sanitizeOnboardingPayload = (payload: OnboardingData): Record<string, any>
         ["denomination", 80],
         ["phoneNumber", 30],
         ["countryCode", 8],
+        ["education", 120],
+        ["occupation", 120],
         ["fieldOfStudy", 120],
         ["profession", 120],
         ["favoriteVerse", 120],
+        ["lifestyle", 80],
         ["drinkingHabit", 80],
         ["smokingHabit", 80],
         ["workoutHabit", 80],
@@ -147,6 +168,7 @@ const sanitizeOnboardingPayload = (payload: OnboardingData): Record<string, any>
         ["churchAttendance", 40],
         ["sundayActivity", 40],
         ["baptismStatus", 40],
+        ["preferredDenomination", 80],
         ["preferredGender", 20],
     ];
 
@@ -169,7 +191,6 @@ const sanitizeOnboardingPayload = (payload: OnboardingData): Record<string, any>
         "preferredFaithJourney",
         "preferredChurchAttendance",
         "preferredRelationshipGoals",
-        "preferredDenomination",
         "personality",
     ];
 
@@ -193,6 +214,7 @@ const sanitizeOnboardingPayload = (payload: OnboardingData): Record<string, any>
         ["maxAge", 18, 99, true],
         ["maxDistance", 1, 500, true],
         ["preferredMinHeight", 120, 220, true],
+        ["profilePhotoCount", 0, 6, true],
     ];
 
     numericBounds.forEach(([field, min, max, integer]) => {
@@ -208,7 +230,34 @@ const sanitizeOnboardingPayload = (payload: OnboardingData): Record<string, any>
         if (url !== undefined) result[key] = url;
     }
 
+    if (typeof result.occupation === "string" && typeof result.profession !== "string") {
+        result.profession = result.occupation;
+    }
+
+    if (typeof result.education === "string" && typeof result.fieldOfStudy !== "string") {
+        result.fieldOfStudy = result.education;
+    }
+
+    if (typeof result.churchAttendance === "string" && typeof result.sundayActivity !== "string") {
+        result.sundayActivity = result.churchAttendance;
+    }
+
     return result;
+};
+
+const getProfilePhotoCount = (payload: Record<string, any>): number => {
+    if (typeof payload.profilePhotoCount === "number" && Number.isFinite(payload.profilePhotoCount)) {
+        return Math.max(0, Math.min(6, Math.round(payload.profilePhotoCount)));
+    }
+
+    let count = 0;
+    for (let i = 1; i <= 6; i++) {
+        const value = payload[`profilePhoto${i}`];
+        if (typeof value === "string" && value.trim()) {
+            count += 1;
+        }
+    }
+    return count;
 };
 
 //  FIX 1: Update User interface to include all fields from the Mongoose model
@@ -257,11 +306,17 @@ const fetchUserDataFromFirestore = async (fbUser: FirebaseAuthUser): Promise<Use
         phoneNumber: backendData.phoneNumber,
         countryCode: backendData.countryCode,
         birthday: backendData.birthday ? new Date(backendData.birthday.seconds * 1000) : undefined, // Handle Firestore Timestamp
-        fieldOfStudy: backendData.fieldOfStudy,
-        profession: backendData.profession,
+        fieldOfStudy: backendData.fieldOfStudy || backendData.education,
+        profession: backendData.profession || backendData.occupation,
         faithJourney: backendData.faithJourney,
-        sundayActivity: backendData.sundayActivity,
+        sundayActivity: backendData.sundayActivity || backendData.churchAttendance,
+        churchAttendance: backendData.churchAttendance || backendData.sundayActivity,
+        baptismStatus: backendData.baptismStatus,
+        spiritualGifts: backendData.spiritualGifts,
+        relationshipGoals: backendData.relationshipGoals,
+        lifestyle: backendData.lifestyle,
         lookingFor: backendData.lookingFor,
+        personality: backendData.personality,
         hobbies: backendData.hobbies,
         interests: backendData.interests,
         values: backendData.values,
@@ -280,6 +335,14 @@ const fetchUserDataFromFirestore = async (fbUser: FirebaseAuthUser): Promise<Use
         loveStyle: backendData.loveStyle,
         educationLevel: backendData.educationLevel,
         zodiacSign: backendData.zodiacSign,
+        preferredFaithJourney: backendData.preferredFaithJourney,
+        preferredChurchAttendance: backendData.preferredChurchAttendance,
+        preferredRelationshipGoals: backendData.preferredRelationshipGoals,
+        preferredDenomination: backendData.preferredDenomination,
+        preferredGender: backendData.preferredGender,
+        minAge: backendData.minAge,
+        maxAge: backendData.maxAge,
+        maxDistance: backendData.maxDistance,
         preferredMinHeight: backendData.preferredMinHeight,
         
         // Photo URLs
@@ -289,6 +352,7 @@ const fetchUserDataFromFirestore = async (fbUser: FirebaseAuthUser): Promise<Use
         profilePhoto4: backendData.profilePhoto4,
         profilePhoto5: backendData.profilePhoto5,
         profilePhoto6: backendData.profilePhoto6,
+        profilePhotoCount: getProfilePhotoCount(backendData),
     };
 };
 
@@ -307,6 +371,7 @@ const ensureUserProfile = async (fbUser: FirebaseAuthUser) => {
             location: "",
             bio: "",
             onboardingCompleted: false,
+            profilePhotoCount: 0,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         });
@@ -597,26 +662,27 @@ export function useAuth() {
 
             try {
                 console.log("G. Firestore: Attempting to complete onboarding for user:", fbUser.uid);
-                const userDocRef = doc(db, "users", fbUser.uid);
-                
-                //  FIX 3: Spread all fields in onboardingData, which ensures all profile fields 
-                // are updated, even if they were undefined before.
-                await updateDoc(userDocRef, {
-                    ...sanitizeOnboardingPayload(onboardingData), // sanitize before writing to Firestore
-                    onboardingCompleted: true, // Set the flag to true
-                    updatedAt: serverTimestamp(),
-                });
+                const sanitizedPayload = sanitizeOnboardingPayload(onboardingData);
+                await API.Auth.completeOnboarding(sanitizedPayload);
 
-                console.log("H. Firestore: Onboarding completed successfully.");
+                const refreshedUser = await fetchUserDataFromFirestore(fbUser);
+                console.log("H. Backend + Firestore: Onboarding completed successfully.");
 
                 // After successful update, manually update the local user state
                 setUser(prevUser => {
-                    if (!prevUser) return null;
-                    //  FIX: Ensure the merged object is explicitly cast to User to satisfy the type-checker 
-                    // since OnboardingData contains a subset of User fields.
-                    const updatedUser: User = { 
-                        ...prevUser, 
-                        ...sanitizeOnboardingPayload(onboardingData), // Merge sanitized data
+                    const updatedUser: User = refreshedUser || {
+                        ...(prevUser || {
+                            id: fbUser.uid,
+                            email: fbUser.email || "",
+                            name: "User",
+                            onboardingCompleted: true,
+                            age: 0,
+                            gender: "MALE",
+                            denomination: "",
+                            bio: "",
+                            location: "",
+                        }),
+                        ...sanitizedPayload,
                         onboardingCompleted: true,
                     };
                     localStorage.setItem("user", JSON.stringify(updatedUser));
@@ -844,16 +910,17 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
             phoneNumber: data.phoneNumber,
             countryCode: data.countryCode,
             birthday: data.birthday ? new Date(data.birthday.seconds * 1000) : undefined,
-            fieldOfStudy: data.fieldOfStudy,
-            profession: data.profession,
+            fieldOfStudy: data.fieldOfStudy || data.education,
+            profession: data.profession || data.occupation,
             faithJourney: data.faithJourney,
-            sundayActivity: data.sundayActivity,
-            churchAttendance: data.churchAttendance,
+            sundayActivity: data.sundayActivity || data.churchAttendance,
+            churchAttendance: data.churchAttendance || data.sundayActivity,
             baptismStatus: data.baptismStatus,
             spiritualGifts: data.spiritualGifts,
             relationshipGoals: data.relationshipGoals,
             lifestyle: data.lifestyle,
             lookingFor: data.lookingFor,
+            personality: data.personality,
             hobbies: data.hobbies,
             interests: data.interests,
             values: data.values,
@@ -872,6 +939,14 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
             loveStyle: data.loveStyle,
             educationLevel: data.educationLevel,
             zodiacSign: data.zodiacSign,
+            preferredFaithJourney: data.preferredFaithJourney,
+            preferredChurchAttendance: data.preferredChurchAttendance,
+            preferredRelationshipGoals: data.preferredRelationshipGoals,
+            preferredDenomination: data.preferredDenomination,
+            preferredGender: data.preferredGender,
+            minAge: data.minAge,
+            maxAge: data.maxAge,
+            maxDistance: data.maxDistance,
             preferredMinHeight: data.preferredMinHeight,
 
             // Photos
@@ -881,6 +956,7 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
             profilePhoto4: data.profilePhoto4,
             profilePhoto5: data.profilePhoto5,
             profilePhoto6: data.profilePhoto6,
+            profilePhotoCount: getProfilePhotoCount(data as Record<string, any>),
         };
 
         console.log(` Firestore: Successfully fetched user profile for UID: ${userId}`);

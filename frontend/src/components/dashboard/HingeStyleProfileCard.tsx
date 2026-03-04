@@ -484,6 +484,11 @@ export const HingeStyleProfileCard = ({
       .filter((item): item is string => Boolean(item))
       .slice(0, 8);
     const currentMobilePhoto = cardPhotos[0] ?? '/default-avatar.png';
+    const remainingMobilePhotos = cardPhotos.slice(1);
+    const promptInlinePhotos =
+      remainingMobilePhotos.length > 2 ? remainingMobilePhotos.slice(0, 2) : remainingMobilePhotos.slice(0, 1);
+    const postInterestsPhotos =
+      remainingMobilePhotos.length > 2 ? remainingMobilePhotos.slice(2) : remainingMobilePhotos.slice(1);
     const mobileSectionLabelClass = 'pr-4 text-[0.72rem] font-bold uppercase tracking-[0.12em] text-slate-500';
     const mobileBodyTextClass = isCompactHeight
       ? 'mt-2 text-[1.4rem] font-semibold leading-[1.12] tracking-[-0.03em] text-slate-950'
@@ -491,6 +496,58 @@ export const HingeStyleProfileCard = ({
     const mobilePromptTextClass = isCompactHeight
       ? 'mt-2 text-[1.28rem] font-serif font-semibold leading-[1.16] tracking-[-0.02em] text-slate-950'
       : 'mt-3 text-[1.52rem] font-serif font-semibold leading-[1.14] tracking-[-0.025em] text-slate-950';
+    const renderMobileLikeButton = (positionClassName = 'absolute top-4 right-4') => (
+      <button
+        type="button"
+        onPointerDown={stopEvent}
+        onMouseDown={stopEvent}
+        onTouchStart={stopEvent}
+        onClick={(event) => {
+          stopEvent(event);
+          onLike();
+        }}
+        className={`${positionClassName} z-20 inline-flex h-[3.8rem] w-[3.8rem] items-center justify-center rounded-full bg-transparent text-slate-950 transition-all duration-200 hover:-translate-y-0.5`}
+        aria-label="Like"
+      >
+        <span className="relative inline-flex h-[2.6rem] w-[2.6rem] items-center justify-center rounded-[1.05rem] bg-gradient-to-br from-fuchsia-500 via-pink-500 to-rose-500 shadow-[0_6px_12px_rgba(236,72,153,0.24)]">
+          <span className="absolute inset-[1px] rounded-[1rem] bg-gradient-to-br from-white/18 to-transparent" />
+          <Heart className="relative h-5 w-5 fill-white text-white stroke-[2.3]" />
+        </span>
+      </button>
+    );
+    const renderInlineMobilePhoto = (photoUrl: string, photoIndex: number) => (
+      <div
+        key={`${profileId}-${photoIndex}-inline`}
+        className={`relative mt-4 w-full cursor-zoom-in overflow-hidden rounded-[26px] bg-slate-100 shadow-[0_14px_34px_rgba(15,23,42,0.08)] ${isCompactHeight ? 'aspect-[4/5] min-h-[352px]' : 'aspect-[4/5] min-h-[420px]'}`}
+        onClick={() => openImageViewer(photoIndex)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            openImageViewer(photoIndex);
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-label={`Open profile image ${photoIndex + 1}`}
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.img
+            key={`${profileId}-${photoIndex}-mobile-inline`}
+            src={photoUrl}
+            alt={`${profile.name} profile ${photoIndex + 1}`}
+            className="absolute inset-0 h-full w-full object-cover object-center [image-rendering:auto] [backface-visibility:hidden] [transform:translateZ(0)]"
+            style={{ objectPosition: mobileCoverPosition }}
+            initial={{ opacity: 0.5 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0.5 }}
+            transition={{ duration: 0.28, ease: 'easeOut' }}
+            draggable={false}
+            loading="eager"
+            decoding="async"
+          />
+        </AnimatePresence>
+        {renderMobileLikeButton('absolute bottom-4 right-4')}
+      </div>
+    );
 
     return (
       <>
@@ -578,42 +635,30 @@ export const HingeStyleProfileCard = ({
                   />
                 </AnimatePresence>
 
-                <button
-                  type="button"
-                  onPointerDown={stopEvent}
-                  onMouseDown={stopEvent}
-                  onTouchStart={stopEvent}
-                  onClick={(event) => {
-                    stopEvent(event);
-                    onLike();
-                  }}
-                  className="absolute bottom-4 right-4 z-20 inline-flex h-[3.9rem] w-[3.9rem] items-center justify-center rounded-full border border-black/5 bg-white text-slate-950 shadow-[0_16px_30px_rgba(15,23,42,0.14)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_36px_rgba(15,23,42,0.18)]"
-                  aria-label="Like"
-                >
-                  <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-[1.15rem] bg-gradient-to-br from-fuchsia-500 via-pink-500 to-rose-500 shadow-[0_10px_18px_rgba(236,72,153,0.35)]">
-                    <span className="absolute inset-[1px] rounded-[1rem] bg-gradient-to-br from-white/18 to-transparent" />
-                    <Heart className="relative h-5 w-5 fill-white text-white stroke-[2.4]" />
-                  </span>
-                </button>
+                {renderMobileLikeButton('absolute bottom-4 right-4')}
               </div>
 
               <div className="relative mt-4 rounded-[26px] bg-slate-100 px-5 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                {renderMobileLikeButton()}
                 <p className={mobileSectionLabelClass}>About me</p>
-                <p className={`${mobileBodyTextClass} pr-3`}>
+                <p className={`${mobileBodyTextClass} pr-14`}>
                   {aboutMeBody}
                 </p>
               </div>
 
               {promptQuestion || promptAnswer ? (
                 <div className="relative mt-4 rounded-[26px] bg-slate-100 px-5 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                  {renderMobileLikeButton()}
                   <p className={mobileSectionLabelClass}>
                     {promptQuestion || 'Personal prompt'}
                   </p>
-                  <p className={`${mobilePromptTextClass} pr-3`}>
+                  <p className={`${mobilePromptTextClass} pr-14`}>
                     {promptAnswer || 'No response added yet.'}
                   </p>
                 </div>
               ) : null}
+
+              {promptInlinePhotos.map((photoUrl, offset) => renderInlineMobilePhoto(photoUrl, offset + 1))}
 
               {mobileInterests.length > 0 ? (
                 <div className="mt-4 rounded-[26px] bg-slate-100 px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
@@ -630,6 +675,10 @@ export const HingeStyleProfileCard = ({
                   </div>
                 </div>
               ) : null}
+
+              {postInterestsPhotos.map((photoUrl, offset) =>
+                renderInlineMobilePhoto(photoUrl, promptInlinePhotos.length + offset + 1)
+              )}
 
               <Link
                 to={`/profile/${profileId}`}
@@ -648,12 +697,12 @@ export const HingeStyleProfileCard = ({
                     stopEvent(event);
                     onPass();
                   }}
-                  className="pointer-events-auto inline-flex h-[3.9rem] w-[3.9rem] items-center justify-center rounded-full border border-black/5 bg-white text-slate-950 shadow-[0_16px_30px_rgba(15,23,42,0.14)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_36px_rgba(15,23,42,0.18)]"
+                  className="pointer-events-auto inline-flex h-[4.1rem] w-[4.1rem] items-center justify-center rounded-full bg-transparent text-slate-950 transition-all duration-200 hover:-translate-y-0.5"
                   aria-label="Pass"
                 >
-                  <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-[1.15rem] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 shadow-[0_10px_18px_rgba(15,23,42,0.26)]">
+                  <span className="relative inline-flex h-[2.8rem] w-[2.8rem] items-center justify-center rounded-[1.15rem] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 shadow-[0_10px_18px_rgba(15,23,42,0.26)]">
                     <span className="absolute inset-[1px] rounded-[1rem] border border-white/10" />
-                    <X className="relative h-5 w-5 text-white stroke-[2.8]" />
+                    <X className="relative h-5.5 w-5.5 text-white stroke-[2.8]" />
                   </span>
                 </button>
               </div>

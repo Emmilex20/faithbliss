@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { HeartBeatLoader } from '@/components/HeartBeatLoader';
 import { TopBar } from '@/components/dashboard/TopBar';
@@ -8,15 +8,26 @@ import { useMatches, useMatching } from '@/hooks/useAPI';
 import {
   BadgeCheck,
   Briefcase,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Church,
+  Cigarette,
+  Dumbbell,
+  Flame,
+  GlassWater,
   GraduationCap,
   Heart,
+  HeartHandshake,
+  Languages,
   MapPin,
   MessageCircle,
+  PawPrint,
+  Ruler,
   Sparkles,
+  Target,
   UserRound,
+  VenusAndMars,
   X,
 } from 'lucide-react';
 import type { User } from '@/services/api';
@@ -46,18 +57,58 @@ const formatValue = (value?: string | null): string => {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
-const InfoCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <section className="rounded-[28px] border border-slate-200/80 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.08)] sm:p-6">
-    <h3 className="mb-3 text-[0.72rem] font-semibold uppercase tracking-[0.28em] text-slate-500 sm:text-[0.78rem]">
-      {title}
-    </h3>
-    {children}
+const formatBirthday = (value?: string | Date | null): string => {
+  if (!value) return 'Not provided';
+
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return typeof value === 'string' ? value : 'Not provided';
+  }
+
+  return parsed.toLocaleDateString(undefined, {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
+const DashboardPanel = ({
+  eyebrow,
+  title,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  children: ReactNode;
+}) => (
+  <section className="rounded-[36px] border border-slate-200 bg-white p-5 shadow-[0_18px_40px_rgba(15,23,42,0.06)] sm:p-6">
+    <p className="text-[0.72rem] font-semibold uppercase tracking-[0.34em] text-slate-500">{eyebrow}</p>
+    <h2 className="profile-display mt-3 text-[1.9rem] leading-[0.98] tracking-[-0.02em] text-slate-900 sm:text-[2.2rem]">{title}</h2>
+    <div className="mt-5">{children}</div>
   </section>
+);
+
+const DetailTile = ({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value?: string | null;
+  icon?: ReactNode;
+}) => (
+  <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+    <div className="flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-slate-500">
+      {icon}
+      <span>{label}</span>
+    </div>
+    <p className="mt-2.5 text-[1rem] font-medium leading-7 text-slate-900 sm:text-[1.05rem]">{value || 'Not provided'}</p>
+  </div>
 );
 
 const ChipList = ({ items, emptyText = 'Not provided' }: { items?: string[]; emptyText?: string }) => {
   if (!items || items.length === 0) {
-    return <p className="text-sm text-slate-500">{emptyText}</p>;
+    return <p className="text-[0.98rem] leading-7 text-slate-500">{emptyText}</p>;
   }
 
   return (
@@ -65,7 +116,7 @@ const ChipList = ({ items, emptyText = 'Not provided' }: { items?: string[]; emp
       {items.map((item, index) => (
         <span
           key={`${item}-${index}`}
-          className="rounded-full border border-slate-200/80 bg-white px-3 py-1 text-xs font-semibold tracking-tight text-slate-700 shadow-[0_10px_18px_rgba(15,23,42,0.06)] sm:text-sm"
+          className="rounded-full border border-slate-200 bg-white px-3.5 py-2 text-[0.8rem] font-semibold tracking-[-0.01em] text-slate-700 shadow-[0_6px_18px_rgba(15,23,42,0.06)] sm:text-[0.88rem]"
         >
           {formatValue(item)}
         </span>
@@ -84,6 +135,16 @@ const normalizeList = (value?: string[] | string | null): string[] => {
   if (Array.isArray(value)) return value.filter(Boolean);
   if (typeof value === 'string' && value.trim()) return [value.trim()];
   return [];
+};
+
+const buildRangeLabel = (min?: number | null, max?: number | null, suffix = ''): string => {
+  const minLabel = typeof min === 'number' ? `${min}${suffix}` : null;
+  const maxLabel = typeof max === 'number' ? `${max}${suffix}` : null;
+
+  if (minLabel && maxLabel) return `${minLabel} - ${maxLabel}`;
+  if (minLabel) return `From ${minLabel}`;
+  if (maxLabel) return `Up to ${maxLabel}`;
+  return 'Not provided';
 };
 
 const ProfilePage = () => {
@@ -131,20 +192,22 @@ const ProfilePage = () => {
 
   const currentPhotoUrl = photos[currentPhotoIndex] || photos[0];
   const isOwnProfile = Boolean(contextUser?.id && profile?.id && contextUser.id === profile.id);
+
   const mutualIds = useMemo(() => {
     const list = Array.isArray(mutual)
       ? mutual
       : mutual && typeof mutual === 'object' && 'matches' in (mutual as Record<string, unknown>)
-      ? ((mutual as { matches?: any[] }).matches ?? [])
+      ? ((mutual as { matches?: Array<Record<string, unknown>> }).matches ?? [])
       : [];
 
     return new Set(
       list
-        .map((item: any) => item?.matchedUserId || item?.id || item?.matchedUser?.id)
+        .map((item) => item?.matchedUserId || item?.id || item?.matchedUser?.id)
         .filter(Boolean)
-        .map((id: string) => String(id))
+        .map((id) => String(id))
     );
   }, [mutual]);
+
   const isMutual = Boolean(profile?.id && mutualIds.has(String(profile.id)));
 
   const nextPhoto = () => {
@@ -185,13 +248,14 @@ const ProfilePage = () => {
 
   if (!profile) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white px-6 text-slate-900">
-        <div className="max-w-md rounded-3xl border border-slate-200/70 bg-white p-7 text-center shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
-          <h1 className="mb-2 text-2xl font-semibold text-slate-900">Profile Not Found</h1>
+      <div className="flex min-h-screen items-center justify-center bg-[#f5f5f4] px-6 text-slate-900">
+        <div className="max-w-md rounded-[32px] border border-slate-200 bg-white p-7 text-center shadow-[0_20px_50px_rgba(15,23,42,0.08)]">
+          <h1 className="profile-display mb-2 text-2xl font-semibold text-slate-900">Profile Not Found</h1>
           <p className="mb-6 text-sm text-slate-500">This user may no longer be available or the link is invalid.</p>
           <button
             onClick={() => navigate('/dashboard')}
-            className="rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(15,23,42,0.16)] transition hover:bg-slate-800"
+            type="button"
+            className="rounded-full bg-gradient-to-r from-pink-500 to-fuchsia-500 px-6 py-3 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(236,72,153,0.22)] transition hover:brightness-110"
           >
             Return to Dashboard
           </button>
@@ -200,196 +264,377 @@ const ProfilePage = () => {
     );
   }
 
+  const firstName = profile.name?.trim().split(/\s+/)[0] || profile.name || 'This user';
+  const hasRealPhotos = !(photos.length === 1 && photos[0] === '/default-avatar.png');
+  const realPhotoCount = hasRealPhotos ? photos.length : 0;
+  const totalPhotoCount = profile.profilePhotoCount ?? realPhotoCount;
+  const profileFitList = normalizeList(profile.profileFits);
+  const interestList = getInterestList(profile);
+  const personalityList = normalizeList(profile.personality);
+  const communicationList = normalizeList(profile.communicationStyle);
+  const loveStyleList = normalizeList(profile.loveStyle);
+  const languageList = normalizeList(profile.languageSpoken);
+  const preferenceDenominations = normalizeList(profile.preferredDenomination);
+  const preferenceFaithJourney = normalizeList(profile.preferredFaithJourney);
+  const preferenceChurchAttendance = normalizeList(profile.preferredChurchAttendance);
+  const preferenceRelationshipGoals = normalizeList(profile.preferredRelationshipGoals);
+  const contactNumber = [profile.countryCode, profile.phoneNumber].filter(Boolean).join(' ').trim();
+  const primaryGoal = profile.relationshipGoals?.[0] || profile.lookingFor?.[0] || '';
+  const quickHighlights = [
+    { label: 'Denomination', value: formatValue(profile.denomination) },
+    { label: 'Faith Journey', value: formatValue(profile.faithJourney) },
+    { label: 'Primary Goal', value: primaryGoal ? formatValue(primaryGoal) : 'Not provided' },
+    { label: 'Profession', value: profile.profession || 'Not provided' },
+  ];
+
   const content = (
-    <div className="profile-page mx-auto w-full max-w-7xl px-3 pb-28 pt-4 sm:px-5 sm:pb-24 lg:px-8">
-      <div className="overflow-hidden rounded-[34px] border border-slate-200/80 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.12)]">
-        <div className="relative h-52 overflow-hidden sm:h-64 lg:h-[19rem]">
-          <img src={currentPhotoUrl} alt={`${profile.name} cover`} className="h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-white via-white/60 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <div className="mb-2 flex items-center gap-2">
-                  <h1 className="profile-display text-[1.7rem] font-semibold tracking-tight text-slate-900 sm:text-[2.2rem]">
-                    {profile.name}
-                  </h1>
+    <div className="profile-page mx-auto w-full max-w-[88rem] px-3 pb-28 pt-5 sm:px-5 sm:pb-24 lg:px-8">
+      <div className="rounded-[40px] border border-slate-200 bg-[#f8f8f7] p-3 shadow-[0_20px_45px_rgba(15,23,42,0.05)] sm:rounded-[44px] sm:p-4">
+        <div className="grid gap-4 lg:grid-cols-[minmax(320px,0.95fr)_1.35fr] lg:gap-6">
+        <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+          <section className="overflow-hidden rounded-[38px] border border-slate-200 bg-white shadow-[0_20px_50px_rgba(15,23,42,0.08)]">
+            <div className="relative aspect-[4/5] overflow-hidden">
+              <img src={currentPhotoUrl} alt={`${profile.name} photo`} className="h-full w-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-slate-900/10 to-transparent" />
+
+              <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4">
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full border border-white/60 bg-white/80 px-3 py-1 text-[0.66rem] font-semibold uppercase tracking-[0.22em] text-slate-700 backdrop-blur-md">
+                    {totalPhotoCount} {totalPhotoCount === 1 ? 'Photo' : 'Photos'}
+                  </span>
                   {profile.isVerified && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-emerald-700">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-white/60 bg-white/80 px-3 py-1 text-[0.66rem] font-semibold uppercase tracking-[0.22em] text-emerald-700 backdrop-blur-md">
                       <BadgeCheck className="h-3.5 w-3.5" />
                       Verified
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-slate-600 sm:text-base">
-                  {profile.age ? `${profile.age} years` : 'Age not provided'}
-                  {profile.gender ? ` � ${formatValue(profile.gender)}` : ''}
-                </p>
-                <p className="mt-1 flex items-center gap-2 text-xs text-slate-500 sm:text-sm">
+
+                {!isOwnProfile && isMutual && (
+                  <span className="rounded-full border border-white/60 bg-white/80 px-3 py-1 text-[0.66rem] font-semibold uppercase tracking-[0.22em] text-fuchsia-700 backdrop-blur-md">
+                    Mutual Match
+                  </span>
+                )}
+              </div>
+
+              {photos.length > 1 && (
+                <>
+                  <button
+                    onClick={prevPhoto}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-white/70 bg-white/85 p-2 text-slate-900 shadow-[0_12px_28px_rgba(15,23,42,0.12)] transition hover:-translate-y-[52%]"
+                    aria-label="Previous photo"
+                    type="button"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={nextPhoto}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-white/70 bg-white/85 p-2 text-slate-900 shadow-[0_12px_28px_rgba(15,23,42,0.12)] transition hover:-translate-y-[52%]"
+                    aria-label="Next photo"
+                    type="button"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </>
+              )}
+
+              <div className="absolute inset-x-0 bottom-0 p-5 sm:p-6">
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {profile.age ? (
+                    <span className="rounded-full border border-white/60 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-700 backdrop-blur-sm">
+                      Age {profile.age}
+                    </span>
+                  ) : null}
+                  {profile.gender ? (
+                    <span className="rounded-full border border-white/60 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-700 backdrop-blur-sm">
+                      {formatValue(profile.gender)}
+                    </span>
+                  ) : null}
+                  {profile.height ? (
+                    <span className="rounded-full border border-white/60 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-700 backdrop-blur-sm">
+                      {profile.height}
+                    </span>
+                  ) : null}
+                </div>
+                <h1 className="profile-display text-[2.2rem] leading-[0.92] tracking-[-0.02em] text-white sm:text-[2.85rem]">{profile.name}</h1>
+                <p className="mt-3 flex items-center gap-2 text-[0.98rem] text-white/90 sm:text-[1.02rem]">
                   <MapPin className="h-4 w-4" />
                   {profile.location || 'Location not provided'}
                 </p>
               </div>
-
-              <div className="rounded-2xl border border-slate-200/80 bg-white/90 px-3 py-2 text-xs text-slate-500 shadow-[0_14px_30px_rgba(15,23,42,0.08)] sm:text-sm">
-                <p className="text-[0.66rem] font-semibold uppercase tracking-[0.22em] text-slate-500">Photos</p>
-                <p>{photos.length}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(320px,1.1fr)_1.4fr] lg:gap-6">
-          <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
-            <div className="overflow-hidden rounded-[26px] border border-slate-200/80 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.12)]">
-              <div className="relative aspect-[4/5]">
-                <img src={currentPhotoUrl} alt={`${profile.name} photo`} className="h-full w-full object-cover" />
-                {photos.length > 1 && (
-                  <>
-                    <button
-                      onClick={prevPhoto}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-slate-200 bg-white/95 p-2 text-slate-900 shadow-[0_14px_30px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5"
-                      aria-label="Previous photo"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={nextPhoto}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-slate-200 bg-white/95 p-2 text-slate-900 shadow-[0_14px_30px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5"
-                      aria-label="Next photo"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                    <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full border border-slate-200/70 bg-white/90 px-2 py-1 shadow-[0_12px_24px_rgba(15,23,42,0.1)]">
-                      {photos.map((_, index) => (
-                        <button
-                          key={`photo-dot-${index}`}
-                          onClick={() => setCurrentPhotoIndex(index)}
-                          className={`h-2 w-2 rounded-full ${
-                            index === currentPhotoIndex ? 'bg-slate-900' : 'bg-slate-300'
-                          }`}
-                          aria-label={`Go to photo ${index + 1}`}
-                        />
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
             </div>
 
-          </div>
+            {photos.length > 1 && (
+              <div className="border-t border-slate-200 p-4">
+                <div className="flex gap-1.5">
+                  {photos.map((_, index) => (
+                    <button
+                      key={`photo-dot-${index}`}
+                      onClick={() => setCurrentPhotoIndex(index)}
+                      className={`h-1.5 flex-1 rounded-full transition ${
+                        index === currentPhotoIndex ? 'bg-pink-500' : 'bg-slate-200'
+                      }`}
+                      aria-label={`Go to photo ${index + 1}`}
+                      type="button"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
 
-          <div className="space-y-4 sm:space-y-5">
-            <InfoCard title="Bio">
-              <p className="text-[1.05rem] leading-relaxed text-slate-700 sm:text-lg">{profile.bio?.trim() || 'No bio provided yet.'}</p>
-              {(profile.personalPromptQuestion || profile.personalPromptAnswer) && (
-                <div className="mt-4 rounded-2xl border border-slate-200/70 bg-slate-50 p-4">
-                  <p className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                    {profile.personalPromptQuestion || 'Prompt'}
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-slate-900 profile-display">{profile.personalPromptAnswer || 'No answer provided yet.'}</p>
+          <DashboardPanel eyebrow="Snapshot" title="Quick Highlights">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              {quickHighlights.map((item) => (
+                <DetailTile key={item.label} label={item.label} value={item.value} />
+              ))}
+            </div>
+          </DashboardPanel>
+
+          {!isOwnProfile && (
+            <div className="hidden rounded-[34px] border border-slate-200 bg-white p-4 shadow-[0_18px_40px_rgba(15,23,42,0.06)] lg:block">
+              {isMutual ? (
+                <button
+                  onClick={handleMessage}
+                  type="button"
+                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-pink-500 to-fuchsia-500 px-5 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(236,72,153,0.2)] transition hover:brightness-110"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Message {firstName}
+                </button>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    onClick={handlePass}
+                    disabled={actionLoading !== null}
+                    type="button"
+                    className="inline-flex h-[4rem] w-[4rem] items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white shadow-[0_12px_28px_rgba(2,6,23,0.38)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                    aria-label="Pass"
+                  >
+                    <span className="relative inline-flex h-[2.8rem] w-[2.8rem] items-center justify-center rounded-[1.1rem] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 shadow-[0_10px_18px_rgba(15,23,42,0.26)]">
+                      <span className="absolute inset-[1px] rounded-[1rem] border border-white/10" />
+                      <X className="relative h-5.5 w-5.5 text-white stroke-[2.8]" />
+                    </span>
+                  </button>
+                  <button
+                    onClick={handleLike}
+                    disabled={actionLoading !== null}
+                    type="button"
+                    className="inline-flex h-[4rem] w-[4rem] items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white shadow-[0_12px_28px_rgba(2,6,23,0.38)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                    aria-label="Like"
+                  >
+                    <span className="relative inline-flex h-[2.8rem] w-[2.8rem] items-center justify-center rounded-[1.1rem] bg-gradient-to-br from-fuchsia-500 via-pink-500 to-rose-500 shadow-[0_8px_16px_rgba(236,72,153,0.26)]">
+                      <span className="absolute inset-[1px] rounded-[1rem] bg-gradient-to-br from-white/18 to-transparent" />
+                      <Heart className="relative h-5.5 w-5.5 fill-white text-white stroke-[2.4]" />
+                    </span>
+                  </button>
                 </div>
               )}
-            </InfoCard>
+            </div>
+          )}
+        </div>
 
-            <InfoCard title="Faith and Values">
-              <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-                <div className="rounded-xl border border-slate-200/70 bg-slate-50 p-3">
-                  <p className="flex items-center gap-2 text-xs text-slate-500">
-                    <Church className="h-4 w-4" /> Church Attendance
-                  </p>
-                  <p className="mt-1 font-medium text-slate-900">{formatValue(profile.churchAttendance || profile.sundayActivity)}</p>
-                </div>
-                <div className="rounded-xl border border-slate-200/70 bg-slate-50 p-3">
-                  <p className="text-xs text-slate-500">Baptism Status</p>
-                  <p className="mt-1 font-medium text-slate-900">{formatValue(profile.baptismStatus)}</p>
-                </div>
-                <div className="rounded-xl border border-slate-200/70 bg-slate-50 p-3 sm:col-span-2">
-                  <p className="mb-2 text-xs text-slate-500">Spiritual Gifts</p>
+        <div className="space-y-4 sm:space-y-5">
+          <DashboardPanel eyebrow="Overview" title={`About ${firstName}`}>
+            <p className="text-[1.03rem] leading-8 text-slate-700 sm:text-[1.1rem]">
+              {profile.bio?.trim() || 'No bio provided yet.'}
+            </p>
+
+            {(profile.personalPromptQuestion || profile.personalPromptAnswer) && (
+              <div className="mt-5 rounded-[30px] border border-slate-200 bg-slate-50 p-4 sm:p-5">
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  {profile.personalPromptQuestion || 'Prompt'}
+                </p>
+                <p className="profile-display mt-3 text-[1.52rem] leading-[1.08] tracking-[-0.015em] text-slate-900 sm:text-[1.74rem]">
+                  {profile.personalPromptAnswer || 'No answer provided yet.'}
+                </p>
+              </div>
+            )}
+
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <DetailTile label="Age" value={profile.age ? String(profile.age) : 'Not provided'} />
+              <DetailTile label="Gender" value={formatValue(profile.gender)} icon={<VenusAndMars className="h-3.5 w-3.5" />} />
+              <DetailTile label="Location" value={profile.location || 'Not provided'} icon={<MapPin className="h-3.5 w-3.5" />} />
+              <DetailTile label="Birthday" value={formatBirthday(profile.birthday)} icon={<CalendarDays className="h-3.5 w-3.5" />} />
+            </div>
+          </DashboardPanel>
+
+          <DashboardPanel eyebrow="Faith" title="Faith Walk">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <DetailTile label="Denomination" value={formatValue(profile.denomination)} />
+              <DetailTile label="Faith Journey" value={formatValue(profile.faithJourney)} icon={<Flame className="h-3.5 w-3.5" />} />
+              <DetailTile
+                label="Church Attendance"
+                value={formatValue(profile.churchAttendance || profile.sundayActivity)}
+                icon={<Church className="h-3.5 w-3.5" />}
+              />
+              <DetailTile label="Baptism Status" value={formatValue(profile.baptismStatus)} />
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4">
+              <div className="rounded-[30px] border border-slate-200 bg-slate-50 p-4">
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">Spiritual Gifts</p>
+                <div className="mt-3">
                   <ChipList items={profile.spiritualGifts} emptyText="No spiritual gifts listed" />
                 </div>
-                <div className="rounded-xl border border-slate-200/70 bg-slate-50 p-3 sm:col-span-2">
-                  <p className="mb-2 text-xs text-slate-500">Core Values</p>
+              </div>
+              <div className="rounded-[30px] border border-slate-200 bg-slate-50 p-4">
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">Core Values</p>
+                <div className="mt-3">
                   <ChipList items={profile.values} emptyText="No values listed" />
                 </div>
               </div>
-            </InfoCard>
+              <div className="rounded-[30px] border border-slate-200 bg-slate-50 p-4">
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">Favorite Verse</p>
+                <p className="mt-3 text-base italic leading-relaxed text-slate-800">
+                  {profile.favoriteVerse ? `"${profile.favoriteVerse}"` : 'Not provided'}
+                </p>
+              </div>
+            </div>
+          </DashboardPanel>
 
-            <InfoCard title="Relationship Goals">
-              <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-                <div className="rounded-xl border border-slate-200/70 bg-slate-50 p-3">
-                  <p className="mb-2 text-xs text-slate-500">Looking For</p>
+          <DashboardPanel eyebrow="Connection" title="Relationship and Lifestyle">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <div className="rounded-[30px] border border-slate-200 bg-slate-50 p-4">
+                <p className="flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  <HeartHandshake className="h-3.5 w-3.5" />
+                  Looking For
+                </p>
+                <div className="mt-3">
                   <ChipList items={profile.lookingFor} emptyText="No relationship preference listed" />
                 </div>
-                <div className="rounded-xl border border-slate-200/70 bg-slate-50 p-3">
-                  <p className="mb-2 text-xs text-slate-500">Relationship Goals</p>
+              </div>
+              <div className="rounded-[30px] border border-slate-200 bg-slate-50 p-4">
+                <p className="flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  <Target className="h-3.5 w-3.5" />
+                  Relationship Goals
+                </p>
+                <div className="mt-3">
                   <ChipList items={profile.relationshipGoals} emptyText="No goals listed" />
                 </div>
               </div>
-            </InfoCard>
+            </div>
 
-            <InfoCard title="Which Fits Them Best">
-              <ChipList items={profile.profileFits} emptyText="No profile fit selections listed" />
-            </InfoCard>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <DetailTile label="Lifestyle" value={formatValue(profile.lifestyle)} />
+              <DetailTile label="Drinking Habit" value={formatValue(profile.drinkingHabit)} icon={<GlassWater className="h-3.5 w-3.5" />} />
+              <DetailTile label="Smoking Habit" value={formatValue(profile.smokingHabit)} icon={<Cigarette className="h-3.5 w-3.5" />} />
+              <DetailTile label="Workout Habit" value={formatValue(profile.workoutHabit)} icon={<Dumbbell className="h-3.5 w-3.5" />} />
+              <DetailTile label="Pet Preference" value={formatValue(profile.petPreference)} icon={<PawPrint className="h-3.5 w-3.5" />} />
+              <DetailTile label="Love Language" value={loveStyleList.length ? loveStyleList.map(formatValue).join(', ') : 'Not provided'} />
+            </div>
 
-            <InfoCard title="Interests and Personal Details">
-              <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200/70 bg-slate-50 p-4">
-                  <p className="mb-2 flex items-center gap-2 text-xs text-slate-500">
-                    <Sparkles className="h-4 w-4" /> Interests / Hobbies
-                  </p>
-                  <ChipList items={getInterestList(profile)} emptyText="No interests listed" />
-                </div>
-                <div className="rounded-2xl border border-slate-200/70 bg-slate-50 p-4">
-                  <p className="text-xs text-slate-500">Favorite Verse</p>
-                  <p className="mt-1 italic text-slate-900">{profile.favoriteVerse ? `"${profile.favoriteVerse}"` : 'Not provided'}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200/70 bg-slate-50 p-4">
-                  <p className="flex items-center gap-2 text-xs text-slate-500">
-                    <Briefcase className="h-4 w-4" /> Profession
-                  </p>
-                  <p className="mt-1 font-medium text-slate-900">{profile.profession || 'Not provided'}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200/70 bg-slate-50 p-4">
-                  <p className="flex items-center gap-2 text-xs text-slate-500">
-                    <GraduationCap className="h-4 w-4" /> Education
-                  </p>
-                  <p className="mt-1 font-medium text-slate-900">{profile.fieldOfStudy || 'Not provided'}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200/70 bg-slate-50 p-4 sm:col-span-2">
-                  <p className="flex items-center gap-2 text-xs text-slate-500">
-                    <UserRound className="h-4 w-4" /> Gender
-                  </p>
-                  <p className="mt-1 font-medium text-slate-900">{formatValue(profile.gender)}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200/70 bg-slate-50 p-4">
-                  <p className="text-xs text-slate-500">Communication Style</p>
-                  <div className="mt-2">
-                    <ChipList items={normalizeList(profile.communicationStyle)} emptyText="Not provided" />
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-slate-200/70 bg-slate-50 p-4">
-                  <p className="text-xs text-slate-500">Love Language</p>
-                  <div className="mt-2">
-                    <ChipList items={normalizeList(profile.loveStyle)} emptyText="Not provided" />
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-slate-200/70 bg-slate-50 p-4">
-                  <p className="text-xs text-slate-500">Education Level</p>
-                  <p className="mt-1 font-medium text-slate-900">{formatValue(profile.educationLevel)}</p>
+            <div className="mt-4 rounded-[30px] border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">Communication Style</p>
+              <div className="mt-3">
+                <ChipList items={communicationList} emptyText="Not provided" />
+              </div>
+            </div>
+          </DashboardPanel>
+
+          <DashboardPanel eyebrow="Identity" title="Personal Details">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <DetailTile label="Profession" value={profile.profession || 'Not provided'} icon={<Briefcase className="h-3.5 w-3.5" />} />
+              <DetailTile label="Field of Study" value={profile.fieldOfStudy || 'Not provided'} icon={<GraduationCap className="h-3.5 w-3.5" />} />
+              <DetailTile label="Education Level" value={formatValue(profile.educationLevel)} />
+              <DetailTile label="Height" value={profile.height || 'Not provided'} icon={<Ruler className="h-3.5 w-3.5" />} />
+              <DetailTile label="Zodiac Sign" value={formatValue(profile.zodiacSign)} />
+              <DetailTile label="Primary Language" value={profile.language || 'Not provided'} icon={<Languages className="h-3.5 w-3.5" />} />
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <div className="rounded-[30px] border border-slate-200 bg-slate-50 p-4">
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">Languages Spoken</p>
+                <div className="mt-3">
+                  <ChipList items={languageList} emptyText="No languages listed" />
                 </div>
               </div>
-            </InfoCard>
-          </div>
+              <div className="rounded-[30px] border border-slate-200 bg-slate-50 p-4">
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">Profile Fits</p>
+                <div className="mt-3">
+                  <ChipList items={profileFitList} emptyText="No profile fit selections listed" />
+                </div>
+              </div>
+              <div className="rounded-[30px] border border-slate-200 bg-slate-50 p-4">
+                <p className="flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Interests and Hobbies
+                </p>
+                <div className="mt-3">
+                  <ChipList items={interestList} emptyText="No interests listed" />
+                </div>
+              </div>
+              <div className="rounded-[30px] border border-slate-200 bg-slate-50 p-4">
+                <p className="flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  <UserRound className="h-3.5 w-3.5" />
+                  Personality
+                </p>
+                <div className="mt-3">
+                  <ChipList items={personalityList} emptyText="No personality traits listed" />
+                </div>
+              </div>
+            </div>
+          </DashboardPanel>
+
+          <DashboardPanel eyebrow="Preferences" title="What They Want">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <DetailTile label="Preferred Gender" value={formatValue(profile.preferredGender || undefined)} />
+              <DetailTile label="Preferred Age Range" value={buildRangeLabel(profile.minAge, profile.maxAge)} />
+              <DetailTile label="Maximum Distance" value={buildRangeLabel(undefined, profile.maxDistance, ' km')} />
+              <DetailTile
+                label="Preferred Minimum Height"
+                value={typeof profile.preferredMinHeight === 'number' ? `${profile.preferredMinHeight} cm` : 'Not provided'}
+              />
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <div className="rounded-[30px] border border-slate-200 bg-slate-50 p-4">
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">Preferred Denomination</p>
+                <div className="mt-3">
+                  <ChipList items={preferenceDenominations} emptyText="No denomination preference listed" />
+                </div>
+              </div>
+              <div className="rounded-[30px] border border-slate-200 bg-slate-50 p-4">
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">Preferred Faith Journey</p>
+                <div className="mt-3">
+                  <ChipList items={preferenceFaithJourney} emptyText="No faith journey preference listed" />
+                </div>
+              </div>
+              <div className="rounded-[30px] border border-slate-200 bg-slate-50 p-4">
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">Preferred Church Attendance</p>
+                <div className="mt-3">
+                  <ChipList items={preferenceChurchAttendance} emptyText="No church attendance preference listed" />
+                </div>
+              </div>
+              <div className="rounded-[30px] border border-slate-200 bg-slate-50 p-4">
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">Preferred Relationship Goals</p>
+                <div className="mt-3">
+                  <ChipList items={preferenceRelationshipGoals} emptyText="No relationship goal preference listed" />
+                </div>
+              </div>
+            </div>
+          </DashboardPanel>
+
+          {isOwnProfile && (
+            <DashboardPanel eyebrow="Private" title="Your Saved Account Details">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <DetailTile label="Email" value={profile.email || 'Not provided'} />
+                <DetailTile label="Phone Number" value={contactNumber || 'Not provided'} />
+              </div>
+            </DashboardPanel>
+          )}
+        </div>
         </div>
       </div>
 
       {!isOwnProfile && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/70 bg-white/92 px-4 py-3 backdrop-blur-xl">
-          <div className="mx-auto flex w-full max-w-4xl items-center justify-between">
+        <div className="fixed inset-x-0 bottom-0 z-40 px-4 py-4 lg:hidden">
+          <div className="mx-auto flex w-full max-w-4xl items-center justify-between rounded-[32px] border border-slate-200 bg-white/94 px-5 py-4 shadow-[0_16px_40px_rgba(15,23,42,0.1)] backdrop-blur-xl">
             {isMutual ? (
               <button
                 onClick={handleMessage}
-                className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-slate-900 px-5 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(15,23,42,0.16)] transition hover:bg-slate-800"
+                type="button"
+                className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-pink-500 to-fuchsia-500 px-5 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(236,72,153,0.18)] transition hover:brightness-110"
               >
                 <MessageCircle className="h-4 w-4" />
                 Message
@@ -399,22 +644,24 @@ const ProfilePage = () => {
                 <button
                   onClick={handlePass}
                   disabled={actionLoading !== null}
-                  className="inline-flex h-[3.4rem] w-[3.4rem] items-center justify-center rounded-full border border-slate-200/80 bg-white text-slate-950 shadow-[0_14px_26px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_30px_rgba(15,23,42,0.16)] disabled:cursor-not-allowed disabled:opacity-60"
+                  type="button"
+                  className="inline-flex h-[4rem] w-[4rem] items-center justify-center rounded-full border border-slate-200 bg-white text-white shadow-[0_10px_24px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                   aria-label="Pass"
                 >
-                  <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-[1.15rem] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 shadow-[0_10px_18px_rgba(15,23,42,0.26)]">
-                    <span className="absolute inset-[1px] rounded-[1rem] border border-white/10" />
+                  <span className="relative inline-flex h-[2.55rem] w-[2.55rem] items-center justify-center rounded-[1.05rem] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 shadow-[0_10px_18px_rgba(15,23,42,0.26)]">
+                    <span className="absolute inset-[1px] rounded-[0.98rem] border border-white/10" />
                     <X className="relative h-5 w-5 text-white stroke-[2.8]" />
                   </span>
                 </button>
                 <button
                   onClick={handleLike}
                   disabled={actionLoading !== null}
-                  className="inline-flex h-[3.4rem] w-[3.4rem] items-center justify-center rounded-full border border-slate-200/80 bg-white text-slate-950 shadow-[0_14px_26px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_30px_rgba(15,23,42,0.16)] disabled:cursor-not-allowed disabled:opacity-60"
+                  type="button"
+                  className="inline-flex h-[4rem] w-[4rem] items-center justify-center rounded-full border border-slate-200 bg-white text-white shadow-[0_10px_24px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                   aria-label="Like"
                 >
-                  <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-[1.15rem] bg-gradient-to-br from-fuchsia-500 via-pink-500 to-rose-500 shadow-[0_10px_18px_rgba(236,72,153,0.35)]">
-                    <span className="absolute inset-[1px] rounded-[1rem] bg-gradient-to-br from-white/18 to-transparent" />
+                  <span className="relative inline-flex h-[2.55rem] w-[2.55rem] items-center justify-center rounded-[1.05rem] bg-gradient-to-br from-fuchsia-500 via-pink-500 to-rose-500 shadow-[0_8px_16px_rgba(236,72,153,0.26)]">
+                    <span className="absolute inset-[1px] rounded-[0.98rem] bg-gradient-to-br from-white/18 to-transparent" />
                     <Heart className="relative h-5 w-5 fill-white text-white stroke-[2.4]" />
                   </span>
                 </button>
@@ -427,24 +674,25 @@ const ProfilePage = () => {
   );
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-white text-slate-900 dashboard-main">
+    <div className="min-h-screen overflow-x-hidden bg-[#f5f5f4] text-slate-900 dashboard-main">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
         .profile-page {
-          font-family: "Manrope", "Segoe UI", sans-serif;
+          font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+          color: #0f172a;
         }
 
         .profile-display {
-          font-family: "Fraunces", "Times New Roman", serif;
+          font-family: "Cormorant Garamond", "Times New Roman", serif;
         }
       `}</style>
       <div className="hidden min-h-screen lg:flex">
         <div className="w-80 flex-shrink-0">
           <SidePanel userName={layoutName} userImage={layoutImage} user={contextUser} onClose={() => setShowSidePanel(false)} />
         </div>
-          <div className="flex min-h-screen flex-1 flex-col bg-white">
-            <TopBar
+        <div className="flex min-h-screen flex-1 flex-col bg-transparent">
+          <TopBar
             userName={layoutName}
             userImage={layoutImage}
             user={contextUser}
@@ -485,9 +733,3 @@ const ProfilePage = () => {
 };
 
 export default ProfilePage;
-
-
-
-
-
-

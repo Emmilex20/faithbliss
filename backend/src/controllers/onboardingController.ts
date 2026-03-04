@@ -3,6 +3,8 @@
 import { Request, Response } from 'express';
 import { admin, usersCollection } from '../config/firebase-admin';
 import { DocumentData } from 'firebase-admin/firestore'; 
+import { countProfilePhotos, MIN_REQUIRED_PROFILE_PHOTOS } from '../utils/profilePhotos';
+import { validateOnboardingPayload } from '../utils/validateOnboardingPayload';
 
 // --- FIRESTORE USER TYPE ---
 interface IUserProfile extends DocumentData {
@@ -10,6 +12,12 @@ interface IUserProfile extends DocumentData {
     name: string;
     email: string;
     profilePhoto1?: string;
+    profilePhoto2?: string;
+    profilePhoto3?: string;
+    profilePhoto4?: string;
+    profilePhoto5?: string;
+    profilePhoto6?: string;
+    profilePhotoCount?: number;
     onboardingCompleted: boolean;
     profileFits?: string[];
     // ... all other fields
@@ -83,6 +91,8 @@ export const completeOnboarding = async (req: Request, res: Response) => {
             return res.status(404).json({ message: 'User profile not found in database. Please complete initial profile creation.' });
         }
         
+        const existingUserData = doc.data() as Partial<IUserProfile>;
+
         // 1. Extract body data and prepare base update object
         const { 
             birthday, location, latitude, longitude, faithJourney, sundayActivity,
@@ -95,10 +105,12 @@ export const completeOnboarding = async (req: Request, res: Response) => {
             ...otherFields
         } = req.body;
 
+        const parsedRelationshipGoals = safeParseJSON(relationshipGoals);
+        const parsedHobbies = safeParseJSON(hobbies);
+        const parsedValues = safeParseJSON(values);
+        const parsedInterests = safeParseJSON(interests);
+        const parsedSpiritualGifts = safeParseJSON(spiritualGifts);
         const parsedProfileFits = safeParseJSON(profileFits);
-        if (profileFits !== undefined && parsedProfileFits.length < 3) {
-            return res.status(400).json({ message: 'Please select at least 3 profile fit options.' });
-        }
 
         const updateFields: Partial<IUserProfile> = {
             ...otherFields,
@@ -118,9 +130,9 @@ export const completeOnboarding = async (req: Request, res: Response) => {
             churchAttendance: sundayActivity || churchAttendance,
             
             // List Fields (Parsed from JSON strings)
-            relationshipGoals: safeParseJSON(relationshipGoals), hobbies: safeParseJSON(hobbies),
-            values: safeParseJSON(values), interests: safeParseJSON(interests),
-            spiritualGifts: safeParseJSON(spiritualGifts),
+            relationshipGoals: parsedRelationshipGoals, hobbies: parsedHobbies,
+            values: parsedValues, interests: parsedInterests,
+            spiritualGifts: parsedSpiritualGifts,
             profileFits: profileFits === undefined ? undefined : parsedProfileFits,
             
             // Preferences
@@ -147,6 +159,24 @@ export const completeOnboarding = async (req: Request, res: Response) => {
                     console.warn(`File URL missing for ${fieldName}. Check Multer configuration.`);
                 }
             }
+        }
+
+        const nextUserSnapshot = { ...existingUserData, ...updateFields };
+        const profilePhotoCount = countProfilePhotos(nextUserSnapshot);
+        if (profilePhotoCount < MIN_REQUIRED_PROFILE_PHOTOS) {
+            return res.status(400).json({
+                message: `Please upload at least ${MIN_REQUIRED_PROFILE_PHOTOS} profile photos before completing onboarding.`,
+            });
+        }
+        updateFields.profilePhotoCount = profilePhotoCount;
+
+        const validationError = validateOnboardingPayload({
+            ...nextUserSnapshot,
+            profilePhotoCount,
+        } as Record<string, unknown>);
+
+        if (validationError) {
+            return res.status(400).json({ message: validationError });
         }
         
         // Clean up undefined values (ensures fields not provided are not set to 'undefined')
@@ -180,6 +210,7 @@ export const completeOnboarding = async (req: Request, res: Response) => {
                 email: updatedUser.email,
                 onboardingCompleted: updatedUser.onboardingCompleted,
                 profilePhoto1: updatedUser.profilePhoto1,
+                profilePhotoCount: updatedUser.profilePhotoCount,
             },
         });
 

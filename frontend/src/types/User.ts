@@ -43,6 +43,7 @@ export interface User {
   relationshipGoals?: string[];
   lifestyle?: string;
   lookingFor?: string[];
+  personality?: string[];
   hobbies?: string[];
   interests?: string[];
   values?: string[];
@@ -59,6 +60,14 @@ export interface User {
   height?: string;
   language?: string;
   languageSpoken?: string[];
+  preferredFaithJourney?: string[] | null;
+  preferredChurchAttendance?: string[] | null;
+  preferredRelationshipGoals?: string[] | null;
+  preferredDenomination?: string | null;
+  preferredGender?: 'MALE' | 'FEMALE' | string | null;
+  minAge?: number | null;
+  maxAge?: number | null;
+  maxDistance?: number | null;
   preferredMinHeight?: number;
   personalPromptQuestion?: string;
   personalPromptAnswer?: string;
@@ -69,6 +78,7 @@ export interface User {
   profilePhoto4?: string;
   profilePhoto5?: string;
   profilePhoto6?: string;
+  profilePhotoCount?: number;
   isActive?: boolean;
 
   subscriptionStatus?: 'active' | 'pending' | 'inactive' | string;

@@ -6,6 +6,8 @@ import { DocumentData, DocumentReference } from 'firebase-admin/firestore';
 import { Types } from 'mongoose'; // Still used for internal logic, but not for DB IDs anymore
 import multer from 'multer';
 import { storage } from '../config/cloudinaryConfig'; // Assuming Cloudinary is still used
+import { countProfilePhotos, MIN_REQUIRED_PROFILE_PHOTOS } from '../utils/profilePhotos';
+import { validateOnboardingPayload } from '../utils/validateOnboardingPayload';
 
 
 // --- FIRESTORE USER TYPE (Simplified for the controller) ---
@@ -20,6 +22,12 @@ export interface IUserProfile extends DocumentData {
     bio?: string;
     location?: string;
     profilePhoto1?: string;
+    profilePhoto2?: string;
+    profilePhoto3?: string;
+    profilePhoto4?: string;
+    profilePhoto5?: string;
+    profilePhoto6?: string;
+    profilePhotoCount?: number;
     onboardingCompleted: boolean;
     profileFits?: string[];
     // Add other fields...
@@ -107,6 +115,7 @@ const createProfileAfterFirebaseRegister = async (req: Request, res: Response) =
             bio, 
             location,
             onboardingCompleted: false, // Initial state
+            profilePhotoCount: 0,
             createdAt: new Date(),
             likes: [], // Initialize arrays for future use
             passes: [],
@@ -167,10 +176,11 @@ const completeOnboarding = async (req: Request, res: Response) => {
         lookingFor, hobbies, values, bio, interests, profileFits, ...otherFields
     } = req.body;
 
+    const parsedInterests = safeParseJSON(interests);
+    const parsedLookingFor = safeParseJSON(lookingFor);
+    const parsedHobbies = safeParseJSON(hobbies);
+    const parsedValues = safeParseJSON(values);
     const parsedProfileFits = safeParseJSON(profileFits);
-    if (profileFits !== undefined && parsedProfileFits.length < 3) {
-        return res.status(400).json({ message: 'Please select at least 3 profile fit options.' });
-    }
 
     const updateFields: Partial<IUserProfile> = {
         // General Profile fields
@@ -186,10 +196,10 @@ const completeOnboarding = async (req: Request, res: Response) => {
         sundayActivity,
         
         // Preferences (Parsed from JSON strings)
-        interests: safeParseJSON(interests),
-        lookingFor: safeParseJSON(lookingFor),
-        hobbies: safeParseJSON(hobbies),
-        values: safeParseJSON(values),
+        interests: parsedInterests,
+        lookingFor: parsedLookingFor,
+        hobbies: parsedHobbies,
+        values: parsedValues,
         profileFits: profileFits === undefined ? undefined : parsedProfileFits,
         
         // Matching Preferences
@@ -214,6 +224,24 @@ const completeOnboarding = async (req: Request, res: Response) => {
         // and in updateFields, it remains unchanged in Firestore via .update().
     }
 
+    const nextUserSnapshot = { ...user, ...updateFields };
+    const profilePhotoCount = countProfilePhotos(nextUserSnapshot);
+    if (profilePhotoCount < MIN_REQUIRED_PROFILE_PHOTOS) {
+        return res.status(400).json({
+            message: `Please upload at least ${MIN_REQUIRED_PROFILE_PHOTOS} profile photos before completing onboarding.`,
+        });
+    }
+    updateFields.profilePhotoCount = profilePhotoCount;
+
+    const validationError = validateOnboardingPayload({
+        ...nextUserSnapshot,
+        profilePhotoCount,
+    } as Record<string, unknown>);
+
+    if (validationError) {
+        return res.status(400).json({ message: validationError });
+    }
+
     // Clean up undefined values (Firestore update ignores undefined, but good practice)
     Object.keys(updateFields).forEach(key => updateFields[key as keyof Partial<IUserProfile>] === undefined && delete updateFields[key as keyof Partial<IUserProfile>]);
 
@@ -236,6 +264,7 @@ const completeOnboarding = async (req: Request, res: Response) => {
                 email: updatedUser.email,
                 onboardingCompleted: updatedUser.onboardingCompleted,
                 profilePhoto1: updatedUser.profilePhoto1,
+                profilePhotoCount: updatedUser.profilePhotoCount,
             },
         });
 

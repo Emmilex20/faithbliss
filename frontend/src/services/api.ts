@@ -287,11 +287,19 @@ export interface UploadSinglePhotoResponse {
 export interface DeletePhotoResponse {
   message: string;
   photoNumber: number;
+  profilePhotoCount?: number;
   photos: {
     profilePhoto1?: string | null;
     profilePhoto2?: string | null;
     profilePhoto3?: string | null;
   }
+}
+
+export interface OnboardingDebugResponse {
+  id: string;
+  fetchedAt: string;
+  onboardingDocument: Record<string, unknown>;
+  profilePhotoCount: number;
 }
 
 // Generic API request function
@@ -481,7 +489,9 @@ export const AuthAPI = {
   },
 
   // Complete user onboarding
-  completeOnboarding: async (onboardingData: CompleteOnboardingDto): Promise<User> => {
+  completeOnboarding: async (
+    onboardingData: CompleteOnboardingDto | Record<string, unknown>
+  ): Promise<{ message: string; user: User }> => {
     // FIX: Added /api prefix
     return apiRequest('/api/auth/complete-onboarding', {
       method: 'PUT',
@@ -580,11 +590,18 @@ export const UserAPI = {
     });
   },
 
-  // Get user by ID
+  // Get user by ID
   getUserById: async (id: string): Promise<User> => {
     // FIX: Added /api prefix
     return apiRequest(`/api/users/${id}`);
   },
+
+  getOnboardingDebug: async (userId?: string): Promise<OnboardingDebugResponse> => {
+    const endpoint = userId?.trim()
+      ? `/api/users/${encodeURIComponent(userId.trim())}/onboarding-debug`
+      : '/api/users/me/onboarding-debug';
+    return apiRequest(endpoint);
+  },
 
   // Search users with advanced filters
   searchUsers: async (params: {

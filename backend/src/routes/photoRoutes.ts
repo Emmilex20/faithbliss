@@ -3,6 +3,7 @@ import multer from 'multer';
 import { storage } from '../config/cloudinaryConfig';
 import { protect } from '../middleware/authMiddleware';
 import { db } from '../config/firebase-admin';
+import { countProfilePhotos } from '../utils/profilePhotos';
 
 const router = express.Router();
 
@@ -45,9 +46,17 @@ router.post('/me/photo/:photoNumber', protect, upload.single('photo'), async (re
     const userRef = db.collection('users').doc(uid);
     await userRef.update({ [photoField]: photoUrl });
 
+    const updatedDoc = await userRef.get();
+    const updatedData = updatedDoc.data() || {};
+    const profilePhotoCount = countProfilePhotos(updatedData);
+    if (updatedData.profilePhotoCount !== profilePhotoCount) {
+      await userRef.update({ profilePhotoCount });
+    }
+
     return res.status(200).json({
       message: `Photo ${photoNumber} uploaded successfully`,
       photoUrl,
+      profilePhotoCount,
     });
   } catch (error: unknown) {
     const knownError = error as { message?: string };
@@ -71,10 +80,17 @@ router.delete('/me/photo/:photoNumber', protect, async (req, res) => {
 
     const updatedDoc = await userRef.get();
     const updatedData = updatedDoc.data() || {};
+    const profilePhotoCount = countProfilePhotos(updatedData);
+
+    if (updatedData.profilePhotoCount !== profilePhotoCount) {
+      await userRef.update({ profilePhotoCount });
+      updatedData.profilePhotoCount = profilePhotoCount;
+    }
 
     return res.status(200).json({
       message: `Photo ${photoNumber} removed successfully`,
       photoNumber: Number(photoNumber),
+      profilePhotoCount,
       photos: {
         profilePhoto1: updatedData.profilePhoto1 || null,
         profilePhoto2: updatedData.profilePhoto2 || null,

@@ -3,6 +3,7 @@
 import { Request, Response } from 'express'; 
 import { db, usersCollection } from '../config/firebase-admin'; // Firestore Import
 import * as admin from 'firebase-admin'; // Admin SDK for types
+import { countProfilePhotos } from '../utils/profilePhotos';
 
 // Interface for the Firestore Profile
 interface IFirestoreUser {
@@ -10,6 +11,12 @@ interface IFirestoreUser {
     name: string;
     email: string;
     profilePhoto1: string;
+    profilePhoto2?: string;
+    profilePhoto3?: string;
+    profilePhoto4?: string;
+    profilePhoto5?: string;
+    profilePhoto6?: string;
+    profilePhotoCount?: number;
     onboardingCompleted: boolean;
     age: number;
     gender: string;
@@ -80,6 +87,7 @@ const getMe = async (req: CustomRequest, res: Response) => {
         id: uid,
         firebaseUid: uid,
         ...userData,
+        profilePhotoCount: countProfilePhotos(userData),
     });
 };
 
@@ -112,6 +120,7 @@ const getUserById = async (req: CustomRequest, res: Response) => {
             id: userDoc.id, 
             name: user.name,
             profilePhoto1: user.profilePhoto1,
+            profilePhotoCount: countProfilePhotos(user),
             age: user.age,
             gender: user.gender,
             location: user.location,
@@ -175,6 +184,7 @@ const getAllUsers = async (req: CustomRequest, res: Response) => {
                 id: user.id,
                 name: user.name,
                 profilePhoto1: user.profilePhoto1,
+                profilePhotoCount: countProfilePhotos(user),
                 age: user.age,
                 gender: user.gender,
                 location: user.location,
@@ -190,6 +200,37 @@ const getAllUsers = async (req: CustomRequest, res: Response) => {
         console.error('Error fetching users:', error);
         return res.status(500).json({ message: `Failed to retrieve user list: ${errorMessage}` });
     }
+};
+
+const getOnboardingDebug = async (req: CustomRequest, res: Response) => {
+  const targetUid = typeof req.params.id === 'string' && req.params.id.trim()
+    ? req.params.id.trim()
+    : req.userId;
+
+  if (!targetUid) {
+    return res.status(401).json({ message: 'Authentication required: Firebase UID missing.' });
+  }
+
+  try {
+    const userDoc = await usersCollection.doc(targetUid).get();
+
+    if (!userDoc.exists) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    const rawData = userDoc.data() || {};
+
+    return res.status(200).json({
+      id: userDoc.id,
+      fetchedAt: new Date().toISOString(),
+      onboardingDocument: rawData,
+      profilePhotoCount: countProfilePhotos(rawData),
+    });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error fetching onboarding debug data:', error);
+    return res.status(500).json({ message: `Failed to retrieve onboarding debug data: ${errorMessage}` });
+  }
 };
 
 const updateUserProfile = async (req: Request, res: Response) => {
@@ -273,6 +314,8 @@ const updateUserProfile = async (req: Request, res: Response) => {
       ['phoneNumber', 30],
       ['fieldOfStudy', 120],
       ['profession', 120],
+      ['preferredDenomination', 80],
+      ['lifestyle', 80],
       ['drinkingHabit', 80],
       ['smokingHabit', 80],
       ['workoutHabit', 80],
@@ -324,7 +367,6 @@ const updateUserProfile = async (req: Request, res: Response) => {
       'preferredFaithJourney',
       'preferredChurchAttendance',
       'preferredRelationshipGoals',
-      'preferredDenomination',
       'personality',
     ];
 
@@ -433,4 +475,13 @@ const reactivateAccount = async (req: Request, res: Response) => {
 // ----------------------------------------
 // FINAL EXPORTS 
 // ----------------------------------------
-export { getMe, getUserById, getAllUsers, updateUserProfile, updateUserSettings, deactivateAccount, reactivateAccount };
+export {
+  getMe,
+  getUserById,
+  getAllUsers,
+  getOnboardingDebug,
+  updateUserProfile,
+  updateUserSettings,
+  deactivateAccount,
+  reactivateAccount,
+};

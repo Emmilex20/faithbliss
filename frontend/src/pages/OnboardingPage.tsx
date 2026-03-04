@@ -21,6 +21,7 @@ import ShareMoreAboutYouSlide from '../components/onboarding/ShareMoreAboutYouSl
 
 import { uploadPhotosToCloudinary } from '../api/cloudinaryUpload';
 import { MIN_PROFILE_FITS } from '../constants/profileFitOptions';
+import { MIN_ONBOARDING_PHOTOS } from '../constants/onboarding';
 
 // --- TYPE ---
 type OnboardingUpdateData = Partial<Omit<OnboardingData, 'photos' | 'customDenomination'>> & {
@@ -28,11 +29,14 @@ type OnboardingUpdateData = Partial<Omit<OnboardingData, 'photos' | 'customDenom
   profilePhoto2?: string;
   profilePhoto3?: string;
   profilePhoto4?: string;
+  profilePhoto5?: string;
+  profilePhoto6?: string;
+  profilePhotoCount?: number;
 };
 
 const getStepValidationError = (step: number, data: OnboardingData): string | null => {
-  if (step === 0 && data.photos.length < 2) {
-    return 'Please upload at least 2 photos.';
+  if (step === 0 && data.photos.length < MIN_ONBOARDING_PHOTOS) {
+    return `Please upload at least ${MIN_ONBOARDING_PHOTOS} photos.`;
   }
 
   if (
@@ -191,6 +195,9 @@ const OnboardingPage = () => {
     try {
       const userId = user?.uid || user?.id;
       if (!userId) throw new Error('User not authenticated.');
+      if (onboardingData.photos.length < MIN_ONBOARDING_PHOTOS) {
+        throw new Error(`Please upload at least ${MIN_ONBOARDING_PHOTOS} photos before completing onboarding.`);
+      }
 
       // --- UPLOAD PHOTOS TO CLOUDINARY ---
       const photoUrls = await uploadPhotosToCloudinary(onboardingData.photos as File[]);
@@ -209,6 +216,7 @@ const OnboardingPage = () => {
       photoUrls.forEach((url, index) => {
         (rawData as any)[`profilePhoto${index + 1}`] = url;
       });
+      rawData.profilePhotoCount = photoUrls.length;
 
       // Remove null/undefined/empty strings
       const dataToSubmit: OnboardingUpdateData = {};

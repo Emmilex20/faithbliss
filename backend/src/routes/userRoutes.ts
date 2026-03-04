@@ -4,6 +4,7 @@ import {
   getMe,
   getAllUsers,
   getUserById,
+  getOnboardingDebug,
   updateUserProfile,
   updateUserSettings,
   deactivateAccount,
@@ -15,6 +16,7 @@ const router = express.Router();
 
 // Get current logged-in user
 router.get('/me', protect, getMe);
+router.get('/me/onboarding-debug', protect, getOnboardingDebug);
 
 // Update profile info
 router.put('/me', protect, updateUserProfile);
@@ -28,6 +30,9 @@ router.post('/me/reactivate', protect, reactivateAccount);
 
 // Get all users
 router.get('/', protect, getAllUsers);
+
+// Debug onboarding document
+router.get('/:id/onboarding-debug', protect, getOnboardingDebug);
 
 // Get single user by ID
 router.get('/:id', protect, getUserById);

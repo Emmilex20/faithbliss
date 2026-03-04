@@ -27,6 +27,7 @@ import Settings from './pages/Settings.tsx';
 import Help from './pages/Help.tsx';
 import Report from './pages/Report.tsx';
 import Deactivate from './pages/Deactivate.tsx';
+import OnboardingDebug from './pages/OnboardingDebug.tsx';
 
 // Import the Contexts and Gates
 import { ToastProvider } from './contexts/ToastContext.tsx';
@@ -103,6 +104,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="help" element={<Help />} />
                 <Route path="report" element={<Report />} />
                 <Route path="deactivate" element={<Deactivate />} />
+                <Route path="debug/onboarding" element={<OnboardingDebug />} />
 
                 {/* 💡 CORRECTION: Use dynamic route path and the direct component */}
                 <Route path="profile/:id" element={<ProfilePage />} />
