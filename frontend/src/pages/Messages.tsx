@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // src/pages/Messages.tsx
 
-import { useState, useRef, useEffect, useLayoutEffect, Suspense, useMemo, useCallback, type ChangeEvent } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, Suspense, useMemo, useCallback, type ChangeEvent, type TouchEvent as ReactTouchEvent } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 
@@ -31,7 +31,7 @@ import type {
 } from '@/services/WebSocketService';
 import {
   MessageCircle, ArrowLeft, Search, Send, Phone, Video,
-  Smile, Paperclip, Info, Check, CheckCheck, Download, FileText, Loader2, Eye, X, Mic, Square, Play, Pause, Image as ImageIcon, Sticker, Reply, PhoneOff, MicOff, VideoOff, Minimize2, Maximize2
+  Smile, Paperclip, Info, Check, CheckCheck, Download, FileText, Loader2, Eye, X, Mic, Square, Play, Pause, Image as ImageIcon, Sticker, Reply, PhoneOff, MicOff, VideoOff, Minimize2, Maximize2, RefreshCcw, Wand2
 } from 'lucide-react';
 
 // Assuming these imports are correct for your Vite project structure
@@ -467,6 +467,7 @@ const MessagesContent = () => {
   const localCallVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteCallVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteCallAudioRef = useRef<HTMLAudioElement | null>(null);
+  const localPreviewContainerRef = useRef<HTMLDivElement | null>(null);
   const minimizedCallContainerRef = useRef<HTMLDivElement | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localCallStreamRef = useRef<MediaStream | null>(null);
@@ -490,6 +491,16 @@ const MessagesContent = () => {
     offsetX: 0,
     offsetY: 0,
   });
+  const localPreviewDragStateRef = useRef<{
+    dragging: boolean;
+    offsetX: number;
+    offsetY: number;
+  }>({
+    dragging: false,
+    offsetX: 0,
+    offsetY: 0,
+  });
+  const mobileCallGestureStartRef = useRef<{ x: number; y: number } | null>(null);
   const ringtoneAudioContextRef = useRef<AudioContext | null>(null);
   const ringtoneIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const incomingCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -529,9 +540,13 @@ const MessagesContent = () => {
   const [callDurationSeconds, setCallDurationSeconds] = useState(0);
   const [isCallMicMuted, setIsCallMicMuted] = useState(false);
   const [isCallCameraOff, setIsCallCameraOff] = useState(false);
+  const [callCameraFacingMode, setCallCameraFacingMode] = useState<'user' | 'environment'>('user');
+  const [callQualityLabel, setCallQualityLabel] = useState<'Excellent' | 'Good' | 'Weak' | 'Offline'>('Excellent');
   const [isCallMinimized, setIsCallMinimized] = useState(false);
   const [minimizedCallPosition, setMinimizedCallPosition] = useState<{ x: number; y: number } | null>(null);
   const [isMinimizedCallDragging, setIsMinimizedCallDragging] = useState(false);
+  const [localPreviewPosition, setLocalPreviewPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isLocalPreviewDragging, setIsLocalPreviewDragging] = useState(false);
   const [selectedVideoFilterId, setSelectedVideoFilterId] = useState<string>('none');
   const [selectedBackgroundId, setSelectedBackgroundId] = useState<string>('default');
   const [pendingAttachment, setPendingAttachment] = useState<{
@@ -777,10 +792,16 @@ const MessagesContent = () => {
     setCallDurationSeconds(0);
     setIsCallMicMuted(false);
     setIsCallCameraOff(false);
+    setCallCameraFacingMode('user');
+    setCallQualityLabel('Excellent');
     setIsCallMinimized(false);
     setMinimizedCallPosition(null);
     setIsMinimizedCallDragging(false);
     minimizedCallDragStateRef.current.dragging = false;
+    setLocalPreviewPosition(null);
+    setIsLocalPreviewDragging(false);
+    localPreviewDragStateRef.current.dragging = false;
+    mobileCallGestureStartRef.current = null;
     setSelectedVideoFilterId('none');
     setSelectedBackgroundId('default');
   }, []);
@@ -971,16 +992,25 @@ const MessagesContent = () => {
     return peerConnection;
   }, [cleanupCallSession, clearCallDisconnectTimeout, rtcIceServers, startCallTimer, webSocketService]);
 
-  const getCallUserMedia = useCallback(async (mode: CallType) => {
+  const getCallUserMedia = useCallback(async (
+    mode: CallType,
+    facingMode: 'user' | 'environment' = callCameraFacingMode
+  ) => {
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error('getUserMedia is unavailable in this browser.');
     }
 
     return navigator.mediaDevices.getUserMedia({
       audio: true,
-      video: mode === 'video',
+      video: mode === 'video'
+        ? {
+            facingMode: { ideal: facingMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          }
+        : false,
     });
-  }, []);
+  }, [callCameraFacingMode]);
 
   const startOutgoingCall = useCallback(async (mode: CallType) => {
     const activeConversation = currentConversationRef.current;
@@ -1114,6 +1144,72 @@ const MessagesContent = () => {
     });
   }, []);
 
+  const cycleCallVideoFilter = useCallback(() => {
+    setSelectedVideoFilterId((prev) => {
+      const currentIndex = Math.max(
+        0,
+        CALL_VIDEO_FILTER_PRESETS.findIndex((preset) => preset.id === prev)
+      );
+      const nextIndex = (currentIndex + 1) % CALL_VIDEO_FILTER_PRESETS.length;
+      return CALL_VIDEO_FILTER_PRESETS[nextIndex].id;
+    });
+  }, []);
+
+  const cycleCallBackground = useCallback(() => {
+    setSelectedBackgroundId((prev) => {
+      const currentIndex = Math.max(
+        0,
+        CALL_BACKGROUND_PRESETS.findIndex((preset) => preset.id === prev)
+      );
+      const nextIndex = (currentIndex + 1) % CALL_BACKGROUND_PRESETS.length;
+      return CALL_BACKGROUND_PRESETS[nextIndex].id;
+    });
+  }, []);
+
+  const switchCallCameraFacing = useCallback(async () => {
+    if (callMode !== 'video') return;
+    const currentStream = localCallStreamRef.current;
+    if (!currentStream) return;
+
+    const nextFacingMode = callCameraFacingMode === 'user' ? 'environment' : 'user';
+
+    try {
+      const replacementStream = await getCallUserMedia('video', nextFacingMode);
+      const nextVideoTrack = replacementStream.getVideoTracks()[0];
+
+      replacementStream.getAudioTracks().forEach((track) => track.stop());
+
+      if (!nextVideoTrack) {
+        throw new Error('No replacement camera track available.');
+      }
+
+      nextVideoTrack.enabled = !isCallCameraOff;
+
+      currentStream.getVideoTracks().forEach((track) => {
+        currentStream.removeTrack(track);
+        track.stop();
+      });
+      currentStream.addTrack(nextVideoTrack);
+
+      const videoSender = peerConnectionRef.current
+        ?.getSenders()
+        .find((sender) => sender.track?.kind === 'video');
+      if (videoSender) {
+        await videoSender.replaceTrack(nextVideoTrack);
+      }
+
+      if (localCallVideoRef.current) {
+        localCallVideoRef.current.srcObject = currentStream;
+      }
+
+      setLocalCallStream(new MediaStream(currentStream.getTracks()));
+      setCallCameraFacingMode(nextFacingMode);
+    } catch (error) {
+      console.error('Failed to switch call camera:', error);
+      showError('Unable to switch camera right now.', 'Camera Error');
+    }
+  }, [callCameraFacingMode, callMode, getCallUserMedia, isCallCameraOff, showError]);
+
   const clampMinimizedCallPosition = useCallback((x: number, y: number) => {
     if (typeof window === 'undefined') return { x, y };
     const card = minimizedCallContainerRef.current;
@@ -1235,6 +1331,167 @@ const MessagesContent = () => {
       window.removeEventListener('touchcancel', onTouchEnd);
     };
   }, [isCallMinimized, stopMinimizedCallDrag, updateMinimizedCallDrag]);
+
+  const clampLocalPreviewPosition = useCallback((x: number, y: number) => {
+    if (typeof window === 'undefined') return { x, y };
+    const card = localPreviewContainerRef.current;
+    const width = card?.offsetWidth || 128;
+    const height = card?.offsetHeight || 176;
+    const margin = 14;
+    const maxX = Math.max(margin, window.innerWidth - width - margin);
+    const reservedBottomSpace = 218;
+    const maxY = Math.max(margin, window.innerHeight - height - reservedBottomSpace);
+    return {
+      x: Math.min(Math.max(margin, x), maxX),
+      y: Math.min(Math.max(margin, y), maxY),
+    };
+  }, []);
+
+  const startLocalPreviewDrag = useCallback((clientX: number, clientY: number) => {
+    const card = localPreviewContainerRef.current;
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    localPreviewDragStateRef.current = {
+      dragging: true,
+      offsetX: clientX - rect.left,
+      offsetY: clientY - rect.top,
+    };
+    setIsLocalPreviewDragging(true);
+  }, []);
+
+  const updateLocalPreviewDrag = useCallback((clientX: number, clientY: number) => {
+    if (!localPreviewDragStateRef.current.dragging) return;
+    const nextX = clientX - localPreviewDragStateRef.current.offsetX;
+    const nextY = clientY - localPreviewDragStateRef.current.offsetY;
+    setLocalPreviewPosition(clampLocalPreviewPosition(nextX, nextY));
+  }, [clampLocalPreviewPosition]);
+
+  const stopLocalPreviewDrag = useCallback(() => {
+    localPreviewDragStateRef.current.dragging = false;
+    setIsLocalPreviewDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (callStatus === 'idle' || callMode !== 'video' || isDesktopLayout) return;
+
+    setLocalPreviewPosition((previous) => {
+      if (previous) {
+        return clampLocalPreviewPosition(previous.x, previous.y);
+      }
+      const card = localPreviewContainerRef.current;
+      const width = card?.offsetWidth || 128;
+      const height = card?.offsetHeight || 176;
+      return clampLocalPreviewPosition(
+        window.innerWidth - width - 16,
+        window.innerHeight - height - 236
+      );
+    });
+
+    const handleResize = () => {
+      setLocalPreviewPosition((previous) => {
+        if (!previous) return previous;
+        return clampLocalPreviewPosition(previous.x, previous.y);
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [callMode, callStatus, clampLocalPreviewPosition, isDesktopLayout]);
+
+  useEffect(() => {
+    if (callStatus === 'idle' || isDesktopLayout) return;
+
+    const onPointerMove = (event: PointerEvent) => {
+      updateLocalPreviewDrag(event.clientX, event.clientY);
+    };
+    const onPointerUp = () => {
+      stopLocalPreviewDrag();
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+    };
+  }, [callStatus, isDesktopLayout, stopLocalPreviewDrag, updateLocalPreviewDrag]);
+
+  useEffect(() => {
+    if (callStatus === 'idle') {
+      setCallQualityLabel('Excellent');
+      return;
+    }
+
+    const updateQuality = () => {
+      if (!navigator.onLine) {
+        setCallQualityLabel('Offline');
+        return;
+      }
+
+      const connection = (navigator as Navigator & {
+        connection?: {
+          effectiveType?: string;
+          downlink?: number;
+          rtt?: number;
+          addEventListener?: (type: 'change', listener: () => void) => void;
+          removeEventListener?: (type: 'change', listener: () => void) => void;
+        };
+      }).connection;
+
+      const effectiveType = connection?.effectiveType;
+      const downlink = typeof connection?.downlink === 'number' ? connection.downlink : 10;
+      const rtt = typeof connection?.rtt === 'number' ? connection.rtt : 80;
+      const iceState = peerConnectionRef.current?.iceConnectionState;
+
+      if (
+        iceState === 'failed'
+        || iceState === 'disconnected'
+        || effectiveType === 'slow-2g'
+        || effectiveType === '2g'
+        || downlink < 1.2
+        || rtt > 450
+      ) {
+        setCallQualityLabel('Weak');
+        return;
+      }
+
+      if (
+        iceState === 'checking'
+        || effectiveType === '3g'
+        || downlink < 3
+        || rtt > 220
+      ) {
+        setCallQualityLabel('Good');
+        return;
+      }
+
+      setCallQualityLabel('Excellent');
+    };
+
+    updateQuality();
+    const intervalId = window.setInterval(updateQuality, 5000);
+    const connection = (navigator as Navigator & {
+      connection?: {
+        addEventListener?: (type: 'change', listener: () => void) => void;
+        removeEventListener?: (type: 'change', listener: () => void) => void;
+      };
+    }).connection;
+
+    connection?.addEventListener?.('change', updateQuality);
+    window.addEventListener('online', updateQuality);
+    window.addEventListener('offline', updateQuality);
+
+    return () => {
+      window.clearInterval(intervalId);
+      connection?.removeEventListener?.('change', updateQuality);
+      window.removeEventListener('online', updateQuality);
+      window.removeEventListener('offline', updateQuality);
+    };
+  }, [callStatus, remoteCallStream]);
 
   useEffect(() => {
     if (callStatus === 'ringing') {
@@ -2511,6 +2768,13 @@ const MessagesContent = () => {
   const callVideoFilterStyle = callMode === 'video'
     ? { filter: selectedVideoFilter.cssFilter }
     : undefined;
+  const callQualityToneClass = callQualityLabel === 'Excellent'
+    ? 'text-emerald-200'
+    : callQualityLabel === 'Good'
+      ? 'text-amber-200'
+      : callQualityLabel === 'Offline'
+        ? 'text-rose-200'
+        : 'text-orange-200';
 
   const renderCallLayer = () => {
     const shouldShowCallWindow = callStatus !== 'idle' && Boolean(activeCallPeerId);
@@ -2658,9 +2922,52 @@ const MessagesContent = () => {
       );
     }
 
+    const isMobileCallView = !isDesktopLayout;
+    const hasLocalPreviewPosition = Boolean(localPreviewPosition);
+
+    const handleCallGestureStart = (event: ReactTouchEvent<HTMLDivElement>) => {
+      if (!isMobileCallView) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('button, a, [data-call-control="true"]')) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      mobileCallGestureStartRef.current = { x: touch.clientX, y: touch.clientY };
+    };
+
+    const handleCallGestureEnd = (event: ReactTouchEvent<HTMLDivElement>) => {
+      if (!isMobileCallView) return;
+      const start = mobileCallGestureStartRef.current;
+      mobileCallGestureStartRef.current = null;
+      if (!start) return;
+      const touch = event.changedTouches[0];
+      if (!touch) return;
+      const deltaX = touch.clientX - start.x;
+      const deltaY = touch.clientY - start.y;
+
+      if (Math.abs(deltaX) < 64 && Math.abs(deltaY) < 64) return;
+
+      if (Math.abs(deltaY) > Math.abs(deltaX) && deltaY < -72) {
+        void switchCallCameraFacing();
+        return;
+      }
+
+      if (Math.abs(deltaX) > Math.abs(deltaY) && deltaX < -72) {
+        cycleCallVideoFilter();
+        return;
+      }
+
+      if (Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 72) {
+        cycleCallBackground();
+      }
+    };
+
     return (
       <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/70 backdrop-blur-md p-3 md:p-5">
-        <div className="relative w-full h-full max-h-[92vh] max-w-5xl rounded-3xl overflow-hidden border border-white/15 bg-gradient-to-br from-[#07121d] via-[#0b1b2b] to-[#10263a] shadow-[0_30px_120px_rgba(0,0,0,0.6)]">
+        <div
+          className="relative w-full h-full max-h-[92vh] max-w-5xl rounded-3xl overflow-hidden border border-white/15 bg-gradient-to-br from-[#07121d] via-[#0b1b2b] to-[#10263a] shadow-[0_30px_120px_rgba(0,0,0,0.6)]"
+          onTouchStart={handleCallGestureStart}
+          onTouchEnd={handleCallGestureEnd}
+        >
           <div className={`absolute inset-0 ${selectedBackground.className}`} />
           <div className="absolute inset-0">
             {callMode === 'video' ? (
@@ -2682,6 +2989,7 @@ const MessagesContent = () => {
 
           <div className={`pointer-events-none absolute inset-0 transition-all duration-300 ${selectedBackground.overlayClass}`} />
           <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/55" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.06),transparent_30%),linear-gradient(180deg,rgba(244,114,182,0.08),transparent_24%,transparent_62%,rgba(12,18,30,0.38)_100%)] mix-blend-screen" />
 
           <div className="absolute top-4 left-4 right-4 flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 rounded-2xl border border-white/15 bg-black/35 px-3 py-2 backdrop-blur-xl">
@@ -2695,6 +3003,9 @@ const MessagesContent = () => {
               <div className="min-w-0">
                 <p className="text-white font-semibold truncate">{callPeerName}</p>
                 <p className="text-xs text-white/75">{callStatusLabel}</p>
+                {isMobileCallView ? (
+                  <p className={`mt-0.5 text-[11px] font-medium ${callQualityToneClass}`}>📶 {callQualityLabel}</p>
+                ) : null}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -2724,7 +3035,23 @@ const MessagesContent = () => {
           </div>
 
           {callMode === 'video' && localCallStream && (
-            <div className="absolute right-3 bottom-24 md:right-4 md:bottom-28 w-28 h-40 sm:w-32 sm:h-44 rounded-2xl overflow-hidden border border-white/25 bg-black/40 shadow-2xl">
+            <div
+              ref={localPreviewContainerRef}
+              data-call-control="true"
+              className={`absolute overflow-hidden border bg-black/30 ${isMobileCallView ? 'w-24 h-36 rounded-[1.35rem] border-white/35 shadow-[0_16px_40px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.14),0_0_24px_rgba(244,114,182,0.16)] backdrop-blur-md' : 'right-3 bottom-24 md:right-4 md:bottom-28 w-28 h-40 sm:w-32 sm:h-44 rounded-2xl border-white/25 shadow-2xl'} ${isLocalPreviewDragging ? '' : 'transition-[left,top,transform] duration-200 ease-out'} ${isMobileCallView ? 'cursor-grab active:cursor-grabbing' : ''}`}
+              style={isMobileCallView
+                ? (hasLocalPreviewPosition
+                    ? { left: localPreviewPosition!.x, top: localPreviewPosition!.y }
+                    : { right: 16, bottom: 236 })
+                : undefined}
+              onPointerDown={(event) => {
+                if (!isMobileCallView) return;
+                event.preventDefault();
+                startLocalPreviewDrag(event.clientX, event.clientY);
+              }}
+            >
+              <div className="pointer-events-none absolute inset-0 z-10 rounded-[inherit] ring-1 ring-white/20" />
+              <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-black/35 via-transparent to-white/8" />
                 <video
                   ref={localCallVideoRef}
                   autoPlay
@@ -2760,12 +3087,17 @@ const MessagesContent = () => {
                 </div>
               </div>
             ) : (
-              <div className="mx-auto w-full max-w-md rounded-2xl border border-white/20 bg-black/45 backdrop-blur-xl px-4 py-3">
-                <div className="flex items-center justify-center gap-3">
+              <div
+                data-call-control="true"
+                className={`mx-auto w-full ${isMobileCallView ? 'max-w-[20rem] rounded-[1.8rem] border-white/18 bg-black/34 px-3.5 py-2.5 shadow-[0_22px_48px_rgba(0,0,0,0.26)]' : 'max-w-md rounded-2xl border-white/20 bg-black/45 px-4 py-3'} border backdrop-blur-2xl`}
+              >
+                <div className={`flex items-center justify-center ${isMobileCallView ? 'gap-2.5' : 'gap-3'}`}>
                   <button
                     type="button"
                     onClick={toggleCallMic}
-                    className={`inline-flex items-center justify-center h-11 w-11 rounded-xl border transition-colors ${
+                    className={`inline-flex items-center justify-center border transition-all duration-150 active:scale-95 ${
+                      isMobileCallView ? 'h-12 w-12 rounded-2xl shadow-[0_10px_26px_rgba(0,0,0,0.22)]' : 'h-11 w-11 rounded-xl'
+                    } ${
                       isCallMicMuted
                         ? 'bg-white/90 text-gray-900 border-white'
                         : 'bg-white/10 text-white border-white/25 hover:bg-white/20'
@@ -2778,7 +3110,9 @@ const MessagesContent = () => {
                     <button
                       type="button"
                       onClick={toggleCallCamera}
-                      className={`inline-flex items-center justify-center h-11 w-11 rounded-xl border transition-colors ${
+                      className={`inline-flex items-center justify-center border transition-all duration-150 active:scale-95 ${
+                        isMobileCallView ? 'h-12 w-12 rounded-2xl shadow-[0_10px_26px_rgba(0,0,0,0.22)]' : 'h-11 w-11 rounded-xl'
+                      } ${
                         isCallCameraOff
                           ? 'bg-white/90 text-gray-900 border-white'
                           : 'bg-white/10 text-white border-white/25 hover:bg-white/20'
@@ -2791,24 +3125,24 @@ const MessagesContent = () => {
                   <button
                     type="button"
                     onClick={() => endActiveCall({ notifyPeer: true, reason: 'ended-by-user' })}
-                    className="inline-flex items-center justify-center h-11 w-14 rounded-xl bg-rose-500 hover:bg-rose-600 text-white transition-colors"
+                    className={`inline-flex items-center justify-center bg-rose-500 hover:bg-rose-600 text-white transition-all duration-150 active:scale-95 ${isMobileCallView ? 'h-12 w-14 rounded-2xl shadow-[0_16px_30px_rgba(244,63,94,0.32)]' : 'h-11 w-14 rounded-xl'}`}
                     aria-label="Hang up call"
                   >
                     <PhoneOff className="w-4 h-4" />
                   </button>
                 </div>
                 {callMode === 'video' && (
-                  <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className={`mt-2.5 grid grid-cols-2 ${isMobileCallView ? 'gap-2' : 'gap-2'}`}>
                     <AppDropdown
                       value={selectedVideoFilterId}
                       onChange={setSelectedVideoFilterId}
                       options={CALL_VIDEO_FILTER_PRESETS.map((preset) => ({
                         value: preset.id,
-                        label: `Filter: ${preset.label}`,
+                        label: preset.label,
                       }))}
-                      placeholder="Video filter"
-                      triggerClassName="h-9 rounded-lg border border-white/20 bg-white/10 px-2 text-xs text-white focus:border-pink-300/70"
-                      menuClassName="border-white/20 bg-slate-900/96"
+                      placeholder="Filter"
+                      triggerClassName={`${isMobileCallView ? 'h-11 rounded-2xl border-white/18 bg-white/8 px-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'h-9 rounded-lg border border-white/20 bg-white/10 px-2 text-xs text-white'} focus:border-pink-300/70`}
+                      menuClassName="z-[140] border-white/20 bg-slate-900/98"
                       optionClassName="text-xs sm:text-sm"
                       ariaLabel="Video filter"
                     />
@@ -2817,16 +3151,50 @@ const MessagesContent = () => {
                       onChange={setSelectedBackgroundId}
                       options={CALL_BACKGROUND_PRESETS.map((preset) => ({
                         value: preset.id,
-                        label: `Bg: ${preset.label}`,
+                        label: preset.label,
                       }))}
-                      placeholder="Call background"
-                      triggerClassName="h-9 rounded-lg border border-white/20 bg-white/10 px-2 text-xs text-white focus:border-pink-300/70"
-                      menuClassName="border-white/20 bg-slate-900/96"
+                      placeholder="Background"
+                      triggerClassName={`${isMobileCallView ? 'h-11 rounded-2xl border-white/18 bg-white/8 px-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'h-9 rounded-lg border border-white/20 bg-white/10 px-2 text-xs text-white'} focus:border-pink-300/70`}
+                      menuClassName="z-[140] border-white/20 bg-slate-900/98"
                       optionClassName="text-xs sm:text-sm"
                       ariaLabel="Call background"
                     />
                   </div>
                 )}
+                {isMobileCallView && callMode === 'video' ? (
+                  <div className="mt-2.5 flex items-center justify-between gap-1.5 rounded-[1.2rem] border border-white/10 bg-white/[0.03] px-2.5 py-2 text-[10px] text-white/75">
+                    <button
+                      type="button"
+                      data-call-control="true"
+                      onClick={() => void switchCallCameraFacing()}
+                      className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 transition-transform duration-150 active:scale-95"
+                      aria-label="Switch camera"
+                    >
+                      <RefreshCcw className="h-3.5 w-3.5" />
+                      <span>Swipe up</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-call-control="true"
+                      onClick={cycleCallVideoFilter}
+                      className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 transition-transform duration-150 active:scale-95"
+                      aria-label="Cycle video filters"
+                    >
+                      <Wand2 className="h-3.5 w-3.5" />
+                      <span>Swipe left</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-call-control="true"
+                      onClick={cycleCallBackground}
+                      className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 transition-transform duration-150 active:scale-95"
+                      aria-label="Cycle backgrounds"
+                    >
+                      <ImageIcon className="h-3.5 w-3.5" />
+                      <span>Swipe right</span>
+                    </button>
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
