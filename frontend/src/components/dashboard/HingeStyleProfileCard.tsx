@@ -517,9 +517,8 @@ export const HingeStyleProfileCard = ({
 
       return (
         <div className="relative mt-4 rounded-[26px] bg-slate-100 px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-          {renderMobileLikeButton()}
           <p className={mobileSectionLabelClass}>{title}</p>
-          {value ? <p className="mt-3 pr-14 text-[1.18rem] font-semibold leading-7 text-slate-900">{value}</p> : null}
+          {value ? <p className="mt-3 text-[1.18rem] font-semibold leading-7 text-slate-900">{value}</p> : null}
           {children}
         </div>
       );
@@ -667,9 +666,8 @@ export const HingeStyleProfileCard = ({
               </div>
 
               <div className="relative mt-4 rounded-[26px] bg-slate-100 px-5 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                {renderMobileLikeButton()}
                 <p className={mobileSectionLabelClass}>About me</p>
-                <p className={`${mobileBodyTextClass} pr-14`}>
+                <p className={mobileBodyTextClass}>
                   {aboutMeBody}
                 </p>
               </div>
@@ -677,7 +675,7 @@ export const HingeStyleProfileCard = ({
               {renderMobileInfoSection({
                 title: 'Gender & location',
                 children: (
-                  <div className="mt-3 space-y-3 pr-14">
+                  <div className="mt-3 space-y-3">
                     {formattedGender ? (
                       <div>
                         <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Gender</p>
@@ -703,11 +701,10 @@ export const HingeStyleProfileCard = ({
 
               {promptQuestion || promptAnswer ? (
                 <div className="relative mt-4 rounded-[26px] bg-slate-100 px-5 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                  {renderMobileLikeButton()}
                   <p className={mobileSectionLabelClass}>
                     {promptQuestion || 'Personal prompt'}
                   </p>
-                  <p className={`${mobilePromptTextClass} pr-14`}>
+                  <p className={mobilePromptTextClass}>
                     {promptAnswer || 'No response added yet.'}
                   </p>
                 </div>
