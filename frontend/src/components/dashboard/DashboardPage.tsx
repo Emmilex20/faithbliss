@@ -10,7 +10,6 @@ import { ProfileDisplay } from '@/components/dashboard/ProfileDisplay';
 import { OverlayPanels } from '@/components/dashboard/OverlayPanels';
 import { StoryBar } from '@/components/dashboard/StoryBar';
 import { PostOnboardingWelcomeOverlay } from '@/components/dashboard/PostOnboardingWelcomeOverlay';
-import { MatchCelebrationOverlay } from '@/components/dashboard/MatchCelebrationOverlay';
 import { type DashboardFiltersPayload } from '@/components/dashboard/FilterPanel';
 import type { DashboardFilterFocusSection } from '@/components/dashboard/FilterPanel';
 import { insertScrollbarStyles } from '@/components/dashboard/styles'; 
@@ -40,18 +39,6 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const hasCompletedInitialLoadRef = useRef(false);
     const [showForcedOnboardingPrompt, setShowForcedOnboardingPrompt] = useState(false);
     const ONBOARDING_PAUSE_STORAGE_KEY = 'faithbliss_onboarding_pause_state';
-    const matchCelebrationTimerRef = useRef<number | null>(null);
-    const [matchCelebration, setMatchCelebration] = useState<{
-      open: boolean;
-      matchedUserId: string;
-      matchedUserName: string;
-      matchedUserPhoto?: string;
-    }>({
-      open: false,
-      matchedUserId: '',
-      matchedUserName: '',
-      matchedUserPhoto: undefined,
-    });
 
   // Fetch real potential matches from backend
   const { 
@@ -158,9 +145,6 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
   useEffect(() => {
     return () => {
       setFilteredProfiles(null);
-      if (matchCelebrationTimerRef.current) {
-        window.clearTimeout(matchCelebrationTimerRef.current);
-      }
     };
   }, []);
 
@@ -293,8 +277,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
   const handleLike = () => {
     //  CRITICAL FIX: Use currentProfile?.id OR currentProfile?._id
     const userIdToLike = currentProfile?.id || currentProfile?._id;
-    const likedProfile = currentProfile;
-    
+
     if (!userIdToLike) {
       console.warn("No user ID found to like. Skipping API call.");
       goToNextProfile(); // Move to the next profile placeholder
@@ -311,28 +294,8 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
 
     // Fire network call in background so UI never blocks.
     void likeUser(key, { suppressSuccessToast: true })
-      .then((result) => {
+      .then(() => {
         console.log(`Liked profile ${key}`);
-        if (result?.isMatch && likedProfile) {
-          const matchedUserId = String(likedProfile.id || (likedProfile as any)._id || key);
-          const matchedUserName = likedProfile.name || 'New Match';
-          const matchedUserPhoto = likedProfile.profilePhoto1 || likedProfile.profilePhoto2 || likedProfile.profilePhoto3;
-
-          if (matchCelebrationTimerRef.current) {
-            window.clearTimeout(matchCelebrationTimerRef.current);
-          }
-
-          setMatchCelebration({
-            open: true,
-            matchedUserId,
-            matchedUserName,
-            matchedUserPhoto,
-          });
-
-          matchCelebrationTimerRef.current = window.setTimeout(() => {
-            setMatchCelebration((prev) => ({ ...prev, open: false }));
-          }, 30000);
-        }
       })
       .catch((error) => {
         console.error('Failed to like user:', error);
@@ -416,27 +379,6 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
         }
     };
 
-  const closeMatchCelebration = () => {
-    if (matchCelebrationTimerRef.current) {
-      window.clearTimeout(matchCelebrationTimerRef.current);
-      matchCelebrationTimerRef.current = null;
-    }
-    setMatchCelebration((prev) => ({ ...prev, open: false }));
-  };
-
-  const handleMatchChat = () => {
-    const targetId = matchCelebration.matchedUserId;
-    const targetName = matchCelebration.matchedUserName;
-    closeMatchCelebration();
-    if (!targetId) {
-      navigate('/messages');
-      return;
-    }
-    navigate(
-      `/messages?profileId=${encodeURIComponent(targetId)}&profileName=${encodeURIComponent(targetName || '')}`
-    );
-  };
-
   const handleToggleFilters = () => {
     setFilterFocusSection(null);
     setShowFilters((prev) => !prev);
@@ -454,15 +396,6 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white pb-0 lg:pb-20 no-horizontal-scroll dashboard-main">
-      <MatchCelebrationOverlay
-        open={matchCelebration.open}
-        currentUserName={userName}
-        currentUserPhoto={userImage}
-        matchedUserName={matchCelebration.matchedUserName}
-        matchedUserPhoto={matchCelebration.matchedUserPhoto}
-        onContinue={closeMatchCelebration}
-        onChat={handleMatchChat}
-      />
       {showPostOnboardingOverlay && (
         <PostOnboardingWelcomeOverlay
           user={currentUserData}

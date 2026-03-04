@@ -1,24 +1,158 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/contexts/ToastContext';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { MatchCelebrationOverlay } from '@/components/dashboard/MatchCelebrationOverlay';
+import { API } from '@/services/api';
 
 type NotificationPayload = {
+  id?: string;
   type: 'NEW_MESSAGE' | 'PROFILE_LIKED' | 'NEW_MATCH' | 'STORY_POSTED' | string;
   message: string;
   data?: Record<string, any>;
+  createdAt?: string;
 };
 
+type MatchCelebration = {
+  notificationId: string;
+  matchedUserId: string;
+  matchedUserName: string;
+  matchedUserPhoto?: string;
+};
+
+const MAX_STORED_MATCH_NOTIFICATION_IDS = 100;
+
 export const NotificationListener = () => {
-  const { isAuthenticated } = useAuthContext();
+  const navigate = useNavigate();
+  const { isAuthenticated, user } = useAuthContext();
   const webSocketService = useWebSocket();
   const { showSuccess, showInfo } = useToast();
+  const [celebrationQueue, setCelebrationQueue] = useState<MatchCelebration[]>([]);
+  const seenMatchNotificationIdsRef = useRef<Set<string>>(new Set());
+
+  const storageKey = useMemo(() => {
+    const userId = user?.id ? String(user.id) : '';
+    return userId ? `faithbliss_seen_match_notifications:${userId}` : '';
+  }, [user?.id]);
+
+  const persistSeenIds = useCallback(() => {
+    if (!storageKey) return;
+    try {
+      const entries = Array.from(seenMatchNotificationIdsRef.current).slice(-MAX_STORED_MATCH_NOTIFICATION_IDS);
+      localStorage.setItem(storageKey, JSON.stringify(entries));
+    } catch {
+      // Ignore localStorage failures.
+    }
+  }, [storageKey]);
+
+  const hasSeenNotification = useCallback((notificationId: string) => {
+    return seenMatchNotificationIdsRef.current.has(notificationId);
+  }, []);
+
+  const markNotificationSeen = useCallback((notificationId: string) => {
+    if (!notificationId || seenMatchNotificationIdsRef.current.has(notificationId)) return;
+    seenMatchNotificationIdsRef.current.add(notificationId);
+    persistSeenIds();
+  }, [persistSeenIds]);
+
+  const enqueueMatchCelebration = useCallback(async (payload: NotificationPayload) => {
+    const fallbackId = `${payload.type}:${payload.data?.otherUserId || 'unknown'}:${payload.createdAt || payload.message}`;
+    const notificationId = String(payload.id || fallbackId);
+    if (hasSeenNotification(notificationId)) return;
+
+    markNotificationSeen(notificationId);
+
+    const matchedUserId =
+      typeof payload.data?.otherUserId === 'string' && payload.data.otherUserId.trim()
+        ? payload.data.otherUserId.trim()
+        : '';
+
+    let matchedUserName = 'New Match';
+    let matchedUserPhoto: string | undefined;
+
+    if (matchedUserId) {
+      try {
+        const matchedUser = await API.User.getUserById(matchedUserId);
+        matchedUserName = matchedUser?.name || matchedUserName;
+        matchedUserPhoto =
+          matchedUser?.profilePhoto1 || matchedUser?.profilePhoto2 || matchedUser?.profilePhoto3 || undefined;
+      } catch {
+        // Fall back to the notification message.
+      }
+    }
+
+    if (matchedUserName === 'New Match' && payload.message) {
+      const extractedName = payload.message.replace(/^You matched with\s+/i, '').trim();
+      if (extractedName) {
+        matchedUserName = extractedName;
+      }
+    }
+
+    setCelebrationQueue((current) => {
+      if (current.some((item) => item.notificationId === notificationId)) {
+        return current;
+      }
+
+      return [
+        ...current,
+        {
+          notificationId,
+          matchedUserId,
+          matchedUserName,
+          matchedUserPhoto,
+        },
+      ];
+    });
+  }, [hasSeenNotification, markNotificationSeen]);
+
+  const maybeShowBrowserNotification = useCallback((payload: NotificationPayload) => {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    const title =
+      payload.type === 'NEW_MATCH'
+        ? "It's a match!"
+        : payload.type === 'PROFILE_LIKED'
+        ? 'New Like'
+        : payload.type === 'NEW_MESSAGE'
+        ? 'New Message'
+        : payload.type === 'STORY_POSTED'
+        ? 'New Story'
+        : 'Notification';
+
+    const notification = new Notification(title, {
+      body: payload.message || 'You have a new notification.',
+      icon: '/favicon.ico',
+    });
+
+    notification.onclick = () => {
+      window.focus();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!storageKey) {
+      seenMatchNotificationIdsRef.current = new Set();
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(storageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const items = Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string') : [];
+      seenMatchNotificationIdsRef.current = new Set(items);
+    } catch {
+      seenMatchNotificationIdsRef.current = new Set();
+    }
+  }, [storageKey]);
 
   useEffect(() => {
     if (!isAuthenticated || !webSocketService) return;
+
     const handleNotification = (payload: NotificationPayload) => {
       if (payload.type === 'NEW_MATCH') {
         showSuccess(payload.message || "It's a match!", 'Match');
+        void enqueueMatchCelebration(payload);
       } else if (payload.type === 'PROFILE_LIKED') {
         showInfo(payload.message || 'You received a new like', 'New Like');
       } else if (payload.type === 'NEW_MESSAGE') {
@@ -29,31 +163,92 @@ export const NotificationListener = () => {
         showInfo(payload.message || 'You have a new notification', 'Notification');
       }
 
-      if ('Notification' in window && Notification.permission === 'granted') {
-        const title =
-          payload.type === 'NEW_MATCH'
-            ? "It's a match!"
-            : payload.type === 'PROFILE_LIKED'
-            ? 'New Like'
-            : payload.type === 'NEW_MESSAGE'
-            ? 'New Message'
-            : payload.type === 'STORY_POSTED'
-            ? 'New Story'
-            : 'Notification';
-        const notification = new Notification(title, {
-          body: payload.message || 'You have a new notification.',
-          icon: '/favicon.ico',
-        });
-        notification.onclick = () => {
-          window.focus();
-        };
-      }
+      maybeShowBrowserNotification(payload);
     };
+
     webSocketService.onNotification(handleNotification);
     return () => {
       webSocketService.off('notification', handleNotification);
     };
-  }, [isAuthenticated, webSocketService, showSuccess, showInfo]);
+  }, [enqueueMatchCelebration, isAuthenticated, maybeShowBrowserNotification, showInfo, showSuccess, webSocketService]);
 
-  return null;
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setCelebrationQueue([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncUnseenMatchNotifications = async () => {
+      try {
+        const notifications = await API.Notification.getNotifications();
+        if (cancelled || !Array.isArray(notifications)) return;
+
+        const unseenMatches = notifications.filter((item) => {
+          const notification = item as NotificationPayload;
+          const notificationId = String(notification.id || '');
+          return notification.type === 'NEW_MATCH' && notificationId && !hasSeenNotification(notificationId);
+        });
+
+        for (const notification of unseenMatches.reverse()) {
+          if (cancelled) break;
+          await enqueueMatchCelebration(notification as NotificationPayload);
+        }
+      } catch {
+        // Ignore transient notification sync errors.
+      }
+    };
+
+    void syncUnseenMatchNotifications();
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        void syncUnseenMatchNotifications();
+      }
+    };
+
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
+  }, [enqueueMatchCelebration, hasSeenNotification, isAuthenticated]);
+
+  const activeCelebration = celebrationQueue[0] || null;
+
+  const closeCelebration = () => {
+    setCelebrationQueue((current) => current.slice(1));
+  };
+
+  const handleChat = () => {
+    const current = activeCelebration;
+    closeCelebration();
+
+    if (!current?.matchedUserId) {
+      navigate('/matches');
+      return;
+    }
+
+    navigate(
+      `/messages?profileId=${encodeURIComponent(current.matchedUserId)}&profileName=${encodeURIComponent(current.matchedUserName || '')}`
+    );
+  };
+
+  return (
+    <>
+      <MatchCelebrationOverlay
+        open={Boolean(activeCelebration)}
+        currentUserName={user?.name || 'You'}
+        currentUserPhoto={user?.profilePhoto1 || undefined}
+        matchedUserName={activeCelebration?.matchedUserName || 'New Match'}
+        matchedUserPhoto={activeCelebration?.matchedUserPhoto}
+        onContinue={closeCelebration}
+        onChat={handleChat}
+      />
+    </>
+  );
 };
