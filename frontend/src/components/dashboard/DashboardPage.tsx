@@ -12,6 +12,7 @@ import { StoryBar } from '@/components/dashboard/StoryBar';
 import { PostOnboardingWelcomeOverlay } from '@/components/dashboard/PostOnboardingWelcomeOverlay';
 import { type DashboardFiltersPayload } from '@/components/dashboard/FilterPanel';
 import type { DashboardFilterFocusSection } from '@/components/dashboard/FilterPanel';
+import { useProfileQueue } from '@/components/dashboard/useProfileQueue';
 import { insertScrollbarStyles } from '@/components/dashboard/styles'; 
 import { usePotentialMatches, useMatching, useStories, useUserProfile } from '@/hooks/useAPI'; 
 
@@ -29,14 +30,8 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const [filterFocusSection, setFilterFocusSection] = useState<DashboardFilterFocusSection | null>(null);
     const [showSidePanel, setShowSidePanel] = useState(false);
     const [showPostOnboardingOverlay, setShowPostOnboardingOverlay] = useState(false);
-    const [currentProfileIndex, setCurrentProfileIndex] = useState(0);
-    const [swipeDirection, setSwipeDirection] = useState<'left' | 'right'>('right');
     const [filteredProfiles, setFilteredProfiles] = useState<User[] | null>(null);
     const [isLoadingFilters, setIsLoadingFilters] = useState(false);
-    const [isExhausted, setIsExhausted] = useState(false);
-    const prefetchingRef = useRef(false);
-    const lastPrefetchAtRef = useRef(0);
-    const lastPrefetchIndexRef = useRef<number | null>(null);
     const pendingActionIdsRef = useRef<Set<string>>(new Set());
     const hasCompletedInitialLoadRef = useRef(false);
     const [showForcedOnboardingPrompt, setShowForcedOnboardingPrompt] = useState(false);
@@ -107,41 +102,22 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
         return unpassedProfiles.length > 0 ? unpassedProfiles : baseProfiles;
     }, [profiles, filteredProfiles, currentUserData?.id, persistedPassedProfileIds]);
 
-
-    useEffect(() => {
-        if (!Array.isArray(activeProfiles) || activeProfiles.length === 0) {
-            setCurrentProfileIndex(0);
-            return;
-        }
-        setIsExhausted(false);
-        setCurrentProfileIndex((prev) => (prev >= activeProfiles.length ? 0 : prev));
-    }, [filteredProfiles, activeProfiles]);
-
-    useEffect(() => {
-        if (filteredProfiles !== null) return;
-        if (!Array.isArray(activeProfiles) || activeProfiles.length === 0) return;
-
-        const remaining = activeProfiles.length - currentProfileIndex - 1;
-        if (remaining > 2) return;
-        if (prefetchingRef.current) return;
-        if (lastPrefetchIndexRef.current === currentProfileIndex) return;
-        if (Date.now() - lastPrefetchAtRef.current < 5000) return;
-
-        prefetchingRef.current = true;
-        lastPrefetchIndexRef.current = currentProfileIndex;
-        lastPrefetchAtRef.current = Date.now();
-        refetch()
-          .catch(() => null)
-          .finally(() => {
-            prefetchingRef.current = false;
-          });
-    }, [activeProfiles, currentProfileIndex, filteredProfiles, refetch]);
+    const {
+      queue: profileQueue,
+      currentProfile,
+      advance,
+      retreat,
+      reset,
+    } = useProfileQueue(activeProfiles, {
+      preloadSize: 5,
+      onRefill: filteredProfiles === null ? refetch : null,
+    });
 
     // Auto-refresh feed when empty so newly registered users appear without manual reload.
     useEffect(() => {
         if (filteredProfiles !== null) return;
         if (matchesLoading || userLoading) return;
-        if (Array.isArray(activeProfiles) && activeProfiles.length > 0) return;
+        if (currentProfile) return;
 
         const refresh = () => {
             refetch().catch(() => null);
@@ -163,7 +139,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
             window.removeEventListener('focus', handleVisibilityOrFocus);
             document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
         };
-    }, [filteredProfiles, matchesLoading, userLoading, activeProfiles, refetch]);
+    }, [currentProfile, filteredProfiles, matchesLoading, userLoading, refetch]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -268,39 +244,27 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     );
   }
 
-    // Use a safe, non-asserted way to define the current profile
-    const currentProfile = !isExhausted && activeProfiles
-      ? (activeProfiles[currentProfileIndex] ?? activeProfiles[0])
-      : undefined; 
-
     const goToNextProfile = () => {
-        if (!activeProfiles) return;
-        
-        if (currentProfileIndex < activeProfiles.length - 1) {
-            setCurrentProfileIndex(prev => prev + 1);
-        } else {
-            if (filteredProfiles !== null) {
-                showInfo("End of filtered results.");
-                setIsExhausted(true);
-            } else {
-                showInfo("No more new profiles right now. Check back later.");
-                setIsExhausted(true);
-            }
-        }
+      const hasNext = advance();
+      if (hasNext) return;
+      if (filteredProfiles !== null) {
+        showInfo('End of filtered results.');
+      } else {
+        showInfo('No more new profiles right now. Check back later.');
+      }
     };
     
     const handleNoProfilesAction = async () => {
-        setIsExhausted(false);
-        setCurrentProfileIndex(0);
-        if (filteredProfiles !== null) {
-            setFilteredProfiles(null);
-        }
-        await refetch();
+      reset();
+      if (filteredProfiles !== null) {
+        setFilteredProfiles(null);
+      }
+      await refetch();
     };
 
   const handleLike = () => {
-    //  CRITICAL FIX: Use currentProfile?.id OR currentProfile?._id
-    const userIdToLike = currentProfile?.id || currentProfile?._id;
+    const currentProfileCandidate = currentProfile as (User & { _id?: string }) | null;
+    const userIdToLike = currentProfileCandidate?.id || currentProfileCandidate?._id;
 
     if (!userIdToLike) {
       console.warn("No user ID found to like. Skipping API call.");
@@ -308,8 +272,6 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
       return;
     }
 
-    // Optimistic UX: move to next profile immediately.
-    setSwipeDirection('right');
     goToNextProfile();
 
     const key = String(userIdToLike);
@@ -318,9 +280,6 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
 
     // Fire network call in background so UI never blocks.
     void likeUser(key, { suppressSuccessToast: true })
-      .then(() => {
-        console.log(`Liked profile ${key}`);
-      })
       .catch((error) => {
         console.error('Failed to like user:', error);
       })
@@ -330,8 +289,8 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
   };
 
   const handlePass = () => {
-    //  CRITICAL FIX: Use currentProfile?.id OR currentProfile?._id
-    const userIdToPass = currentProfile?.id || currentProfile?._id;
+    const currentProfileCandidate = currentProfile as (User & { _id?: string }) | null;
+    const userIdToPass = currentProfileCandidate?.id || currentProfileCandidate?._id;
     
     if (!userIdToPass) {
       console.warn("No user ID found to pass. Skipping API call.");
@@ -339,8 +298,6 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
       return;
     }
     
-    // Optimistic UX: move to next profile immediately.
-    setSwipeDirection('left');
     goToNextProfile();
 
     const key = String(userIdToPass);
@@ -371,9 +328,6 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
 
     // Fire network call in background so UI never blocks.
     void passUser(key)
-      .then(() => {
-        console.log(`Passed on profile ${key}`);
-      })
       .catch((error) => {
         console.error('Failed to pass user:', error);
       })
@@ -383,8 +337,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
   };
 
   const handleGoBack = () => {
-    setSwipeDirection('left');
-    setCurrentProfileIndex(Math.max(0, currentProfileIndex - 1));
+    retreat();
   };
 
 
@@ -401,8 +354,7 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
 
         if (!hasActiveFilters) {
             setFilteredProfiles(null);
-            setCurrentProfileIndex(0);
-            setIsExhausted(false);
+            reset();
             showInfo('Filters cleared. Showing all profiles.');
             return;
         }
@@ -411,8 +363,7 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
         try {
             const results = await API.Discovery.filterProfiles(normalizedFilters); 
             setFilteredProfiles(Array.isArray(results) ? results : []);
-            setCurrentProfileIndex(0);
-            setIsExhausted(false);
+            reset();
             if (results.length > 0) {
               showSuccess(`Found ${results.length} profile${results.length > 1 ? 's' : ''}.`);
             } else {
@@ -499,13 +450,13 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
                 >
                     <ProfileDisplay
                         currentProfile={currentProfile}
+                        profileQueue={profileQueue}
                         viewerLatitude={typeof currentUserData?.latitude === 'number' ? currentUserData.latitude : undefined}
                         viewerLongitude={typeof currentUserData?.longitude === 'number' ? currentUserData.longitude : undefined}
-                        onStartOver={() => setCurrentProfileIndex(0)}
+                        onStartOver={reset}
                         onGoBack={handleGoBack}
                         onLike={handleLike}
                         onPass={handlePass}
-                        swipeDirection={swipeDirection}
                         noProfilesTitle="No new matches yet"
                         noProfilesDescription="You have liked or passed everyone available for now. Tap reload and we will fetch fresh profiles instantly."
                         noProfilesActionLabel="Reload Profiles"
@@ -539,13 +490,13 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
                 >
                     <ProfileDisplay
                         currentProfile={currentProfile}
+                        profileQueue={profileQueue}
                         viewerLatitude={typeof currentUserData?.latitude === 'number' ? currentUserData.latitude : undefined}
                         viewerLongitude={typeof currentUserData?.longitude === 'number' ? currentUserData.longitude : undefined}
-                        onStartOver={() => setCurrentProfileIndex(0)}
+                        onStartOver={reset}
                         onGoBack={handleGoBack}
                         onLike={handleLike}
                         onPass={handlePass}
-                        swipeDirection={swipeDirection}
                         noProfilesTitle="No new matches yet"
                         noProfilesDescription="You have liked or passed everyone available for now. Tap reload and we will fetch fresh profiles instantly."
                         noProfilesActionLabel="Reload Profiles"

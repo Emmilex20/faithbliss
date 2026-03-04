@@ -1,30 +1,16 @@
-import { HingeStyleProfileCard } from './HingeStyleProfileCard';
-import { NoProfilesState } from './NoProfilesState';
 import type { User } from '@/services/api';
 import type { DashboardFilterFocusSection } from './FilterPanel';
-import { useEffect, useMemo, useRef } from 'react';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import type { Swiper as SwiperInstance } from 'swiper';
-import 'swiper/css';
-
-type ProfileWithLegacyId = User & { _id?: string };
-
-const getProfileId = (profile?: User | null): string | null => {
-  if (!profile) return null;
-  const candidate = profile as ProfileWithLegacyId;
-  const id = candidate.id || candidate._id;
-  return id ? String(id) : null;
-};
+import { SwipeDeck } from './SwipeDeck';
 
 interface ProfileDisplayProps {
   currentProfile: User | null | undefined;
+  profileQueue?: User[];
   viewerLatitude?: number;
   viewerLongitude?: number;
   onStartOver: () => void;
   onGoBack: () => void;
   onLike: () => void;
   onPass: () => void;
-  swipeDirection?: 'left' | 'right';
   noProfilesTitle?: string;
   noProfilesDescription?: string;
   noProfilesActionLabel?: string;
@@ -34,6 +20,7 @@ interface ProfileDisplayProps {
 
 export const ProfileDisplay = ({
   currentProfile,
+  profileQueue,
   viewerLatitude,
   viewerLongitude,
   onStartOver,
@@ -46,99 +33,30 @@ export const ProfileDisplay = ({
   onNoProfilesAction,
   onOpenFilterSection,
 }: ProfileDisplayProps) => {
-  const swipeLockRef = useRef(false);
-  const swiperRef = useRef<SwiperInstance | null>(null);
-  const currentProfileId = getProfileId(currentProfile);
-  const hasRenderableProfile = currentProfileId !== null;
-  const profileKey = currentProfileId ?? 'no-profile';
-
-  const resetToCenter = () => {
-    requestAnimationFrame(() => {
-      swiperRef.current?.slideTo(1, 0, false);
-    });
-  };
-
-  const runSwipeAction = async (action: () => void | Promise<void>) => {
-    if (swipeLockRef.current) return;
-    swipeLockRef.current = true;
-    try {
-      await Promise.resolve(action());
-    } finally {
-      swipeLockRef.current = false;
-      resetToCenter();
-    }
-  };
-
-  const handleSlideChange = (swiper: SwiperInstance) => {
-    if (swiper.activeIndex === 2) {
-      runSwipeAction(onPass);
-      return;
-    }
-    if (swiper.activeIndex === 0) {
-      runSwipeAction(onLike);
-    }
-  };
-
-  useEffect(() => {
-    if (!hasRenderableProfile) return;
-    resetToCenter();
-  }, [profileKey, hasRenderableProfile]);
-
-  const edgeSlide = useMemo(
-    () => (
-      <div className="h-full w-full bg-transparent" />
-    ),
-    []
-  );
-
-  if (!hasRenderableProfile) {
-    if (currentProfile) {
-      console.error("ProfileDisplay: Profile object exists but is missing 'id' or '_id'. Skipping card render.");
-    }
-
-    return (
-      <NoProfilesState
-        title={noProfilesTitle}
-        description={noProfilesDescription}
-        actionLabel={noProfilesActionLabel}
-        onAction={onNoProfilesAction}
-        onStartOver={onStartOver}
-      />
-    );
-  }
+  const resolvedQueue =
+    Array.isArray(profileQueue) && profileQueue.length > 0
+      ? profileQueue
+      : currentProfile
+      ? [currentProfile]
+      : [];
 
   return (
     <div className="h-full w-full">
-      <Swiper
-        key={profileKey}
-        onSwiper={(instance) => {
-          swiperRef.current = instance;
-          resetToCenter();
-        }}
-        onSlideChangeTransitionEnd={handleSlideChange}
-        slidesPerView={1}
-        centeredSlides={false}
-        initialSlide={1}
-        resistanceRatio={0.85}
-        speed={250}
-        className="h-full w-full"
-      >
-        <SwiperSlide className="h-full">{edgeSlide}</SwiperSlide>
-        <SwiperSlide className="h-full">
-          <div className="mx-auto h-full w-full lg:max-w-[560px]">
-            <HingeStyleProfileCard
-              profile={currentProfile as User}
-              viewerLatitude={viewerLatitude}
-              viewerLongitude={viewerLongitude}
-              onGoBack={onGoBack}
-              onLike={onLike}
-              onPass={onPass}
-              onOpenFilterSection={onOpenFilterSection}
-            />
-          </div>
-        </SwiperSlide>
-        <SwiperSlide className="h-full">{edgeSlide}</SwiperSlide>
-      </Swiper>
+      <SwipeDeck
+        profileQueue={resolvedQueue}
+        viewerLatitude={viewerLatitude}
+        viewerLongitude={viewerLongitude}
+        onStartOver={onStartOver}
+        onGoBack={onGoBack}
+        onLike={onLike}
+        onPass={onPass}
+        noProfilesTitle={noProfilesTitle}
+        noProfilesDescription={noProfilesDescription}
+        noProfilesActionLabel={noProfilesActionLabel}
+        onNoProfilesAction={onNoProfilesAction}
+        onOpenFilterSection={onOpenFilterSection}
+      />
     </div>
   );
 };
+
