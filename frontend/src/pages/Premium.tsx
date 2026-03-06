@@ -1,6 +1,6 @@
 // src/pages/Premium.tsx
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Crown,
@@ -12,74 +12,43 @@ import {
   HeartHandshake,
   CheckCircle2,
 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { TopBar } from '@/components/dashboard/TopBar';
 import { SidePanel } from '@/components/dashboard/SidePanel';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { API } from '@/services/api';
-import { Link, useNavigate } from 'react-router-dom';
+import type { SubscriptionPlan } from '@/services/api';
+import {
+  PREMIUM_PLAN_CONTENT,
+  getSubscriptionTierLabel,
+} from '@/constants/subscriptionPlans';
 
-type Plan = {
+type DisplayPlan = {
   tier: 'free' | 'premium' | 'elite';
   name: string;
-  price: {
-    USD: string;
-    NGN: string;
-  };
   description: string;
+  displayPrice: string;
   highlight?: boolean;
   tag?: string;
   features: string[];
   cta: string;
 };
 
-const plans: Plan[] = [
-  {
-    tier: 'free',
-    name: 'FaithBliss Free',
-    price: { USD: '$0', NGN: '₦0' },
-    description: 'All the essentials to start meaningful connections.',
-    features: [
-      'Unlimited likes',
-      'Daily curated matches',
-      '1:1 messaging after matching',
-      'Basic profile customization',
-    ],
-    cta: 'Current Plan',
-  },
-  {
-    tier: 'premium',
-    name: 'FaithBliss Premium',
-    price: { USD: '$14', NGN: 'NGN 15,000' },
-    description: 'Unlock deeper filters and priority visibility.',
-    highlight: true,
-    tag: 'Most Loved',
-    features: [
-      'See who liked you instantly',
-      'Advanced faith & values filters',
-      'Boosted profile discovery',
-      'Message read receipts',
-      'Weekly profile insights',
-    ],
-    cta: 'Upgrade to Premium',
-  },
-  {
-    tier: 'elite',
-    name: 'FaithBliss Elite',
-    price: { USD: '$24', NGN: 'NGN 25,000' },
-    description: 'The complete experience for intentional matching.',
-    tag: 'Best Value',
-    features: [
-      'Everything in Premium',
-      'Exclusive Elite profiles',
-      'Priority support & coaching',
-      'Invisible browsing mode',
-      'Unlimited profile rewinds',
-    ],
-    cta: 'Go Elite',
-  },
-];
+const FREE_PLAN: DisplayPlan = {
+  tier: 'free',
+  name: 'FaithBliss Free',
+  description: 'All the essentials to start meaningful connections.',
+  displayPrice: 'Free',
+  features: [
+    'Unlimited likes',
+    'Daily curated matches',
+    '1:1 messaging after matching',
+    'Basic profile customization',
+  ],
+  cta: 'Current Plan',
+};
 
 const highlights = [
   {
@@ -94,7 +63,7 @@ const highlights = [
   },
   {
     icon: ShieldCheck,
-    title: 'Safe & verified',
+    title: 'Safe and verified',
     description: 'Premium verification and moderation keep the community trusted.',
   },
   {
@@ -111,29 +80,149 @@ const badges = [
   'Cancel anytime',
 ];
 
+const formatPlanAmount = (amount: number, currency: 'NGN' | 'USD') => {
+  const majorAmount = amount / 100;
+
+  if (currency === 'NGN') {
+    return `NGN ${new Intl.NumberFormat('en-NG', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(majorAmount)}`;
+  }
+
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(majorAmount);
+};
+
 declare global {
   interface Window {
     PaystackPop?: {
-      setup: (config: Record<string, any>) => { openIframe: () => void };
+      setup: (config: Record<string, unknown>) => { openIframe: () => void };
     };
   }
 }
 
 const PremiumContent = () => {
-  const { user } = useAuthContext();
+  const { user, refetchUser } = useAuthContext();
   const { showError, showSuccess } = useToast();
   const navigate = useNavigate();
   const planSectionRef = useRef<HTMLDivElement | null>(null);
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [currency, setCurrency] = useState<'USD' | 'NGN'>('NGN');
+  const [availablePlans, setAvailablePlans] = useState<SubscriptionPlan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(true);
+  const [plansError, setPlansError] = useState<string | null>(null);
   const [loadingTier, setLoadingTier] = useState<'premium' | 'elite' | null>(null);
 
   const layoutName = user?.name || 'User';
   const layoutImage = user?.profilePhoto1 || undefined;
   const layoutUser = user || null;
-  const paystackKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
-  const isPremium = user?.subscriptionStatus === 'active' && ['premium', 'elite'].includes(user?.subscriptionTier || '');
+  const paystackKey = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '')
+    .trim()
+    .replace(/^['"]|['"]$/g, '');
+  const isPremium =
+    user?.subscriptionStatus === 'active' &&
+    ['premium', 'elite'].includes(user?.subscriptionTier || '');
   const activeTier = user?.subscriptionTier || 'free';
+  const normalizedActiveTier: DisplayPlan['tier'] = isPremium && ['premium', 'elite'].includes(activeTier)
+    ? (activeTier as 'premium' | 'elite')
+    : 'free';
+
+  useEffect(() => {
+    let active = true;
+
+    const fetchPlans = async () => {
+      try {
+        setPlansLoading(true);
+        setPlansError(null);
+        const response = await API.Payment.getPlans();
+        if (!active) {
+          return;
+        }
+        setAvailablePlans(Array.isArray(response?.plans) ? response.plans : []);
+      } catch (error: any) {
+        if (!active) {
+          return;
+        }
+        setPlansError(error?.message || 'Unable to load plans right now.');
+      } finally {
+        if (active) {
+          setPlansLoading(false);
+        }
+      }
+    };
+
+    fetchPlans();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+
+    refetchUser();
+
+    const handleFocusRefresh = () => {
+      refetchUser();
+    };
+
+    window.addEventListener('focus', handleFocusRefresh);
+    document.addEventListener('visibilitychange', handleFocusRefresh);
+
+    return () => {
+      window.removeEventListener('focus', handleFocusRefresh);
+      document.removeEventListener('visibilitychange', handleFocusRefresh);
+    };
+  }, [refetchUser, user?.id]);
+
+  const availableCurrencies = useMemo(
+    () => [...new Set(availablePlans.map((plan) => plan.currency))] as Array<'NGN' | 'USD'>,
+    [availablePlans],
+  );
+
+  useEffect(() => {
+    if (availableCurrencies.length === 0) {
+      return;
+    }
+
+    if (!availableCurrencies.includes(currency)) {
+      setCurrency(availableCurrencies[0]);
+    }
+  }, [availableCurrencies, currency]);
+
+  const paidPlans = useMemo(
+    () =>
+      availablePlans
+        .filter((plan) => plan.currency === currency)
+        .sort((left, right) => left.amount - right.amount),
+    [availablePlans, currency],
+  );
+
+  const primaryPaidPlan = useMemo(
+    () => paidPlans.find((plan) => plan.tier === 'premium') ?? paidPlans[0] ?? null,
+    [paidPlans],
+  );
+
+  const displayPlans = useMemo<DisplayPlan[]>(
+    () => [
+      FREE_PLAN,
+      ...paidPlans.map((plan) => ({
+        tier: plan.tier,
+        name: plan.name,
+        displayPrice: formatPlanAmount(plan.amount, plan.currency),
+        ...PREMIUM_PLAN_CONTENT[plan.tier],
+      })),
+    ],
+    [paidPlans],
+  );
 
   const heroStats = useMemo(
     () => [
@@ -150,12 +239,14 @@ const PremiumContent = () => {
         resolve();
         return;
       }
+
       const existing = document.querySelector('script[data-paystack]');
       if (existing) {
         existing.addEventListener('load', () => resolve());
         existing.addEventListener('error', () => reject(new Error('Failed to load Paystack')));
         return;
       }
+
       const script = document.createElement('script');
       script.src = 'https://js.paystack.co/v1/inline.js';
       script.async = true;
@@ -169,24 +260,29 @@ const PremiumContent = () => {
     planSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const handleStartPlan = async (tier: 'premium' | 'elite') => {
+  const handleStartPlan = async (plan: SubscriptionPlan) => {
     if (!user?.email) {
       showError('Please sign in to continue.');
       return;
     }
-    if (isPremium && activeTier === tier) {
+
+    if (isPremium && activeTier === plan.tier) {
       showSuccess('Your subscription is already active.');
       return;
     }
-    if (!paystackKey) {
-      showError('Paystack public key is missing.');
+
+    if (!/^(pk_test|pk_live)_/i.test(paystackKey)) {
+      showError('Paystack public key is missing or invalid.');
       return;
     }
 
     try {
-      setLoadingTier(tier);
+      setLoadingTier(plan.tier);
       await loadPaystackScript();
-      const initResponse = await API.Payment.initialize({ tier, currency });
+      const initResponse = await API.Payment.initialize({
+        tier: plan.tier,
+        currency: plan.currency,
+      });
       const accessCode = initResponse.accessCode;
       const reference = initResponse.reference;
 
@@ -197,7 +293,8 @@ const PremiumContent = () => {
       const handler = window.PaystackPop?.setup({
         key: paystackKey,
         email: user.email,
-        currency,
+        amount: initResponse.amount,
+        currency: plan.currency,
         access_code: accessCode,
         reference,
         callback: (response: { reference: string }) => {
@@ -251,11 +348,19 @@ const PremiumContent = () => {
               </p>
               <div className="flex flex-wrap gap-3">
                 <button
-                  onClick={() => handleStartPlan('premium')}
-                  disabled={loadingTier === 'premium' || (isPremium && activeTier === 'premium')}
-                  className="rounded-full bg-gradient-to-r from-pink-500 to-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-pink-500/30 transition hover:from-pink-400 hover:to-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                  onClick={() => primaryPaidPlan && handleStartPlan(primaryPaidPlan)}
+                  disabled={
+                    !primaryPaidPlan ||
+                    loadingTier === primaryPaidPlan.tier ||
+                    (isPremium && activeTier === primaryPaidPlan.tier)
+                  }
+                  className="rounded-full bg-gradient-to-r from-pink-500 to-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-pink-500/30 transition hover:from-pink-400 hover:to-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isPremium && activeTier === 'premium' ? 'Premium Active' : 'Start Premium'}
+                  {!primaryPaidPlan
+                    ? 'Plans unavailable'
+                    : isPremium && activeTier === primaryPaidPlan.tier
+                    ? `${getSubscriptionTierLabel(primaryPaidPlan.tier)} Active`
+                    : `Start ${getSubscriptionTierLabel(primaryPaidPlan.tier)}`}
                 </button>
                 <button
                   onClick={handleComparePlans}
@@ -264,27 +369,30 @@ const PremiumContent = () => {
                   Compare plans
                 </button>
               </div>
-              <div className="flex items-center gap-2 text-xs text-gray-400">
-                <span className="uppercase tracking-[0.2em] text-gray-500">Currency</span>
-                <div className="inline-flex rounded-full border border-white/10 bg-white/5 p-1">
-                  {(['USD', 'NGN'] as const).map((code) => (
-                    <button
-                      key={code}
-                      onClick={() => setCurrency(code)}
-                      className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
-                        currency === code
-                          ? 'bg-white text-gray-900'
-                          : 'text-gray-300 hover:text-white'
-                      }`}
-                    >
-                      {code}
-                    </button>
-                  ))}
+              {availableCurrencies.length > 1 && (
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <span className="uppercase tracking-[0.2em] text-gray-500">Currency</span>
+                  <div className="inline-flex rounded-full border border-white/10 bg-white/5 p-1">
+                    {availableCurrencies.map((code) => (
+                      <button
+                        key={code}
+                        onClick={() => setCurrency(code)}
+                        className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
+                          currency === code ? 'bg-white text-gray-900' : 'text-gray-300 hover:text-white'
+                        }`}
+                      >
+                        {code}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="flex flex-wrap gap-3 pt-2 text-xs text-gray-400">
                 {badges.map((badge) => (
-                  <span key={badge} className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
+                  <span
+                    key={badge}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1"
+                  >
                     {badge}
                   </span>
                 ))}
@@ -352,59 +460,91 @@ const PremiumContent = () => {
           </p>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          {plans.map((plan) => (
-            <div
-              key={plan.name}
-              className={`relative flex h-full flex-col rounded-3xl border p-6 transition ${
-                plan.highlight
-                  ? 'border-pink-500/50 bg-gradient-to-br from-pink-500/20 to-purple-600/20 shadow-lg shadow-pink-500/20'
-                  : 'border-white/10 bg-white/5 hover:border-white/20'
-              }`}
+        {plansError ? (
+          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-100">
+            <p>{plansError}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 rounded-full border border-red-300/30 bg-white/10 px-4 py-2 font-semibold text-white transition hover:bg-white/15"
             >
-              {plan.tag && (
-                <div className="absolute right-6 top-6 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">
-                  {plan.tag}
-                </div>
-              )}
-              <h3 className="text-xl font-semibold text-white">{plan.name}</h3>
-              <p className="mt-2 text-sm text-gray-300">{plan.description}</p>
-              <div className="mt-4 flex items-end gap-2">
-                <span className="text-3xl font-semibold text-white">{plan.price[currency]}</span>
-                <span className="text-xs text-gray-400">/month</span>
-              </div>
+              Reload plans
+            </button>
+          </div>
+        ) : plansLoading ? (
+          <div className="grid gap-6 lg:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div
+                key={index}
+                className="h-[420px] animate-pulse rounded-3xl border border-white/10 bg-white/5"
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-3">
+            {displayPlans.map((plan) => {
+              const isCurrentPlan = normalizedActiveTier === plan.tier;
 
-              <ul className="mt-6 space-y-3 text-sm text-gray-300">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-pink-300" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-
-              <button
-                onClick={() => plan.tier !== 'free' && handleStartPlan(plan.tier)}
-                disabled={
-                  plan.tier === 'free' ||
-                  loadingTier === plan.tier ||
-                  (isPremium && activeTier === plan.tier)
-                }
-                className={`mt-8 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+              return (
+              <div
+                key={plan.name}
+                className={`relative flex h-full flex-col rounded-3xl border p-6 transition ${
                   plan.highlight
-                    ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/30 hover:from-pink-400 hover:to-purple-500'
-                    : 'border border-white/15 bg-white/5 text-white/90 hover:border-white/30 hover:bg-white/10'
-                } ${plan.tier === 'free' ? 'cursor-not-allowed opacity-70' : ''}`}
+                    ? 'border-pink-500/50 bg-gradient-to-br from-pink-500/20 to-purple-600/20 shadow-lg shadow-pink-500/20'
+                    : 'border-white/10 bg-white/5 hover:border-white/20'
+                }`}
               >
-                {loadingTier === plan.tier
-                  ? 'Processing...'
-                  : isPremium && activeTier === plan.tier
-                  ? 'Current Plan'
-                  : plan.cta}
-              </button>
-            </div>
-          ))}
-        </div>
+                {plan.tag && (
+                  <div className="absolute right-6 top-6 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">
+                    {plan.tag}
+                  </div>
+                )}
+                <h3 className="text-xl font-semibold text-white">{plan.name}</h3>
+                <p className="mt-2 text-sm text-gray-300">{plan.description}</p>
+                <div className="mt-4 flex items-end gap-2">
+                  <span className="text-3xl font-semibold text-white">{plan.displayPrice}</span>
+                  {plan.tier !== 'free' && <span className="text-xs text-gray-400">/month</span>}
+                </div>
+
+                <ul className="mt-6 space-y-3 text-sm text-gray-300">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-pink-300" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+
+                <button
+                  onClick={() => {
+                    const paidPlan = paidPlans.find((item) => item.tier === plan.tier);
+                    if (paidPlan) {
+                      handleStartPlan(paidPlan);
+                    }
+                  }}
+                  disabled={
+                    plan.tier === 'free' ||
+                    loadingTier === plan.tier ||
+                    isCurrentPlan
+                  }
+                  className={`mt-8 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                    plan.highlight
+                      ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/30 hover:from-pink-400 hover:to-purple-500'
+                      : 'border border-white/15 bg-white/5 text-white/90 hover:border-white/30 hover:bg-white/10'
+                  } ${plan.tier === 'free' ? 'cursor-not-allowed opacity-70' : ''}`}
+                >
+                  {loadingTier === plan.tier
+                    ? 'Processing...'
+                    : isCurrentPlan
+                    ? 'Current Plan'
+                    : plan.tier === 'free'
+                    ? 'Free Plan'
+                    : plan.cta}
+                </button>
+              </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       <section className="px-6 pb-16 lg:px-12">
@@ -415,17 +555,27 @@ const PremiumContent = () => {
                 <Sparkles className="h-4 w-4 text-pink-300" />
                 Premium experience
               </div>
-              <h3 className="text-2xl font-semibold text-white">Ready to unlock the full FaithBliss experience?</h3>
+              <h3 className="text-2xl font-semibold text-white">
+                Ready to unlock the full FaithBliss experience?
+              </h3>
               <p className="text-sm text-gray-300">
                 Join thousands of believers discovering meaningful, marriage-minded connections.
               </p>
             </div>
             <button
-              onClick={() => handleStartPlan('premium')}
-              disabled={loadingTier === 'premium' || (isPremium && activeTier === 'premium')}
-              className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-gray-900 transition hover:bg-white/90 disabled:opacity-60 disabled:cursor-not-allowed"
+              onClick={() => primaryPaidPlan && handleStartPlan(primaryPaidPlan)}
+              disabled={
+                !primaryPaidPlan ||
+                loadingTier === primaryPaidPlan.tier ||
+                (isPremium && activeTier === primaryPaidPlan.tier)
+              }
+              className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-gray-900 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isPremium && activeTier === 'premium' ? 'Premium Active' : 'Upgrade now'}
+              {!primaryPaidPlan
+                ? 'Plans unavailable'
+                : isPremium && activeTier === primaryPaidPlan.tier
+                ? `${getSubscriptionTierLabel(primaryPaidPlan.tier)} Active`
+                : `Upgrade to ${getSubscriptionTierLabel(primaryPaidPlan.tier)}`}
             </button>
           </div>
         </div>
@@ -434,8 +584,8 @@ const PremiumContent = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white overflow-x-hidden pb-20 no-horizontal-scroll dashboard-main">
-      <div className="hidden lg:flex min-h-screen">
+    <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 pb-20 text-white no-horizontal-scroll dashboard-main">
+      <div className="hidden min-h-screen lg:flex">
         <div className="w-80 flex-shrink-0">
           <SidePanel
             userName={layoutName}
@@ -444,7 +594,7 @@ const PremiumContent = () => {
             onClose={() => setShowSidePanel(false)}
           />
         </div>
-        <div className="flex-1 flex flex-col min-h-screen">
+        <div className="flex min-h-screen flex-1 flex-col">
           <TopBar
             userName={layoutName}
             userImage={layoutImage}
@@ -459,7 +609,7 @@ const PremiumContent = () => {
         </div>
       </div>
 
-      <div className="lg:hidden min-h-screen">
+      <div className="min-h-screen lg:hidden">
         <TopBar
           userName={layoutName}
           userImage={layoutImage}

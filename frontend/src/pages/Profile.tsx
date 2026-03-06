@@ -19,6 +19,7 @@ import type { UpdateProfileDto } from '@/services/api';
 import { updateProfileClient, uploadSpecificPhotoClient } from '@/services/api-client';
 import { analyzePhotoFaces, validatePhotoFileBasics } from '@/utils/photoValidation';
 import { MIN_PROFILE_FITS, PROFILE_FIT_OPTIONS } from '@/constants/profileFitOptions';
+import { getSubscriptionTierLabel } from '@/constants/subscriptionPlans';
 
 const ProfilePage: React.FC = () => {
   const { accessToken, user: authUser } = useAuthContext();
@@ -289,6 +290,7 @@ const ProfilePage: React.FC = () => {
   const layoutImage = layoutUser?.profilePhoto1 || profileData?.photos?.[0] || undefined;
   const isPremium = layoutUser?.subscriptionStatus === 'active' && ['premium', 'elite'].includes(layoutUser?.subscriptionTier || '');
   const activeTier = layoutUser?.subscriptionTier || 'free';
+  const activeTierLabel = getSubscriptionTierLabel(activeTier);
 
   const content = (
     <>
@@ -299,7 +301,7 @@ const ProfilePage: React.FC = () => {
             ? 'border-pink-500/40 bg-pink-500/10 text-pink-200'
             : 'border-white/10 bg-white/5 text-gray-300'
         }`}>
-          {isPremium ? `${activeTier} subscriber` : 'Free member'}
+          {isPremium ? `${activeTierLabel} subscriber` : 'Free member'}
         </div>
       </div>
       {profileData && (

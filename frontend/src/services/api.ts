@@ -302,6 +302,14 @@ export interface OnboardingDebugResponse {
   profilePhotoCount: number;
 }
 
+export interface SubscriptionPlan {
+  tier: 'premium' | 'elite';
+  name: string;
+  amount: number;
+  currency: 'NGN' | 'USD';
+  interval: 'monthly';
+}
+
 // Generic API request function
 const apiRequest = async <T = unknown>(
   endpoint: string, 
@@ -746,6 +754,9 @@ export const MessageAPI = {
 
 // Payments API
 export const PaymentAPI = {
+  getPlans: async (): Promise<{ plans: SubscriptionPlan[] }> => {
+    return apiRequest('/api/payments/plans');
+  },
   initialize: async (payload: { tier: 'premium' | 'elite'; currency: 'NGN' | 'USD' }): Promise<{
     authorizationUrl: string;
     accessCode: string;

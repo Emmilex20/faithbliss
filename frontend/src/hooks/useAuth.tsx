@@ -312,6 +312,36 @@ const getProfilePhotoCount = (payload: Record<string, any>): number => {
     return count;
 };
 
+const normalizeSubscription = (subscription: Record<string, any> | undefined) => {
+    if (!subscription || typeof subscription !== "object") {
+        return undefined;
+    }
+
+    const nextPaymentDateRaw = subscription.nextPaymentDate;
+    let nextPaymentDate: string | undefined;
+
+    if (typeof nextPaymentDateRaw === "string" && nextPaymentDateRaw.trim()) {
+        nextPaymentDate = nextPaymentDateRaw;
+    } else if (nextPaymentDateRaw?.toDate instanceof Function) {
+        nextPaymentDate = nextPaymentDateRaw.toDate().toISOString();
+    } else if (nextPaymentDateRaw instanceof Date) {
+        nextPaymentDate = nextPaymentDateRaw.toISOString();
+    }
+
+    return {
+        status: typeof subscription.status === "string" ? subscription.status : undefined,
+        tier: typeof subscription.tier === "string" ? subscription.tier : undefined,
+        currency: typeof subscription.currency === "string" ? subscription.currency : undefined,
+        planCode: typeof subscription.planCode === "string" ? subscription.planCode : undefined,
+        reference: typeof subscription.reference === "string" ? subscription.reference : undefined,
+        customerCode: typeof subscription.customerCode === "string" ? subscription.customerCode : undefined,
+        subscriptionCode: typeof subscription.subscriptionCode === "string" ? subscription.subscriptionCode : undefined,
+        authorizationCode: typeof subscription.authorizationCode === "string" ? subscription.authorizationCode : undefined,
+        nextPaymentDate,
+        updatedAt: typeof subscription.updatedAt === "string" ? subscription.updatedAt : undefined,
+    };
+};
+
 //  FIX 1: Update User interface to include all fields from the Mongoose model
 
 export type AuthHookReturn = ReturnType<typeof useAuth>;
@@ -333,6 +363,7 @@ const fetchUserDataFromFirestore = async (fbUser: FirebaseAuthUser): Promise<Use
     }
 
     const backendData = docSnap.data();
+    const normalizedSubscription = normalizeSubscription(backendData.subscription);
     
     //  FIX 2: Map ALL fields from backendData to the complete User interface
     return {
@@ -401,6 +432,11 @@ const fetchUserDataFromFirestore = async (fbUser: FirebaseAuthUser): Promise<Use
         profilePhoto5: backendData.profilePhoto5,
         profilePhoto6: backendData.profilePhoto6,
         profilePhotoCount: getProfilePhotoCount(backendData),
+        subscriptionStatus: backendData.subscriptionStatus || normalizedSubscription?.status,
+        subscriptionTier: backendData.subscriptionTier || normalizedSubscription?.tier,
+        subscriptionCurrency: backendData.subscriptionCurrency || normalizedSubscription?.currency,
+        subscription: normalizedSubscription,
+        settings: backendData.settings,
     };
 };
 
@@ -985,6 +1021,7 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
         }
 
         const data = docSnap.data();
+        const normalizedSubscription = normalizeSubscription(data.subscription);
 
         const profile: User = {
             id: userId,
@@ -1050,6 +1087,11 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
             profilePhoto5: data.profilePhoto5,
             profilePhoto6: data.profilePhoto6,
             profilePhotoCount: getProfilePhotoCount(data as Record<string, any>),
+            subscriptionStatus: data.subscriptionStatus || normalizedSubscription?.status,
+            subscriptionTier: data.subscriptionTier || normalizedSubscription?.tier,
+            subscriptionCurrency: data.subscriptionCurrency || normalizedSubscription?.currency,
+            subscription: normalizedSubscription,
+            settings: data.settings,
         };
 
         return profile;

@@ -9,6 +9,7 @@ import { SidePanel } from '@/components/dashboard/SidePanel';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { API } from '@/services/api';
+import { getSubscriptionTierLabel } from '@/constants/subscriptionPlans';
 
 const SettingsContent = () => {
   const { user } = useAuthContext();
@@ -29,6 +30,7 @@ const SettingsContent = () => {
   const layoutUser = user || null;
   const isPremium = user?.subscriptionStatus === 'active' && ['premium', 'elite'].includes(user?.subscriptionTier || '');
   const activeTier = user?.subscriptionTier || 'free';
+  const activeTierLabel = getSubscriptionTierLabel(activeTier);
 
   const handleToggle = (key: keyof typeof form) => {
     setForm((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -133,7 +135,7 @@ const SettingsContent = () => {
             <div>
               <h3 className="text-lg font-semibold text-white">Subscription</h3>
               <p className="text-sm text-gray-300">
-                {isPremium ? `Active ${activeTier} plan` : 'Free plan'}
+                {isPremium ? `Active ${activeTierLabel}` : 'Free plan'}
               </p>
             </div>
             <span className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] ${
