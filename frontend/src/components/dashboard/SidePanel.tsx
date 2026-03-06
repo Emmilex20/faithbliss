@@ -9,10 +9,11 @@ import { Link } from 'react-router-dom'; // ðŸŒŸ VITE FIX 2: Use Link from r
 // Remove: import Image from 'next/image'; // ðŸŒŸ VITE FIX 3: Replaced with standard <img>
 import { 
   X, User, Heart, MessageCircle, Star, Settings, 
-  HelpCircle, LogOut, Home, UserX, AlertTriangle, Bell, Users, Compass
+  HelpCircle, LogOut, Home, UserX, AlertTriangle, Bell, Users, Compass, Crown, Clock3
 } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNotificationUnreadCount } from '@/hooks/useAPI';
+import { useSubscriptionDisplay } from '@/hooks/useSubscriptionDisplay';
 
 interface SidePanelProps {
   userName: string;
@@ -36,6 +37,7 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
   
   const displayImage = user?.profilePhotos?.photo1 || userImage || '/default-avatar.png';
   const faithJourney = user?.faithJourney || 'Passionate Believer';
+  const subscriptionDisplay = useSubscriptionDisplay(user);
 
   return (
     <div className="h-screen flex flex-col bg-gray-900 lg:bg-gray-800/50 lg:backdrop-blur-sm lg:border-r lg:border-gray-700/30">
@@ -67,6 +69,54 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
           >
             <X className="w-5 h-5 text-gray-400" />
           </button>
+        </div>
+
+        <div className={`mt-5 rounded-3xl border p-4 shadow-[0_16px_30px_rgba(2,6,23,0.2)] ${
+          subscriptionDisplay.isActivePaid
+            ? 'border-yellow-400/30 bg-gradient-to-br from-yellow-500/15 via-amber-500/10 to-transparent'
+            : 'border-white/10 bg-white/5'
+        }`}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Current plan</p>
+              <h4 className="mt-2 flex items-center gap-2 text-white font-semibold">
+                {subscriptionDisplay.isActivePaid ? (
+                  <Crown className="h-4 w-4 text-yellow-300" />
+                ) : (
+                  <Star className="h-4 w-4 text-slate-300" />
+                )}
+                {subscriptionDisplay.tierLabel}
+              </h4>
+            </div>
+            <span className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+              subscriptionDisplay.isActivePaid
+                ? 'bg-emerald-500/15 text-emerald-300'
+                : 'bg-white/10 text-gray-300'
+            }`}>
+              {subscriptionDisplay.statusLabel}
+            </span>
+          </div>
+
+          {subscriptionDisplay.isActivePaid ? (
+            <div className="mt-4 flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.22em] text-gray-400">Renewal countdown</p>
+                <p className="mt-1 text-sm font-semibold text-white">
+                  {subscriptionDisplay.countdownLabel || 'Monthly renewal active'}
+                </p>
+              </div>
+              {subscriptionDisplay.renewalLabel ? (
+                <div className="flex items-center gap-1.5 text-xs text-yellow-100">
+                  <Clock3 className="h-3.5 w-3.5 text-yellow-300" />
+                  <span>{subscriptionDisplay.renewalLabel}</span>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <p className="mt-3 text-xs leading-5 text-gray-400">
+              Upgrade to unlock premium visibility, deeper filters, and faster matching.
+            </p>
+          )}
         </div>
       </div>
 
@@ -175,7 +225,11 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
                 </div>
                 <div>
                   <h4 className="text-white font-semibold">Premium Features</h4>
-                  <p className="text-gray-400 text-sm">Explore exclusive benefits</p>
+                  <p className="text-gray-400 text-sm">
+                    {subscriptionDisplay.isActivePaid
+                      ? `${subscriptionDisplay.tierLabel}${subscriptionDisplay.countdownLabel ? ` • ${subscriptionDisplay.countdownLabel}` : ''}`
+                      : 'Explore exclusive benefits'}
+                  </p>
                 </div>
               </div>
             </Link>

@@ -20,6 +20,8 @@ import { updateProfileClient, uploadSpecificPhotoClient } from '@/services/api-c
 import { analyzePhotoFaces, validatePhotoFileBasics } from '@/utils/photoValidation';
 import { MIN_PROFILE_FITS, PROFILE_FIT_OPTIONS } from '@/constants/profileFitOptions';
 import { getSubscriptionTierLabel } from '@/constants/subscriptionPlans';
+import { useSubscriptionDisplay } from '@/hooks/useSubscriptionDisplay';
+import { Clock3, Crown, Sparkles } from 'lucide-react';
 
 const ProfilePage: React.FC = () => {
   const { accessToken, user: authUser } = useAuthContext();
@@ -291,17 +293,65 @@ const ProfilePage: React.FC = () => {
   const isPremium = layoutUser?.subscriptionStatus === 'active' && ['premium', 'elite'].includes(layoutUser?.subscriptionTier || '');
   const activeTier = layoutUser?.subscriptionTier || 'free';
   const activeTierLabel = getSubscriptionTierLabel(activeTier);
+  const subscriptionDisplay = useSubscriptionDisplay(layoutUser);
 
   const content = (
     <>
       <ProfileHeader />
       <div className="max-w-4xl mx-auto px-4 pt-4">
-        <div className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] ${
+        <div className={`rounded-[2rem] border p-5 shadow-[0_18px_40px_rgba(2,6,23,0.18)] ${
           isPremium
-            ? 'border-pink-500/40 bg-pink-500/10 text-pink-200'
-            : 'border-white/10 bg-white/5 text-gray-300'
+            ? 'border-yellow-400/25 bg-gradient-to-br from-yellow-500/15 via-pink-500/10 to-transparent'
+            : 'border-white/10 bg-white/5'
         }`}>
-          {isPremium ? `${activeTierLabel} subscriber` : 'Free member'}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-gray-400">Current plan</p>
+              <div className="mt-2 flex items-center gap-2">
+                {isPremium ? (
+                  <Crown className="h-5 w-5 text-yellow-300" />
+                ) : (
+                  <Sparkles className="h-5 w-5 text-slate-300" />
+                )}
+                <h2 className="text-xl font-semibold text-white">
+                  {subscriptionDisplay.tierLabel}
+                </h2>
+              </div>
+              <p className="mt-2 text-sm text-gray-300">
+                {isPremium
+                  ? `${activeTierLabel} subscriber with premium matching benefits active.`
+                  : 'You are currently on the free plan.'}
+              </p>
+            </div>
+
+            <div className={`inline-flex w-fit items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] ${
+              isPremium
+                ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-200'
+                : 'border-white/10 bg-white/5 text-gray-300'
+            }`}>
+              {subscriptionDisplay.statusLabel}
+            </div>
+          </div>
+
+          {isPremium ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Countdown</p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {subscriptionDisplay.countdownLabel || 'Monthly renewal active'}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                  <Clock3 className="h-3.5 w-3.5" />
+                  Next renewal
+                </p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {subscriptionDisplay.renewalLabel || 'Auto-renewing monthly'}
+                </p>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
       {profileData && (

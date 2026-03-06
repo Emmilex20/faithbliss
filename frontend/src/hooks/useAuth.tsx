@@ -312,21 +312,26 @@ const getProfilePhotoCount = (payload: Record<string, any>): number => {
     return count;
 };
 
+const timestampToIsoString = (value: unknown): string | undefined => {
+    if (!value) return undefined;
+    if (typeof value === "string" && value.trim()) return value;
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
+    if (typeof value === "object" && value && "toDate" in value && typeof (value as { toDate?: unknown }).toDate === "function") {
+        const converted = (value as { toDate: () => Date }).toDate();
+        if (!Number.isNaN(converted.getTime())) {
+            return converted.toISOString();
+        }
+    }
+    return undefined;
+};
+
 const normalizeSubscription = (subscription: Record<string, any> | undefined) => {
     if (!subscription || typeof subscription !== "object") {
         return undefined;
     }
 
-    const nextPaymentDateRaw = subscription.nextPaymentDate;
-    let nextPaymentDate: string | undefined;
-
-    if (typeof nextPaymentDateRaw === "string" && nextPaymentDateRaw.trim()) {
-        nextPaymentDate = nextPaymentDateRaw;
-    } else if (nextPaymentDateRaw?.toDate instanceof Function) {
-        nextPaymentDate = nextPaymentDateRaw.toDate().toISOString();
-    } else if (nextPaymentDateRaw instanceof Date) {
-        nextPaymentDate = nextPaymentDateRaw.toISOString();
-    }
+    const nextPaymentDate = timestampToIsoString(subscription.nextPaymentDate);
+    const updatedAt = timestampToIsoString(subscription.updatedAt);
 
     return {
         status: typeof subscription.status === "string" ? subscription.status : undefined,
@@ -338,7 +343,7 @@ const normalizeSubscription = (subscription: Record<string, any> | undefined) =>
         subscriptionCode: typeof subscription.subscriptionCode === "string" ? subscription.subscriptionCode : undefined,
         authorizationCode: typeof subscription.authorizationCode === "string" ? subscription.authorizationCode : undefined,
         nextPaymentDate,
-        updatedAt: typeof subscription.updatedAt === "string" ? subscription.updatedAt : undefined,
+        updatedAt,
     };
 };
 

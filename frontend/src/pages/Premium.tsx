@@ -24,6 +24,8 @@ import {
   PREMIUM_PLAN_CONTENT,
   getSubscriptionTierLabel,
 } from '@/constants/subscriptionPlans';
+import { useSubscriptionDisplay } from '@/hooks/useSubscriptionDisplay';
+import { Clock3 } from 'lucide-react';
 
 type DisplayPlan = {
   tier: 'free' | 'premium' | 'elite';
@@ -131,6 +133,7 @@ const PremiumContent = () => {
   const normalizedActiveTier: DisplayPlan['tier'] = isPremium && ['premium', 'elite'].includes(activeTier)
     ? (activeTier as 'premium' | 'elite')
     : 'free';
+  const subscriptionDisplay = useSubscriptionDisplay(user);
 
   useEffect(() => {
     let active = true;
@@ -400,6 +403,51 @@ const PremiumContent = () => {
             </div>
 
             <div className="w-full max-w-[520px] lg:justify-self-end">
+              <div className={`mb-4 rounded-3xl border p-5 shadow-[0_18px_40px_rgba(2,6,23,0.18)] ${
+                subscriptionDisplay.isActivePaid
+                  ? 'border-yellow-400/30 bg-gradient-to-br from-yellow-500/15 via-pink-500/10 to-transparent'
+                  : 'border-white/10 bg-white/5'
+              }`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-gray-400">Current plan</p>
+                    <h3 className="mt-2 text-2xl font-semibold text-white">{subscriptionDisplay.tierLabel}</h3>
+                    <p className="mt-2 text-sm text-gray-300">
+                      {subscriptionDisplay.isActivePaid
+                        ? 'Your premium benefits are active and available right now.'
+                        : 'You are currently on the free plan.'}
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] ${
+                    subscriptionDisplay.isActivePaid
+                      ? 'bg-emerald-500/15 text-emerald-200'
+                      : 'bg-white/10 text-gray-300'
+                  }`}>
+                    {subscriptionDisplay.statusLabel}
+                  </span>
+                </div>
+
+                {subscriptionDisplay.isActivePaid ? (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Countdown</p>
+                      <p className="mt-2 text-lg font-semibold text-white">
+                        {subscriptionDisplay.countdownLabel || 'Monthly renewal active'}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                      <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                        <Clock3 className="h-3.5 w-3.5" />
+                        Next renewal
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-white">
+                        {subscriptionDisplay.renewalLabel || 'Auto-renewing monthly'}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
               <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-6">
                 <div className="grid grid-cols-3 gap-4">
                   {heroStats.map((stat, index) => (
