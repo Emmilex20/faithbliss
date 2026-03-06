@@ -230,17 +230,33 @@ export const TopBar = ({
             </Link>
 
             {showFilterButton && onToggleFilters && (
-              <button
-                type="button"
-                onClick={onToggleFilters}
-                className={`hidden sm:inline-flex p-2 sm:p-3 rounded-2xl transition-all hover:scale-105 ${
-                  showFilters
-                    ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
-                    : 'hover:bg-white/10 text-gray-300 hover:text-white'
-                }`}
-              >
-                <Filter className="w-5 h-5 sm:w-6 sm:h-6 transition-colors" />
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={onToggleFilters}
+                  className={`inline-flex p-2 rounded-2xl transition-all hover:scale-105 sm:hidden ${
+                    showFilters
+                      ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
+                      : 'hover:bg-white/10 text-gray-300 hover:text-white'
+                  }`}
+                  aria-label={showFilters ? 'Close filters' : 'Open filters'}
+                >
+                  <Filter className="w-5 h-5 transition-colors" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onToggleFilters}
+                  className={`hidden sm:inline-flex p-2 sm:p-3 rounded-2xl transition-all hover:scale-105 ${
+                    showFilters
+                      ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
+                      : 'hover:bg-white/10 text-gray-300 hover:text-white'
+                  }`}
+                  aria-label={showFilters ? 'Close filters' : 'Open filters'}
+                >
+                  <Filter className="w-5 h-5 sm:w-6 sm:h-6 transition-colors" />
+                </button>
+              </>
             )}
 
             <button
