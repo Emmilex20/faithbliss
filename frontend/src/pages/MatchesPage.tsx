@@ -3,9 +3,12 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
+  Ban,
   Heart,
+  Loader2,
   MessageCircle,
   User,
+  UserX,
   MapPin,
   Church,
   Users,
@@ -27,12 +30,16 @@ const MatchesPage = () => {
   );
   const { user } = useAuthContext();
   const [showSidePanel, setShowSidePanel] = useState(false);
+  const [actionState, setActionState] = useState<{
+    userId: string;
+    action: "unmatch" | "unmatch-block";
+  } | null>(null);
 
   const userName = user?.name || "User";
   const userImage = user?.profilePhoto1 || undefined;
 
   const { mutual, sent, received, loading, error, refetch } = useMatches();
-  const { likeUser } = useMatching();
+  const { likeUser, unmatchUser, unmatchAndBlockUser } = useMatching();
 
   const { mutualMatches, sentRequests, receivedRequests } = useMemo(() => {
     const normalize = (data: any): Match[] => {
@@ -172,6 +179,64 @@ const MatchesPage = () => {
             </Link>
           )}
         </div>
+
+        {canMessage && (
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              disabled={actionState?.userId === profileId}
+              onClick={async () => {
+                if (!window.confirm(`Unmatch ${user.name || "this user"}? This will remove the match and chat access.`)) {
+                  return;
+                }
+                try {
+                  setActionState({ userId: profileId, action: "unmatch" });
+                  await unmatchUser(profileId);
+                  await refetch();
+                } finally {
+                  setActionState((current) => (current?.userId === profileId ? null : current));
+                }
+              }}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 font-medium text-amber-100 transition hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {actionState?.userId === profileId && actionState.action === "unmatch" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <UserX className="h-4 w-4" />
+              )}
+              Unmatch
+            </button>
+
+            <button
+              type="button"
+              disabled={actionState?.userId === profileId}
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    `Unmatch and block ${user.name || "this user"}? They will no longer appear in your feed or matches.`
+                  )
+                ) {
+                  return;
+                }
+                try {
+                  setActionState({ userId: profileId, action: "unmatch-block" });
+                  await unmatchAndBlockUser(profileId);
+                  await refetch();
+                } finally {
+                  setActionState((current) => (current?.userId === profileId ? null : current));
+                }
+              }}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 font-medium text-rose-100 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {actionState?.userId === profileId && actionState.action === "unmatch-block" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Ban className="h-4 w-4" />
+              )}
+              Unmatch &amp; Block
+            </button>
+          </div>
+        )}
       </motion.div>
     );
   };

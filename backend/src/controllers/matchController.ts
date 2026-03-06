@@ -31,6 +31,7 @@ interface IUserProfile extends DocumentData {
   likes?: string[];
   passes?: string[];
   matches?: string[];
+  blockedUsers?: string[];
   distance?: number;
 }
 
@@ -243,6 +244,56 @@ function isErrorWithMessage(error: unknown): error is { message: string } {
   );
 }
 
+const normalizeIdList = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map(String).filter(Boolean) : [];
+
+const isBlockedBetween = (currentUser: IUserProfile, otherUser: IUserProfile): boolean => {
+  const currentBlocked = normalizeIdList(currentUser.blockedUsers);
+  const otherBlocked = normalizeIdList(otherUser.blockedUsers);
+  return currentBlocked.includes(String(otherUser.id)) || otherBlocked.includes(String(currentUser.id));
+};
+
+const getSharedMatchIdsBetween = async (currentUid: string, targetUid: string): Promise<string[]> => {
+  const snapshot = await matchesCollection.where('users', 'array-contains', currentUid).get();
+  return snapshot.docs
+    .filter((doc) => {
+      const data = doc.data() as IMatch;
+      return Array.isArray(data.users) && data.users.includes(targetUid);
+    })
+    .map((doc) => doc.id);
+};
+
+const removeRelationshipArtifacts = async (currentUid: string, targetUid: string): Promise<string[]> => {
+  const sharedMatchIds = await getSharedMatchIdsBetween(currentUid, targetUid);
+  const batch = db.batch();
+  const currentUserRef = usersCollection.doc(currentUid);
+  const targetUserRef = usersCollection.doc(targetUid);
+
+  const currentUpdate: Record<string, unknown> = {
+    likes: admin.firestore.FieldValue.arrayRemove(targetUid),
+    passes: admin.firestore.FieldValue.arrayRemove(targetUid),
+  };
+  const targetUpdate: Record<string, unknown> = {
+    likes: admin.firestore.FieldValue.arrayRemove(currentUid),
+    passes: admin.firestore.FieldValue.arrayRemove(currentUid),
+  };
+
+  if (sharedMatchIds.length > 0) {
+    currentUpdate.matches = admin.firestore.FieldValue.arrayRemove(...sharedMatchIds);
+    targetUpdate.matches = admin.firestore.FieldValue.arrayRemove(...sharedMatchIds);
+  }
+
+  batch.update(currentUserRef, currentUpdate);
+  batch.update(targetUserRef, targetUpdate);
+
+  sharedMatchIds.forEach((matchId) => {
+    batch.delete(matchesCollection.doc(matchId));
+  });
+
+  await batch.commit();
+  return sharedMatchIds;
+};
+
 // Helper to fetch current user profile
 const fetchCurrentUser = async (req: Request, res: Response): Promise<IUserProfile | null> => {
   const uid = req.userId;
@@ -362,6 +413,7 @@ const getPotentialMatches = async (req: Request, res: Response) => {
       currentUser.id,
       ...(currentUser.likes || []),
       ...(currentUser.passes || []),
+      ...(currentUser.blockedUsers || []),
     ].map(String));
 
     const matchIds = Array.isArray(currentUser.matches) ? currentUser.matches : [];
@@ -411,6 +463,7 @@ const getPotentialMatches = async (req: Request, res: Response) => {
         const candidateGender = typeof candidate.gender === 'string' ? candidate.gender.trim().toUpperCase() : '';
         if (excludedUids.has(candidate.id)) return;
         if (candidate.onboardingCompleted !== true) return;
+        if (isBlockedBetween(currentUser, candidate)) return;
 
         if (!preferredGender) {
           preferredGenderMatches.push(candidate);
@@ -551,6 +604,9 @@ const likeUser = async (req: Request, res: Response) => {
     }
 
     const targetUser = { id: targetUserDoc.id, ...targetUserDoc.data() } as IUserProfile;
+    if (isBlockedBetween(currentUser, targetUser)) {
+      return res.status(403).json({ message: 'You cannot interact with this user.' });
+    }
     const targetLikes = Array.isArray(targetUser.likes) ? targetUser.likes : [];
     const isMatch = targetLikes.includes(currentUid);
 
@@ -627,6 +683,16 @@ const passUser = async (req: Request, res: Response) => {
   }
 
   try {
+    const targetUserDoc = await usersCollection.doc(targetUid).get();
+    if (!targetUserDoc.exists) {
+      return res.status(404).json({ message: 'Target user not found.' });
+    }
+
+    const targetUser = { id: targetUserDoc.id, ...targetUserDoc.data() } as IUserProfile;
+    if (isBlockedBetween(currentUser, targetUser)) {
+      return res.status(403).json({ message: 'You cannot interact with this user.' });
+    }
+
     await usersCollection.doc(currentUid).update({
       passes: admin.firestore.FieldValue.arrayUnion(targetUid),
     });
@@ -854,6 +920,99 @@ const getMatchMessages = async (req: Request, res: Response) => {
 };
 
 // =======================================================
+// 4?? POST /api/matches/unmatch/:userId
+// =======================================================
+const unmatchUser = async (req: Request, res: Response) => {
+  const currentUser = await fetchCurrentUser(req, res);
+  if (!currentUser) return;
+
+  const { userId: targetUid } = req.params;
+  const currentUid = currentUser.id;
+
+  if (currentUid === targetUid) {
+    return res.status(400).json({ message: 'Cannot unmatch yourself.' });
+  }
+
+  try {
+    const targetUserDoc = await usersCollection.doc(targetUid).get();
+    if (!targetUserDoc.exists) {
+      return res.status(404).json({ message: 'Target user not found.' });
+    }
+
+    const removedMatchIds = await removeRelationshipArtifacts(currentUid, targetUid);
+    return res.status(200).json({
+      message: 'User unmatched successfully.',
+      removedMatchIds,
+    });
+  } catch (error) {
+    const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
+    console.error('Error unmatching user:', msg);
+    return res.status(500).json({ message: `Server Error: ${msg}` });
+  }
+};
+
+// =======================================================
+// 5?? POST /api/matches/unmatch-block/:userId
+// =======================================================
+const unmatchAndBlockUser = async (req: Request, res: Response) => {
+  const currentUser = await fetchCurrentUser(req, res);
+  if (!currentUser) return;
+
+  const { userId: targetUid } = req.params;
+  const currentUid = currentUser.id;
+
+  if (currentUid === targetUid) {
+    return res.status(400).json({ message: 'Cannot block yourself.' });
+  }
+
+  try {
+    const targetUserDoc = await usersCollection.doc(targetUid).get();
+    if (!targetUserDoc.exists) {
+      return res.status(404).json({ message: 'Target user not found.' });
+    }
+
+    const sharedMatchIds = await getSharedMatchIdsBetween(currentUid, targetUid);
+    const batch = db.batch();
+    const currentUserRef = usersCollection.doc(currentUid);
+    const targetUserRef = usersCollection.doc(targetUid);
+
+    const currentUpdate: Record<string, unknown> = {
+      likes: admin.firestore.FieldValue.arrayRemove(targetUid),
+      passes: admin.firestore.FieldValue.arrayRemove(targetUid),
+      blockedUsers: admin.firestore.FieldValue.arrayUnion(targetUid),
+    };
+
+    const targetUpdate: Record<string, unknown> = {
+      likes: admin.firestore.FieldValue.arrayRemove(currentUid),
+      passes: admin.firestore.FieldValue.arrayRemove(currentUid),
+    };
+
+    if (sharedMatchIds.length > 0) {
+      currentUpdate.matches = admin.firestore.FieldValue.arrayRemove(...sharedMatchIds);
+      targetUpdate.matches = admin.firestore.FieldValue.arrayRemove(...sharedMatchIds);
+    }
+
+    batch.update(currentUserRef, currentUpdate);
+    batch.update(targetUserRef, targetUpdate);
+
+    sharedMatchIds.forEach((matchId) => {
+      batch.delete(matchesCollection.doc(matchId));
+    });
+
+    await batch.commit();
+
+    return res.status(200).json({
+      message: 'User unmatched and blocked successfully.',
+      removedMatchIds: sharedMatchIds,
+    });
+  } catch (error) {
+    const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
+    console.error('Error unmatching and blocking user:', msg);
+    return res.status(500).json({ message: `Server Error: ${msg}` });
+  }
+};
+
+// =======================================================
 // 6.5 GET /api/messages/media/library
 // =======================================================
 const getMediaLibrary = async (req: Request, res: Response) => {
@@ -1016,6 +1175,8 @@ const getMutualMatches = async (req: Request, res: Response) => {
 
       if (
         user.id !== currentUser.id &&
+        user.onboardingCompleted === true &&
+        !isBlockedBetween(currentUser, user) &&
         user.likes?.includes(currentUser.id) &&
         currentUser.likes?.includes(user.id)
       ) {
@@ -1052,7 +1213,8 @@ const getSentMatches = async (req: Request, res: Response) => {
     const sentDocs = await Promise.all(sentIds.map((id) => usersCollection.doc(id).get()));
     const sentMatches = sentDocs
       .filter((doc) => doc.exists)
-      .map((doc) => ({ id: doc.id, ...doc.data() } as IUserProfile));
+      .map((doc) => ({ id: doc.id, ...doc.data() } as IUserProfile))
+      .filter((user) => user.onboardingCompleted === true && !isBlockedBetween(currentUser, user));
 
     console.log(`? Sent matches found: ${sentMatches.length}`);
     res.status(200).json({ matches: sentMatches });
@@ -1079,6 +1241,8 @@ const getReceivedMatches = async (req: Request, res: Response) => {
       const user = { id: doc.id, ...doc.data() } as IUserProfile;
       if (
         user.id !== currentUser.id &&
+        user.onboardingCompleted === true &&
+        !isBlockedBetween(currentUser, user) &&
         user.likes?.includes(currentUser.id) &&
         !currentUser.likes?.includes(user.id)
       ) {
@@ -1105,6 +1269,8 @@ export {
   getPotentialMatches,
   likeUser,
   passUser,
+  unmatchUser,
+  unmatchAndBlockUser,
   getMatchConversations,
   getMatchMessages,
   getMediaLibrary,

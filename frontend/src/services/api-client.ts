@@ -84,6 +84,20 @@ export const getApiClient = (accessToken: string | null) => ({
 
     passUser: (userId: string) =>
       apiClientRequest<void>(`/api/matches/pass/${userId}`, { method: 'POST' }, accessToken),
+
+    unmatchUser: (userId: string) =>
+      apiClientRequest<{ message: string; removedMatchIds?: string[] }>(
+        `/api/matches/unmatch/${userId}`,
+        { method: 'POST' },
+        accessToken
+      ),
+
+    unmatchAndBlockUser: (userId: string) =>
+      apiClientRequest<{ message: string; removedMatchIds?: string[] }>(
+        `/api/matches/unmatch-block/${userId}`,
+        { method: 'POST' },
+        accessToken
+      ),
   },
 
   User: {

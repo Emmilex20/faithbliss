@@ -179,6 +179,11 @@ interface MatchResult {
   message?: string;
 }
 
+interface MatchActionResult {
+  message: string;
+  removedMatchIds?: string[];
+}
+
 interface TokenDebugInfo {
   userId: string;
   email: string;
@@ -707,6 +712,18 @@ export const MatchAPI = {
       method: 'POST',
     });
   },
+
+  unmatchUser: async (userId: string): Promise<MatchActionResult> => {
+    return apiRequest(`/api/matches/unmatch/${userId}`, {
+      method: 'POST',
+    });
+  },
+
+  unmatchAndBlockUser: async (userId: string): Promise<MatchActionResult> => {
+    return apiRequest(`/api/matches/unmatch-block/${userId}`, {
+      method: 'POST',
+    });
+  },
 };
 
 // 💬 Messaging API

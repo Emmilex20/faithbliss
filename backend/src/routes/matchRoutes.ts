@@ -2,9 +2,11 @@
 import express from 'express';
 import { protect } from '../middleware/authMiddleware'; 
 import { 
-    getPotentialMatches,
+   getPotentialMatches,
   likeUser,
   passUser,
+  unmatchUser,
+  unmatchAndBlockUser,
   getMutualMatches,
   getSentMatches,
   getReceivedMatches,
@@ -21,6 +23,8 @@ router.use(protect);
 router.get('/potential', getPotentialMatches); // GET /api/matches/potential
 router.post('/like/:userId', likeUser);       // POST /api/matches/like/:userId
 router.post('/pass/:userId', passUser);       // POST /api/matches/pass/:userId
+router.post('/unmatch/:userId', unmatchUser);
+router.post('/unmatch-block/:userId', unmatchAndBlockUser);
 router.get('/mutual', getMutualMatches);
 router.get('/sent', getSentMatches);
 router.get('/received', getReceivedMatches);

@@ -411,7 +411,35 @@ export function useMatching() {
     }
   }, [apiClient, accessToken]);
 
-  return { likeUser, passUser };
+  const unmatchUser = useCallback(async (userId: string) => {
+    if (!accessToken) {
+      throw new Error('Authentication required. Please log in.');
+    }
+    try {
+      const result = await apiClient.Match.unmatchUser(userId);
+      toastRef.current.showSuccess(result.message || 'User unmatched.');
+      return result;
+    } catch (error) {
+      toastRef.current.showError('Failed to unmatch user', 'Error');
+      throw error;
+    }
+  }, [apiClient, accessToken]);
+
+  const unmatchAndBlockUser = useCallback(async (userId: string) => {
+    if (!accessToken) {
+      throw new Error('Authentication required. Please log in.');
+    }
+    try {
+      const result = await apiClient.Match.unmatchAndBlockUser(userId);
+      toastRef.current.showSuccess(result.message || 'User unmatched and blocked.');
+      return result;
+    } catch (error) {
+      toastRef.current.showError('Failed to unmatch and block user', 'Error');
+      throw error;
+    }
+  }, [apiClient, accessToken]);
+
+  return { likeUser, passUser, unmatchUser, unmatchAndBlockUser };
 }
 
 // Hook for completing onboarding

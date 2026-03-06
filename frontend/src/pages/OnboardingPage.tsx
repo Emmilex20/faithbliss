@@ -35,49 +35,67 @@ type OnboardingUpdateData = Partial<Omit<OnboardingData, 'photos' | 'customDenom
 };
 
 const getStepValidationError = (step: number, data: OnboardingData): string | null => {
+  const hasText = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
+  const hasSelections = (value: unknown, minimum = 1): boolean => Array.isArray(value) && value.length >= minimum;
+
   if (step === 0 && data.photos.length < MIN_ONBOARDING_PHOTOS) {
     return `Please upload at least ${MIN_ONBOARDING_PHOTOS} photos.`;
   }
 
-  if (
-    step === 1 &&
-    (!data.location || !data.location.trim())
-  ) {
+  if (step === 1 && !hasText(data.location)) {
     return 'Please allow location or enter your location manually.';
   }
 
   if (
     step === 2 &&
     (
-      !data.birthday ||
-      !data.location ||
+      !hasText(data.location) ||
+      !hasText(data.birthday) ||
+      typeof data.age !== 'number' ||
       !data.faithJourney ||
       !data.churchAttendance ||
-      !Array.isArray(data.profileFits) ||
-      data.profileFits.length < MIN_PROFILE_FITS
+      !hasText(data.denomination) ||
+      !hasText(data.baptismStatus) ||
+      !hasText(data.occupation) ||
+      !hasText(data.education) ||
+      !hasText(data.favoriteVerse) ||
+      !hasText(data.height) ||
+      !hasSelections(data.languageSpoken) ||
+      !hasText(data.phoneNumber) ||
+      !hasText(data.countryCode) ||
+      !hasSelections(data.profileFits, MIN_PROFILE_FITS) ||
+      !hasSelections(data.personality) ||
+      !hasSelections(data.hobbies) ||
+      !hasSelections(data.values) ||
+      !hasSelections(data.spiritualGifts)
     )
   ) {
-    return `Please fill out all required profile information and pick at least ${MIN_PROFILE_FITS} options that fit you.`;
+    return `Please complete every profile field on this step and pick at least ${MIN_PROFILE_FITS} profile fit options.`;
   }
 
-  if (step === 3 && data.relationshipGoals.length === 0) {
+  if (step === 3 && !hasSelections(data.relationshipGoals)) {
     return 'Please select your relationship goal.';
   }
 
   if (
     step === 4 &&
     (
-      !data.preferredFaithJourney ||
+      !hasSelections(data.preferredFaithJourney) ||
       !data.preferredGender ||
+      !hasSelections(data.preferredChurchAttendance) ||
+      !hasSelections(data.preferredRelationshipGoals) ||
+      !hasText(data.preferredDenomination) ||
       data.minAge === null ||
       data.minAge === undefined ||
       data.maxAge === null ||
       data.maxAge === undefined ||
       data.maxDistance === null ||
-      data.maxDistance === undefined
+      data.maxDistance === undefined ||
+      data.preferredMinHeight === null ||
+      data.preferredMinHeight === undefined
     )
   ) {
-    return 'Please complete your partner preferences.';
+    return 'Please complete every partner preference on this step.';
   }
 
   if (
