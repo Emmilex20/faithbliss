@@ -124,10 +124,6 @@ const MatchesPage = () => {
               <h3 className="font-semibold text-white group-hover:text-pink-200 transition-colors">
                 {user.name || "Unknown"}, {user.age ?? 0}
               </h3>
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-                <span className="text-sm font-medium text-emerald-400">95% Match</span>
-              </div>
             </div>
 
             <div className="flex items-center gap-2 text-gray-300 text-sm mt-1">
