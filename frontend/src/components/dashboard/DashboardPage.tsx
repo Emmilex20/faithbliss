@@ -93,6 +93,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
         const baseProfiles = sourceProfiles
             .filter(hasValidId)
             .filter(hasDisplayName)
+            .filter((profile) => profile.onboardingCompleted === true)
             .filter((profile) => !currentUserId || String(profile.id || (profile as any)._id) !== currentUserId);
 
         const unpassedProfiles = baseProfiles.filter(

@@ -32,6 +32,8 @@ type DisplayPlan = {
   name: string;
   description: string;
   displayPrice: string;
+  originalPrice?: string;
+  savingsLabel?: string;
   highlight?: boolean;
   tag?: string;
   features: string[];
@@ -41,15 +43,23 @@ type DisplayPlan = {
 const FREE_PLAN: DisplayPlan = {
   tier: 'free',
   name: 'FaithBliss Free',
-  description: 'All the essentials to start meaningful connections.',
+  description: 'A limited starter plan for browsing and basic matching.',
   displayPrice: 'Free',
   features: [
-    'Unlimited likes',
-    'Daily curated matches',
-    '1:1 messaging after matching',
-    'Basic profile customization',
+    'Sign in and create your account',
+    '10 likes or swipes per day',
+    'Chat after matching',
+    'Gender-only filtering',
+    'View user profiles',
+    'Cannot see who liked you',
   ],
   cta: 'Current Plan',
+};
+
+const PREMIUM_MARKETING_PRICE = {
+  original: 'NGN 15,000',
+  discounted: 'NGN 10,000',
+  savingsLabel: 'Save NGN 5,000',
 };
 
 const highlights = [
@@ -205,6 +215,7 @@ const PremiumContent = () => {
     () =>
       availablePlans
         .filter((plan) => plan.currency === currency)
+        .filter((plan) => plan.tier === 'premium')
         .sort((left, right) => left.amount - right.amount),
     [availablePlans, currency],
   );
@@ -220,7 +231,18 @@ const PremiumContent = () => {
       ...paidPlans.map((plan) => ({
         tier: plan.tier,
         name: plan.name,
-        displayPrice: formatPlanAmount(plan.amount, plan.currency),
+        displayPrice:
+          plan.currency === 'NGN'
+            ? PREMIUM_MARKETING_PRICE.discounted
+            : formatPlanAmount(plan.amount, plan.currency),
+        originalPrice:
+          plan.tier === 'premium' && plan.currency === 'NGN'
+            ? PREMIUM_MARKETING_PRICE.original
+            : undefined,
+        savingsLabel:
+          plan.tier === 'premium' && plan.currency === 'NGN'
+            ? PREMIUM_MARKETING_PRICE.savingsLabel
+            : undefined,
         ...PREMIUM_PLAN_CONTENT[plan.tier],
       })),
     ],
@@ -541,9 +563,18 @@ const PremiumContent = () => {
                     : 'border-white/10 bg-white/5 hover:border-white/20'
                 }`}
               >
-                {plan.tag && (
-                  <div className="absolute right-6 top-6 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">
-                    {plan.tag}
+                {(plan.tag || plan.savingsLabel) && (
+                  <div className="mb-5 flex min-h-[2rem] flex-wrap items-start gap-2 pr-16">
+                    {plan.savingsLabel && (
+                      <div className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-200">
+                        {plan.savingsLabel}
+                      </div>
+                    )}
+                    {plan.tag && (
+                      <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">
+                        {plan.tag}
+                      </div>
+                    )}
                   </div>
                 )}
                 <h3 className="text-xl font-semibold text-white">{plan.name}</h3>
@@ -552,6 +583,14 @@ const PremiumContent = () => {
                   <span className="text-3xl font-semibold text-white">{plan.displayPrice}</span>
                   {plan.tier !== 'free' && <span className="text-xs text-gray-400">/month</span>}
                 </div>
+                {plan.originalPrice && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-500 line-through">{plan.originalPrice}</span>
+                    <span className="rounded-full border border-pink-400/30 bg-pink-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-pink-200">
+                      Limited pricing
+                    </span>
+                  </div>
+                )}
 
                 <ul className="mt-6 space-y-3 text-sm text-gray-300">
                   {plan.features.map((feature) => (

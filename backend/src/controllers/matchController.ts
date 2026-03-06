@@ -410,6 +410,7 @@ const getPotentialMatches = async (req: Request, res: Response) => {
         const candidate = { id: doc.id, ...doc.data() } as IUserProfile;
         const candidateGender = typeof candidate.gender === 'string' ? candidate.gender.trim().toUpperCase() : '';
         if (excludedUids.has(candidate.id)) return;
+        if (candidate.onboardingCompleted !== true) return;
 
         if (!preferredGender) {
           preferredGenderMatches.push(candidate);

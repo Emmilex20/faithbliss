@@ -23,14 +23,14 @@ export const PREMIUM_PLAN_CONTENT: Record<
   }
 > = {
   premium: {
-    description: 'Unlock deeper filters and priority visibility.',
+    description: 'Unlock the full FaithBliss experience beyond the free plan limits.',
     cta: 'Start Premium Plan',
     features: [
+      'Unlimited likes and swipes',
+      'Advanced filters beyond gender only',
+      'Voice and video calling',
       'See who liked you instantly',
-      'Advanced faith and values filters',
-      'Boosted profile discovery',
-      'Message read receipts',
-      'Weekly profile insights',
+      'All premium-only web app features',
     ],
   },
   elite: {

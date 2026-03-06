@@ -25,6 +25,7 @@ import { Clock3, Crown, Sparkles } from 'lucide-react';
 
 const ProfilePage: React.FC = () => {
   const { accessToken, user: authUser } = useAuthContext();
+  const subscriptionDisplay = useSubscriptionDisplay(authUser);
 
   // âœ… Use only valid id/email from your User type
   const currentUserId = authUser?.id;
@@ -293,7 +294,6 @@ const ProfilePage: React.FC = () => {
   const isPremium = layoutUser?.subscriptionStatus === 'active' && ['premium', 'elite'].includes(layoutUser?.subscriptionTier || '');
   const activeTier = layoutUser?.subscriptionTier || 'free';
   const activeTierLabel = getSubscriptionTierLabel(activeTier);
-  const subscriptionDisplay = useSubscriptionDisplay(layoutUser);
 
   const content = (
     <>

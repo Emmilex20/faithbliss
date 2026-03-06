@@ -113,6 +113,13 @@ export const SwipeDeck = ({
       return;
     }
 
+    if (!sourceTopProfileId) {
+      setShowSkeletonCard(false);
+      setSkeletonHoldCompleted(true);
+      dispatch({ type: 'NO_NEXT' });
+      return;
+    }
+
     const hasReadyProfile = Boolean(sourceTopProfileId && sourceTopProfileId !== committedProfileId);
     if (hasReadyProfile) {
       if (showSkeletonCard && !skeletonHoldCompleted) {
