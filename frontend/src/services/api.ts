@@ -705,13 +705,17 @@ export const MatchAPI = {
     });
   },
 
-  // Pass on a user
+  // Pass on a user
   passUser: async (userId: string): Promise<void> => {
     // FIX: Added /api prefix
     return apiRequest(`/api/matches/pass/${userId}`, {
       method: 'POST',
     });
   },
+
+  getPassedProfiles: async (): Promise<{ profiles: User[] }> => {
+    return apiRequest('/api/matches/passed');
+  },
 
   unmatchUser: async (userId: string): Promise<MatchActionResult> => {
     return apiRequest(`/api/matches/unmatch/${userId}`, {

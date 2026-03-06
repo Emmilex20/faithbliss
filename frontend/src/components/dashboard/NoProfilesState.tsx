@@ -3,6 +3,8 @@ interface NoProfilesStateProps {
   description?: string;
   actionLabel?: string;
   onAction?: () => void;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
   onStartOver?: () => void;
 }
 
@@ -11,6 +13,8 @@ export const NoProfilesState = ({
   description = "You are all caught up for the moment. New people will appear here as soon as they join or become available.",
   actionLabel = "Reload Profiles",
   onAction,
+  secondaryActionLabel,
+  onSecondaryAction,
   onStartOver
 }: NoProfilesStateProps) => {
   const action = onAction || onStartOver;
@@ -21,14 +25,24 @@ export const NoProfilesState = ({
       </div>
       <h2 className="mb-2 text-2xl font-bold text-white">{title}</h2>
       <p className="mb-5 text-sm leading-relaxed text-slate-300">{description}</p>
-      {action && (
-        <button
-          onClick={action}
-          className="rounded-full bg-gradient-to-r from-pink-500 to-fuchsia-500 px-6 py-2.5 font-semibold text-white transition hover:from-pink-400 hover:to-fuchsia-400"
-        >
-          {actionLabel}
-        </button>
-      )}
+      <div className="flex flex-col items-center gap-3">
+        {action && (
+          <button
+            onClick={action}
+            className="rounded-full bg-gradient-to-r from-pink-500 to-fuchsia-500 px-6 py-2.5 font-semibold text-white transition hover:from-pink-400 hover:to-fuchsia-400"
+          >
+            {actionLabel}
+          </button>
+        )}
+        {onSecondaryAction && secondaryActionLabel && (
+          <button
+            onClick={onSecondaryAction}
+            className="rounded-full border border-white/20 bg-white/5 px-6 py-2.5 font-semibold text-white transition hover:bg-white/10"
+          >
+            {secondaryActionLabel}
+          </button>
+        )}
+      </div>
     </div>
   );
 };

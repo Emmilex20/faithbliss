@@ -73,6 +73,9 @@ export const getApiClient = (accessToken: string | null) => ({
     getSentMatches: () =>
       apiClientRequest<any[]>('/api/matches/sent', { method: 'GET' }, accessToken),
 
+    getPassedProfiles: () =>
+      apiClientRequest<{ profiles: any[] }>('/api/matches/passed', { method: 'GET' }, accessToken),
+
     getReceivedMatches: () =>
       apiClientRequest<any[]>('/api/matches/received', { method: 'GET' }, accessToken),
 

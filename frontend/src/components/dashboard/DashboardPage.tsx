@@ -37,6 +37,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const [showForcedOnboardingPrompt, setShowForcedOnboardingPrompt] = useState(false);
     const ONBOARDING_PAUSE_STORAGE_KEY = 'faithbliss_onboarding_pause_state';
     const [persistedPassedProfileIds, setPersistedPassedProfileIds] = useState<string[]>([]);
+    const [isReviewingPassedProfiles, setIsReviewingPassedProfiles] = useState(false);
 
   // Fetch real potential matches from backend
   const { 
@@ -96,12 +97,16 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
             .filter((profile) => profile.onboardingCompleted === true)
             .filter((profile) => !currentUserId || String(profile.id || (profile as any)._id) !== currentUserId);
 
+        if (isReviewingPassedProfiles) {
+            return baseProfiles;
+        }
+
         const unpassedProfiles = baseProfiles.filter(
             (profile) => !passedIdSet.has(String(profile.id || (profile as any)._id))
         );
 
         return unpassedProfiles.length > 0 ? unpassedProfiles : baseProfiles;
-    }, [profiles, filteredProfiles, currentUserData?.id, persistedPassedProfileIds]);
+    }, [profiles, filteredProfiles, currentUserData?.id, isReviewingPassedProfiles, persistedPassedProfileIds]);
 
     const {
       queue: profileQueue,
@@ -257,10 +262,29 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     
     const handleNoProfilesAction = async () => {
       reset();
+      setIsReviewingPassedProfiles(false);
       if (filteredProfiles !== null) {
         setFilteredProfiles(null);
       }
       await refetch();
+    };
+
+    const handleReviewPassedProfiles = async () => {
+      reset();
+      try {
+        const response = await API.Match.getPassedProfiles();
+        const passedProfiles = Array.isArray(response?.profiles) ? response.profiles : [];
+        setFilteredProfiles(passedProfiles);
+        setIsReviewingPassedProfiles(true);
+
+        if (passedProfiles.length > 0) {
+          showInfo(`Reviewing ${passedProfiles.length} passed profile${passedProfiles.length > 1 ? 's' : ''}.`);
+        } else {
+          showInfo('You have no passed profiles to review right now.');
+        }
+      } catch (error) {
+        console.error('Failed to load passed profiles:', error);
+      }
     };
 
   const handleLike = () => {
@@ -355,6 +379,7 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
 
         if (!hasActiveFilters) {
             setFilteredProfiles(null);
+            setIsReviewingPassedProfiles(false);
             reset();
             showInfo('Filters cleared. Showing all profiles.');
             return;
@@ -364,6 +389,7 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
         try {
             const results = await API.Discovery.filterProfiles(normalizedFilters); 
             setFilteredProfiles(Array.isArray(results) ? results : []);
+            setIsReviewingPassedProfiles(false);
             reset();
             if (results.length > 0) {
               showSuccess(`Found ${results.length} profile${results.length > 1 ? 's' : ''}.`);
@@ -458,10 +484,16 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
                         onGoBack={handleGoBack}
                         onLike={handleLike}
                         onPass={handlePass}
-                        noProfilesTitle="No new matches yet"
-                        noProfilesDescription="You have liked or passed everyone available for now. Tap reload and we will fetch fresh profiles instantly."
-                        noProfilesActionLabel="Reload Profiles"
+                        noProfilesTitle={isReviewingPassedProfiles ? "No passed profiles to review" : "No new matches yet"}
+                        noProfilesDescription={
+                          isReviewingPassedProfiles
+                            ? "You have no passed profiles available to review right now. Go back to the fresh feed anytime."
+                            : "You have liked or passed everyone available for now. Tap reload and we will fetch fresh profiles instantly."
+                        }
+                        noProfilesActionLabel={isReviewingPassedProfiles ? "Back to Fresh Feed" : "Reload Profiles"}
                         onNoProfilesAction={handleNoProfilesAction}
+                        noProfilesSecondaryActionLabel={isReviewingPassedProfiles ? undefined : "Review Passed Profiles"}
+                        onNoProfilesSecondaryAction={isReviewingPassedProfiles ? undefined : handleReviewPassedProfiles}
                         onOpenFilterSection={openFiltersToSection}
                     />
                 </DesktopLayout>
@@ -498,10 +530,16 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
                         onGoBack={handleGoBack}
                         onLike={handleLike}
                         onPass={handlePass}
-                        noProfilesTitle="No new matches yet"
-                        noProfilesDescription="You have liked or passed everyone available for now. Tap reload and we will fetch fresh profiles instantly."
-                        noProfilesActionLabel="Reload Profiles"
+                        noProfilesTitle={isReviewingPassedProfiles ? "No passed profiles to review" : "No new matches yet"}
+                        noProfilesDescription={
+                          isReviewingPassedProfiles
+                            ? "You have no passed profiles available to review right now. Go back to the fresh feed anytime."
+                            : "You have liked or passed everyone available for now. Tap reload and we will fetch fresh profiles instantly."
+                        }
+                        noProfilesActionLabel={isReviewingPassedProfiles ? "Back to Fresh Feed" : "Reload Profiles"}
                         onNoProfilesAction={handleNoProfilesAction}
+                        noProfilesSecondaryActionLabel={isReviewingPassedProfiles ? undefined : "Review Passed Profiles"}
+                        onNoProfilesSecondaryAction={isReviewingPassedProfiles ? undefined : handleReviewPassedProfiles}
                         onOpenFilterSection={openFiltersToSection}
                     />
                 </MobileLayout>

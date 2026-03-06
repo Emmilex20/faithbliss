@@ -9,6 +9,7 @@ import {
   unmatchAndBlockUser,
   getMutualMatches,
   getSentMatches,
+  getPassedProfiles,
   getReceivedMatches,
 } from '../controllers/matchController'; // Only match controllers remain
 
@@ -27,6 +28,7 @@ router.post('/unmatch/:userId', unmatchUser);
 router.post('/unmatch-block/:userId', unmatchAndBlockUser);
 router.get('/mutual', getMutualMatches);
 router.get('/sent', getSentMatches);
+router.get('/passed', getPassedProfiles);
 router.get('/received', getReceivedMatches);
 
 

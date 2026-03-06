@@ -31,6 +31,8 @@ interface SwipeDeckProps {
   noProfilesDescription?: string;
   noProfilesActionLabel?: string;
   onNoProfilesAction?: () => void;
+  noProfilesSecondaryActionLabel?: string;
+  onNoProfilesSecondaryAction?: () => void;
   onOpenFilterSection?: (section: DashboardFilterFocusSection) => void;
 }
 
@@ -46,6 +48,8 @@ export const SwipeDeck = ({
   noProfilesDescription,
   noProfilesActionLabel,
   onNoProfilesAction,
+  noProfilesSecondaryActionLabel,
+  onNoProfilesSecondaryAction,
   onOpenFilterSection,
 }: SwipeDeckProps) => {
   const [state, dispatch] = useReducer(swipeDeckReducer, INITIAL_SWIPE_DECK_STATE);
@@ -183,6 +187,8 @@ export const SwipeDeck = ({
         description={noProfilesDescription}
         actionLabel={noProfilesActionLabel}
         onAction={onNoProfilesAction}
+        secondaryActionLabel={noProfilesSecondaryActionLabel}
+        onSecondaryAction={onNoProfilesSecondaryAction}
         onStartOver={onStartOver}
       />
     );

@@ -1226,7 +1226,39 @@ const getSentMatches = async (req: Request, res: Response) => {
 };
 
 // =======================================================
-// 9?? GET /api/matches/received
+// 9?? GET /api/matches/passed
+// =======================================================
+const getPassedProfiles = async (req: Request, res: Response) => {
+  const currentUser = await fetchCurrentUser(req, res);
+  if (!currentUser) return;
+
+  try {
+    const passedIds = normalizeIdList(currentUser.passes);
+    if (passedIds.length === 0) {
+      return res.status(200).json({ profiles: [] });
+    }
+
+    const passedDocs = await Promise.all(
+      passedIds.map((id) => usersCollection.doc(id).get())
+    );
+
+    const profiles = passedDocs
+      .filter((doc) => doc.exists)
+      .map((doc) => ({ id: doc.id, ...doc.data() } as IUserProfile))
+      .filter((user) => user.id !== currentUser.id)
+      .filter((user) => user.onboardingCompleted === true)
+      .filter((user) => !isBlockedBetween(currentUser, user));
+
+    return res.status(200).json({ profiles });
+  } catch (error) {
+    const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
+    console.error('?? Error fetching passed profiles:', msg);
+    return res.status(500).json({ message: `Server Error: ${msg}` });
+  }
+};
+
+// =======================================================
+// 10?? GET /api/matches/received
 // =======================================================
 const getReceivedMatches = async (req: Request, res: Response) => {
   const currentUser = await fetchCurrentUser(req, res);
@@ -1278,5 +1310,6 @@ export {
   markMessageAsRead,
   getMutualMatches,
   getSentMatches,
+  getPassedProfiles,
   getReceivedMatches,
 };
