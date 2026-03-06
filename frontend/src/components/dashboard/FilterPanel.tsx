@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, Filter, RotateCcw, X } from 'lucide-react';
+import { ChevronDown, Filter, Lock, RotateCcw, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import AppDropdown from '@/components/AppDropdown';
 
 export interface DashboardFiltersPayload {
@@ -29,6 +30,7 @@ interface FilterPanelProps {
   onApplyFilters: (filters: DashboardFiltersPayload) => void;
   isOpen?: boolean;
   initialFocusSection?: DashboardFilterFocusSection | null;
+  isPremiumUser?: boolean;
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -83,7 +85,14 @@ const RELATIONSHIP_GOAL_OPTIONS = [
   { value: 'MARRIAGE_MINDED', label: 'Marriage-minded' },
 ];
 
-export const FilterPanel = ({ onClose, onApplyFilters, isOpen = false, initialFocusSection = null }: FilterPanelProps) => {
+export const FilterPanel = ({
+  onClose,
+  onApplyFilters,
+  isOpen = false,
+  initialFocusSection = null,
+  isPremiumUser = false,
+}: FilterPanelProps) => {
+  const navigate = useNavigate();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [gender, setGender] = useState<'MALE' | 'FEMALE' | ''>('');
@@ -99,15 +108,17 @@ export const FilterPanel = ({ onClose, onApplyFilters, isOpen = false, initialFo
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (gender) count += 1;
-    if (distance !== 50) count += 1;
-    if (minAge !== 22 || maxAge !== 40) count += 1;
-    if (minHeight > 120) count += 1;
-    if (faithJourney) count += 1;
-    if (churchAttendance) count += 1;
-    if (relationshipGoal) count += 1;
-    if (denomination) count += 1;
+    if (isPremiumUser) {
+      if (distance !== 50) count += 1;
+      if (minAge !== 22 || maxAge !== 40) count += 1;
+      if (minHeight > 120) count += 1;
+      if (faithJourney) count += 1;
+      if (churchAttendance) count += 1;
+      if (relationshipGoal) count += 1;
+      if (denomination) count += 1;
+    }
     return count;
-  }, [churchAttendance, denomination, distance, faithJourney, gender, maxAge, minAge, minHeight, relationshipGoal]);
+  }, [churchAttendance, denomination, distance, faithJourney, gender, isPremiumUser, maxAge, minAge, minHeight, relationshipGoal]);
 
   const resetLocalState = () => {
     setGender('');
@@ -129,16 +140,18 @@ export const FilterPanel = ({ onClose, onApplyFilters, isOpen = false, initialFo
 
     const payload: DashboardFiltersPayload = {};
     if (gender) payload.preferredGender = gender;
-    if (distance !== 50) payload.maxDistance = clamp(Math.round(distance), 1, 500);
-    if (minAge !== 22 || maxAge !== 40) {
-      payload.minAge = normalizedMinAge;
-      payload.maxAge = normalizedMaxAge;
+    if (isPremiumUser) {
+      if (distance !== 50) payload.maxDistance = clamp(Math.round(distance), 1, 500);
+      if (minAge !== 22 || maxAge !== 40) {
+        payload.minAge = normalizedMinAge;
+        payload.maxAge = normalizedMaxAge;
+      }
+      if (minHeight > 120) payload.preferredMinHeight = clamp(Math.round(minHeight), 120, 220);
+      if (faithJourney) payload.preferredFaithJourney = [faithJourney];
+      if (churchAttendance) payload.preferredChurchAttendance = [churchAttendance];
+      if (relationshipGoal) payload.preferredRelationshipGoals = [relationshipGoal];
+      if (denomination) payload.preferredDenominations = [denomination];
     }
-    if (minHeight > 120) payload.preferredMinHeight = clamp(Math.round(minHeight), 120, 220);
-    if (faithJourney) payload.preferredFaithJourney = [faithJourney];
-    if (churchAttendance) payload.preferredChurchAttendance = [churchAttendance];
-    if (relationshipGoal) payload.preferredRelationshipGoals = [relationshipGoal];
-    if (denomination) payload.preferredDenominations = [denomination];
 
     return payload;
   };
@@ -157,18 +170,36 @@ export const FilterPanel = ({ onClose, onApplyFilters, isOpen = false, initialFo
   useEffect(() => {
     if (!isOpen || !initialFocusSection) return;
 
-    if (initialFocusSection === 'denomination' || initialFocusSection === 'church-attendance' || initialFocusSection === 'relationship-goal') {
+    if (
+      isPremiumUser &&
+      (initialFocusSection === 'denomination' ||
+        initialFocusSection === 'church-attendance' ||
+        initialFocusSection === 'relationship-goal')
+    ) {
       setShowAdvanced(true);
     }
 
     const timer = window.setTimeout(() => {
-      const selector = `[data-filter-section="${initialFocusSection}"]`;
+      const lockedAdvancedSection =
+        !isPremiumUser &&
+        (initialFocusSection === 'denomination' ||
+          initialFocusSection === 'church-attendance' ||
+          initialFocusSection === 'relationship-goal');
+      const selector = lockedAdvancedSection
+        ? '[data-filter-section="gender"]'
+        : `[data-filter-section="${initialFocusSection}"]`;
       const section = scrollContainerRef.current?.querySelector(selector) as HTMLElement | null;
       section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 140);
 
     return () => window.clearTimeout(timer);
-  }, [initialFocusSection, isOpen]);
+  }, [initialFocusSection, isOpen, isPremiumUser]);
+
+  const lockedSectionClass = !isPremiumUser ? 'opacity-55 pointer-events-none select-none' : '';
+  const goToPremium = () => {
+    onClose();
+    navigate('/premium');
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -194,6 +225,19 @@ export const FilterPanel = ({ onClose, onApplyFilters, isOpen = false, initialFo
         <div className="mt-3 inline-flex items-center rounded-full bg-pink-500/15 border border-pink-400/30 px-3 py-1 text-xs font-semibold text-pink-200">
           {activeFilterCount} active filter{activeFilterCount === 1 ? '' : 's'}
         </div>
+        {!isPremiumUser && (
+          <div className="mt-3 rounded-2xl border border-amber-400/25 bg-amber-500/10 px-3 py-3 text-xs text-amber-100">
+            <p>Free plan allows gender filtering only. All other filters are premium-only.</p>
+            <button
+              type="button"
+              onClick={goToPremium}
+              className="mt-3 inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-white/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-white transition hover:bg-white/15"
+            >
+              <Lock className="h-3.5 w-3.5" />
+              Upgrade to Premium
+            </button>
+          </div>
+        )}
       </div>
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-6 space-y-5">
@@ -209,8 +253,14 @@ export const FilterPanel = ({ onClose, onApplyFilters, isOpen = false, initialFo
           />
         </section>
 
-        <section data-filter-section="distance" className="rounded-2xl border border-pink-400/20 bg-pink-500/10 p-4">
+        <section data-filter-section="distance" className={`rounded-2xl border border-pink-400/20 bg-pink-500/10 p-4 ${lockedSectionClass}`}>
           <label className="block text-xs font-semibold uppercase tracking-wide text-pink-200 mb-2">Distance</label>
+          {!isPremiumUser && (
+            <div className="mb-2 inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/80">
+              <Lock className="h-3 w-3" />
+              Premium
+            </div>
+          )}
           <input
             type="range"
             min={1}
@@ -222,8 +272,14 @@ export const FilterPanel = ({ onClose, onApplyFilters, isOpen = false, initialFo
           <div className="mt-2 text-sm text-slate-200 font-semibold">{distance} km</div>
         </section>
 
-        <section data-filter-section="age" className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4">
+        <section data-filter-section="age" className={`rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4 ${lockedSectionClass}`}>
           <label className="block text-xs font-semibold uppercase tracking-wide text-cyan-200 mb-2">Age Range</label>
+          {!isPremiumUser && (
+            <div className="mb-2 inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/80">
+              <Lock className="h-3 w-3" />
+              Premium
+            </div>
+          )}
           <div className="flex items-center gap-3">
             <input
               type="number"
@@ -245,8 +301,14 @@ export const FilterPanel = ({ onClose, onApplyFilters, isOpen = false, initialFo
           </div>
         </section>
 
-        <section data-filter-section="height" className="rounded-2xl border border-fuchsia-400/20 bg-fuchsia-500/10 p-4">
+        <section data-filter-section="height" className={`rounded-2xl border border-fuchsia-400/20 bg-fuchsia-500/10 p-4 ${lockedSectionClass}`}>
           <label className="block text-xs font-semibold uppercase tracking-wide text-fuchsia-200 mb-2">Minimum Height</label>
+          {!isPremiumUser && (
+            <div className="mb-2 inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/80">
+              <Lock className="h-3 w-3" />
+              Premium
+            </div>
+          )}
           <input
             type="range"
             min={120}
@@ -258,8 +320,14 @@ export const FilterPanel = ({ onClose, onApplyFilters, isOpen = false, initialFo
           <div className="mt-2 text-sm text-slate-200 font-semibold">{minHeight} cm +</div>
         </section>
 
-        <section data-filter-section="faith-journey" className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
+        <section data-filter-section="faith-journey" className={`rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 ${lockedSectionClass}`}>
           <label className="block text-xs font-semibold uppercase tracking-wide text-emerald-200 mb-2">Faith Journey</label>
+          {!isPremiumUser && (
+            <div className="mb-2 inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/80">
+              <Lock className="h-3 w-3" />
+              Premium
+            </div>
+          )}
           <AppDropdown
             value={faithJourney}
             onChange={setFaithJourney}
@@ -272,10 +340,19 @@ export const FilterPanel = ({ onClose, onApplyFilters, isOpen = false, initialFo
 
         <button
           type="button"
-          onClick={() => setShowAdvanced((prev) => !prev)}
-          className="w-full rounded-2xl border border-slate-600/60 bg-slate-800/60 px-4 py-3 text-sm text-white font-semibold flex items-center justify-between hover:bg-slate-700/60 transition-colors"
+          onClick={() => {
+            if (!isPremiumUser) {
+              goToPremium();
+              return;
+            }
+            setShowAdvanced((prev) => !prev);
+          }}
+          className={`w-full rounded-2xl border border-slate-600/60 bg-slate-800/60 px-4 py-3 text-sm text-white font-semibold flex items-center justify-between transition-colors ${isPremiumUser ? 'hover:bg-slate-700/60' : 'hover:bg-slate-700/60'}`}
         >
-          Advanced Filters
+          <span className="inline-flex items-center gap-2">
+            Advanced Filters
+            {!isPremiumUser ? <Lock className="h-4 w-4" /> : null}
+          </span>
           <ChevronDown className={`w-5 h-5 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
         </button>
 

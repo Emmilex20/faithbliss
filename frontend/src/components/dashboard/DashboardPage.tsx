@@ -55,6 +55,9 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
 
   // Use the data from useUserProfile if available, otherwise use the prop
     const currentUserData = userProfile || activeUser;
+    const isPremiumUser =
+      currentUserData?.subscriptionStatus === 'active' &&
+      ['premium', 'elite'].includes(String(currentUserData?.subscriptionTier || '').toLowerCase());
     const userName = currentUserData.name || "User";
     const userImage = currentUserData.profilePhoto1 || undefined; // Uses profilePhoto1 from the User interface
     const passedProfilesStorageKey = useMemo(() => {
@@ -555,6 +558,7 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
         onCloseSidePanel={() => setShowSidePanel(false)}
         onApplyFilters={handleApplyFilters}
         filterFocusSection={filterFocusSection}
+        isPremiumUser={isPremiumUser}
       />
     </div>
   );

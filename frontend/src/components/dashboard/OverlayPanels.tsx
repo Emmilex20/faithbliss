@@ -14,6 +14,7 @@ interface OverlayPanelsProps {
   onCloseSidePanel: () => void;
   onApplyFilters: (filters: DashboardFiltersPayload) => void;
   filterFocusSection?: DashboardFilterFocusSection | null;
+  isPremiumUser?: boolean;
 }
 
 export const OverlayPanels = ({
@@ -26,6 +27,7 @@ export const OverlayPanels = ({
   onCloseSidePanel,
   onApplyFilters,
   filterFocusSection = null,
+  isPremiumUser = false,
 }: OverlayPanelsProps) => {
   return (
     <>
@@ -46,6 +48,7 @@ export const OverlayPanels = ({
           onApplyFilters={onApplyFilters}
           isOpen={showFilters}
           initialFocusSection={filterFocusSection}
+          isPremiumUser={isPremiumUser}
         />
       </div>
 

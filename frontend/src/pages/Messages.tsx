@@ -3,7 +3,7 @@
 // src/pages/Messages.tsx
 
 import { useState, useRef, useEffect, useLayoutEffect, Suspense, useMemo, useCallback, type ChangeEvent, type TouchEvent as ReactTouchEvent } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 
 // 1. IMPORT TYPES
@@ -559,6 +559,10 @@ const MessagesContent = () => {
 
   const { user: layoutUser, accessToken } = useAuthContext();
   const { showError } = useToast();
+  const navigate = useNavigate();
+  const hasPremiumCallAccess =
+    layoutUser?.subscriptionStatus === 'active' &&
+    ['premium', 'elite'].includes(String(layoutUser?.subscriptionTier || '').toLowerCase());
   const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
   const tenorApiKey = (import.meta.env.VITE_TENOR_API_KEY as string | undefined)?.trim() || '';
   const tenorClientKey = (import.meta.env.VITE_TENOR_CLIENT_KEY as string | undefined)?.trim() || 'faithbliss-chat';
@@ -1025,6 +1029,11 @@ const MessagesContent = () => {
     const activeConversation = currentConversationRef.current;
     if (!webSocketService || !activeConversation?.otherUser?.id) return;
     if (callStatusRef.current !== 'idle') return;
+    if (!hasPremiumCallAccess) {
+      showError('Audio and video calls are available on Premium only.', 'Premium Feature');
+      navigate('/premium');
+      return;
+    }
 
     const targetUserId = activeConversation.otherUser.id;
     const matchId = activeConversation.id;
@@ -1064,13 +1073,23 @@ const MessagesContent = () => {
       cleanupCallSession();
       showError('Unable to start call. Please check permissions and try again.', 'Call Error');
     }
-  }, [cleanupCallSession, createPeerConnection, getCallUserMedia, showError, webSocketService]);
+  }, [cleanupCallSession, createPeerConnection, getCallUserMedia, hasPremiumCallAccess, navigate, showError, webSocketService]);
 
   const acceptIncomingCall = useCallback(async () => {
     if (!webSocketService) return;
 
     const offerPayload = pendingIncomingOfferRef.current;
     if (!offerPayload) return;
+    if (!hasPremiumCallAccess) {
+      webSocketService.sendCallReject(offerPayload.fromUserId, {
+        matchId: offerPayload.matchId,
+        reason: 'premium-required',
+      });
+      cleanupCallSession();
+      showError('Audio and video calls are available on Premium only.', 'Premium Feature');
+      navigate('/premium');
+      return;
+    }
 
     try {
       setIncomingCall(null);
@@ -1119,7 +1138,7 @@ const MessagesContent = () => {
       }
       showError('Unable to answer this call right now.', 'Call Error');
     }
-  }, [cleanupCallSession, createPeerConnection, flushPendingIceCandidates, getCallUserMedia, showError, webSocketService]);
+  }, [cleanupCallSession, createPeerConnection, flushPendingIceCandidates, getCallUserMedia, hasPremiumCallAccess, navigate, showError, webSocketService]);
 
   const declineIncomingCall = useCallback((reason: 'declined' | 'missed' = 'declined') => {
     const offerPayload = pendingIncomingOfferRef.current;
@@ -2315,6 +2334,15 @@ const MessagesContent = () => {
     const handleCallOffer = (payload: CallOfferPayload) => {
       if (!payload?.fromUserId || payload.fromUserId === currentUserId) return;
 
+      if (!hasPremiumCallAccess) {
+        webSocketService.sendCallReject(payload.fromUserId, {
+          matchId: payload.matchId,
+          reason: 'premium-required',
+        });
+        showError('Incoming calls require Premium.', 'Premium Feature');
+        return;
+      }
+
       const busy =
         callStatusRef.current !== 'idle'
         || Boolean(activeCallPeerIdRef.current)
@@ -2390,6 +2418,8 @@ const MessagesContent = () => {
         showError('User is offline. Missed call notification sent.', 'User Offline');
       } else if (payload.reason === 'missed') {
         showError('Call was not answered.', 'Missed Call');
+      } else if (payload.reason === 'premium-required') {
+        showError('Calls are available for Premium members only.', 'Premium Feature');
       } else if (payload.reason !== 'ended-by-user') {
         showError('Call was declined.', 'Call Declined');
       }
@@ -2430,7 +2460,7 @@ const MessagesContent = () => {
       webSocketService.off('call:end', handleCallEnd);
       webSocketService.off('call:state', handleCallState);
     };
-  }, [callMode, cleanupCallSession, currentUserId, flushPendingIceCandidates, sendMissedCallMessage, showError, webSocketService]);
+  }, [callMode, cleanupCallSession, currentUserId, flushPendingIceCandidates, hasPremiumCallAccess, sendMissedCallMessage, showError, webSocketService]);
 
   useEffect(() => {
     return () => {
@@ -3275,6 +3305,20 @@ const MessagesContent = () => {
                 <p className="text-center text-sm text-white/85 mb-3">
                   {incomingCall.callType === 'video' ? 'Incoming video call' : 'Incoming audio call'}
                 </p>
+                {!hasPremiumCallAccess ? (
+                  <div className="mb-3 text-center">
+                    <p className="text-xs text-amber-200">
+                      Premium is required to answer calls.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/premium')}
+                      className="mt-2 inline-flex items-center justify-center rounded-full border border-amber-300/30 bg-white/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-white transition hover:bg-white/15"
+                    >
+                      Upgrade to Premium
+                    </button>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-center gap-3">
                   <button
                     type="button"
@@ -3285,10 +3329,20 @@ const MessagesContent = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void acceptIncomingCall()}
-                    className="inline-flex items-center justify-center h-11 px-5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold transition-colors"
+                    onClick={() => {
+                      if (!hasPremiumCallAccess) {
+                        navigate('/premium');
+                        return;
+                      }
+                      void acceptIncomingCall();
+                    }}
+                    className={`inline-flex items-center justify-center h-11 px-5 rounded-xl font-semibold transition-colors ${
+                      hasPremiumCallAccess
+                        ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                        : 'bg-amber-500/15 text-white'
+                    }`}
                   >
-                    Accept
+                    {hasPremiumCallAccess ? 'Accept' : 'Premium Only'}
                   </button>
                 </div>
               </div>
@@ -3949,9 +4003,12 @@ const MessagesContent = () => {
                     disabled={callStatus !== 'idle'}
                     className={`p-2 md:p-2.5 backdrop-blur-xl border rounded-2xl transition-all duration-300 group ${
                       callStatus === 'idle'
-                        ? 'bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/30 hover:scale-105'
+                        ? hasPremiumCallAccess
+                          ? 'bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/30 hover:scale-105'
+                          : 'bg-amber-500/10 hover:bg-amber-500/15 border-amber-300/30 hover:border-amber-200/40 hover:scale-105'
                         : 'bg-white/5 border-white/10 text-gray-400 cursor-not-allowed'
                     }`}
+                    title={hasPremiumCallAccess ? 'Start audio call' : 'Upgrade to Premium for audio calls'}
                   >
                     <Phone className="w-4 h-4 md:w-5 md:h-5 text-white group-hover:scale-110 transition-transform duration-300" />
                   </button>
@@ -3961,9 +4018,12 @@ const MessagesContent = () => {
                     disabled={callStatus !== 'idle'}
                     className={`p-2 md:p-2.5 backdrop-blur-xl border rounded-2xl transition-all duration-300 group ${
                       callStatus === 'idle'
-                        ? 'bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/30 hover:scale-105'
+                        ? hasPremiumCallAccess
+                          ? 'bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/30 hover:scale-105'
+                          : 'bg-amber-500/10 hover:bg-amber-500/15 border-amber-300/30 hover:border-amber-200/40 hover:scale-105'
                         : 'bg-white/5 border-white/10 text-gray-400 cursor-not-allowed'
                     }`}
+                    title={hasPremiumCallAccess ? 'Start video call' : 'Upgrade to Premium for video calls'}
                   >
                     <Video className="w-4 h-4 md:w-5 md:h-5 text-white group-hover:scale-110 transition-transform duration-300" />
                   </button>

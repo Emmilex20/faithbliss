@@ -5,11 +5,7 @@ import {
   ArrowLeft,
   Crown,
   Sparkles,
-  ShieldCheck,
-  MessageCircle,
-  Star,
   Zap,
-  HeartHandshake,
   CheckCircle2,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -49,9 +45,8 @@ const FREE_PLAN: DisplayPlan = {
     'Sign in and create your account',
     '10 likes or swipes per day',
     'Chat after matching',
-    'Gender-only filtering',
+    'Gender filtering',
     'View user profiles',
-    'Cannot see who liked you',
   ],
   cta: 'Current Plan',
 };
@@ -61,29 +56,6 @@ const PREMIUM_MARKETING_PRICE = {
   discounted: 'NGN 10,000',
   savingsLabel: 'Save NGN 5,000',
 };
-
-const highlights = [
-  {
-    icon: Sparkles,
-    title: 'Spirit-led matching',
-    description: 'Get curated matches based on faith alignment, calling, and values.',
-  },
-  {
-    icon: HeartHandshake,
-    title: 'Mutual intent',
-    description: 'See serious, relationship-minded believers who share your goals.',
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Safe and verified',
-    description: 'Premium verification and moderation keep the community trusted.',
-  },
-  {
-    icon: MessageCircle,
-    title: 'Meaningful chats',
-    description: 'Send prompts, audio blessings, and keep conversations flowing.',
-  },
-];
 
 const badges = [
   'Verified community',
@@ -247,15 +219,6 @@ const PremiumContent = () => {
       })),
     ],
     [paidPlans],
-  );
-
-  const heroStats = useMemo(
-    () => [
-      { label: 'Faith-forward matches', value: '3x' },
-      { label: 'Response rate', value: '72%' },
-      { label: 'Verified profiles', value: '15k+' },
-    ],
-    [],
   );
 
   const loadPaystackScript = () =>
@@ -470,55 +433,12 @@ const PremiumContent = () => {
                 ) : null}
               </div>
 
-              <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-6">
-                <div className="grid grid-cols-3 gap-4">
-                  {heroStats.map((stat, index) => (
-                    <div
-                      key={stat.label}
-                      className={`text-center ${index !== 0 ? 'border-l border-white/10 pl-4' : ''}`}
-                    >
-                      <div className="text-2xl font-semibold text-white sm:text-3xl lg:text-4xl">
-                        {stat.value}
-                      </div>
-                      <div className="mt-2 text-[10px] font-semibold uppercase tracking-[0.3em] text-gray-400 sm:text-[11px] lg:text-xs">
-                        {stat.label}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="mt-4 rounded-2xl border border-pink-500/30 bg-gradient-to-br from-pink-500/20 to-purple-600/20 p-4 text-left">
-                <div className="flex items-center gap-2 text-sm text-pink-100">
-                  <Star className="h-4 w-4 text-pink-300" />
-                  Premium members meet faster
-                </div>
-                <p className="mt-2 text-xs text-gray-200">
-                  Premium profiles appear first to your highest potential matches.
-                </p>
-              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <section className="px-6 pb-12 pt-4 lg:px-12">
-        <div className="grid gap-6 lg:grid-cols-4">
-          {highlights.map((item) => (
-            <div
-              key={item.title}
-              className="rounded-3xl border border-white/10 bg-white/5 p-6 transition hover:border-pink-500/40 hover:bg-white/10"
-            >
-              <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-500/20 text-pink-200">
-                <item.icon className="h-6 w-6" />
-              </div>
-              <h3 className="text-lg font-semibold text-white">{item.title}</h3>
-              <p className="mt-2 text-sm text-gray-300">{item.description}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section ref={planSectionRef} className="px-6 pb-16 lg:px-12">
+      <section ref={planSectionRef} className="px-6 pb-16 pt-4 lg:px-12">
         <div className="mb-8 flex flex-col gap-2">
           <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-purple-200">
             <Zap className="h-4 w-4 text-purple-300" />

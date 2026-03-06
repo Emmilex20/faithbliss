@@ -34,6 +34,8 @@ interface IUserProfile extends DocumentData {
   likes?: string[];
   passes?: string[];
   matches?: string[];
+  subscriptionStatus?: string;
+  subscriptionTier?: string;
   distance?: number;
 }
 
@@ -210,18 +212,21 @@ export const filterProfiles = async (req: Request, res: Response) => {
   }
 
   const currentUser = { id: userDoc.id, ...userDoc.data() } as IUserProfile;
+  const hasPremiumFilters =
+    currentUser.subscriptionStatus === 'active' &&
+    ['premium', 'elite'].includes(String(currentUser.subscriptionTier || '').toLowerCase());
   const body = (req.body || {}) as DiscoveryFilterInput;
 
   const preferredGender = normalizeGender(body.preferredGender);
-  const preferredDenominations = normalizeStringArray(
-    body.preferredDenominations ?? body.preferredDenomination
-  );
-  const preferredFaithJourney = normalizeStringArray(body.preferredFaithJourney);
-  const preferredChurchAttendance = normalizeStringArray(body.preferredChurchAttendance);
-  const preferredRelationshipGoals = normalizeStringArray(body.preferredRelationshipGoals);
+  const preferredDenominations = hasPremiumFilters
+    ? normalizeStringArray(body.preferredDenominations ?? body.preferredDenomination)
+    : [];
+  const preferredFaithJourney = hasPremiumFilters ? normalizeStringArray(body.preferredFaithJourney) : [];
+  const preferredChurchAttendance = hasPremiumFilters ? normalizeStringArray(body.preferredChurchAttendance) : [];
+  const preferredRelationshipGoals = hasPremiumFilters ? normalizeStringArray(body.preferredRelationshipGoals) : [];
 
-  const parsedMinAge = parseBoundedInt(body.minAge, 18, 99);
-  const parsedMaxAge = parseBoundedInt(body.maxAge, 18, 99);
+  const parsedMinAge = hasPremiumFilters ? parseBoundedInt(body.minAge, 18, 99) : undefined;
+  const parsedMaxAge = hasPremiumFilters ? parseBoundedInt(body.maxAge, 18, 99) : undefined;
   const minAge = parsedMinAge !== undefined && parsedMaxAge !== undefined
     ? Math.min(parsedMinAge, parsedMaxAge)
     : parsedMinAge;
@@ -229,7 +234,7 @@ export const filterProfiles = async (req: Request, res: Response) => {
     ? Math.max(parsedMinAge, parsedMaxAge)
     : parsedMaxAge;
 
-  const maxDistance = parseBoundedInt(body.maxDistance, 1, 500);
+  const maxDistance = hasPremiumFilters ? parseBoundedInt(body.maxDistance, 1, 500) : undefined;
   const excluded = await buildExcludedUserIds(currentUser);
 
   const snapshot = await usersCollection
@@ -318,6 +323,7 @@ export const filterProfiles = async (req: Request, res: Response) => {
     results.map((u) => ({
       id: u.id,
       name: u.name,
+      onboardingCompleted: true,
       age: u.age,
       gender: u.gender,
       denomination: u.denomination,
@@ -432,6 +438,7 @@ export const discoverByInterests = async (req: Request, res: Response) => {
     results.map((u) => ({
       id: u.id,
       name: u.name,
+      onboardingCompleted: true,
       age: u.age,
       gender: u.gender,
       denomination: u.denomination,
@@ -577,6 +584,7 @@ export const discoverByProfileFit = async (req: Request, res: Response) => {
     results.map((u) => ({
       id: u.id,
       name: u.name,
+      onboardingCompleted: true,
       age: u.age,
       gender: u.gender,
       denomination: u.denomination,

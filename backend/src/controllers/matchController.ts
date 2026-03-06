@@ -528,6 +528,7 @@ const getPotentialMatches = async (req: Request, res: Response) => {
       matchesWithDistance.map((u) => ({
         id: u.id,
         name: (typeof u.name === 'string' && u.name.trim()) ? u.name.trim() : 'FaithBliss User',
+        onboardingCompleted: u.onboardingCompleted === true,
         age: u.age,
         gender: u.gender,
         denomination: u.denomination,
