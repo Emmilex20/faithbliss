@@ -106,6 +106,7 @@ interface OnboardingData {
 }
 
 const GOOGLE_REDIRECT_PENDING_KEY = "faithbliss_google_redirect_pending";
+const GOOGLE_REDIRECT_PENDING_PERSIST_KEY = "faithbliss_google_redirect_pending_persist";
 
 const isFirebaseNetworkError = (error: unknown): boolean => {
     const candidates = [
@@ -159,17 +160,20 @@ const getStoredAccessToken = (): string | null => {
 
 const hasPendingGoogleRedirect = (): boolean => {
     if (typeof window === "undefined") return false;
-    return sessionStorage.getItem(GOOGLE_REDIRECT_PENDING_KEY) === "1";
+    return sessionStorage.getItem(GOOGLE_REDIRECT_PENDING_KEY) === "1"
+        || localStorage.getItem(GOOGLE_REDIRECT_PENDING_PERSIST_KEY) === "1";
 };
 
 const markGoogleRedirectPending = (): void => {
     if (typeof window === "undefined") return;
     sessionStorage.setItem(GOOGLE_REDIRECT_PENDING_KEY, "1");
+    localStorage.setItem(GOOGLE_REDIRECT_PENDING_PERSIST_KEY, "1");
 };
 
 const clearPendingGoogleRedirect = (): void => {
     if (typeof window === "undefined") return;
     sessionStorage.removeItem(GOOGLE_REDIRECT_PENDING_KEY);
+    localStorage.removeItem(GOOGLE_REDIRECT_PENDING_PERSIST_KEY);
 };
 
 const isIosDevice = (): boolean => {
@@ -906,7 +910,8 @@ export function useAuth() {
 // -----------------------------------------------------------
     useEffect(() => {
         const handleRedirectResult = async () => {
-            if (!hasPendingGoogleRedirect()) {
+            const isAuthEntryRoute = ["/login", "/register", "/signup"].includes(location.pathname);
+            if (!hasPendingGoogleRedirect() && !isAuthEntryRoute) {
                 return;
             }
 
@@ -926,6 +931,12 @@ export function useAuth() {
                     await ensureUserProfile(result.user);
                     await syncUserFromFirebase(result.user);
                     setIsLoading(false);
+                } else if (auth.currentUser) {
+                    // iOS Safari can occasionally restore the Firebase user but yield a null redirect result.
+                    setIsLoading(true);
+                    await ensureUserProfile(auth.currentUser);
+                    await syncUserFromFirebase(auth.currentUser);
+                    setIsLoading(false);
                 }
             } catch (error: any) {
                 if (isFirebaseNetworkError(error)) {
@@ -943,7 +954,7 @@ export function useAuth() {
         };
 
         handleRedirectResult();
-    }, [syncUserFromFirebase]);
+    }, [location.pathname, syncUserFromFirebase]);
 
 
 
