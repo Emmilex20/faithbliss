@@ -172,6 +172,31 @@ const clearPendingGoogleRedirect = (): void => {
     sessionStorage.removeItem(GOOGLE_REDIRECT_PENDING_KEY);
 };
 
+const isIosDevice = (): boolean => {
+    if (typeof navigator === "undefined") return false;
+
+    const userAgent = navigator.userAgent || navigator.vendor || "";
+    const platform = navigator.platform || "";
+    const maxTouchPoints = typeof navigator.maxTouchPoints === "number" ? navigator.maxTouchPoints : 0;
+
+    return /iPad|iPhone|iPod/i.test(userAgent)
+        || (platform === "MacIntel" && maxTouchPoints > 1);
+};
+
+const isStandaloneDisplayMode = (): boolean => {
+    if (typeof window === "undefined") return false;
+
+    const isNavigatorStandalone = "standalone" in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+    const isDisplayModeStandalone = typeof window.matchMedia === "function"
+        && window.matchMedia("(display-mode: standalone)").matches;
+
+    return isNavigatorStandalone || isDisplayModeStandalone;
+};
+
+const shouldPreferGoogleRedirect = (): boolean => {
+    return isIosDevice() || isStandaloneDisplayMode();
+};
+
 const sanitizeText = (value: unknown, maxLen: number): string | undefined => {
     if (typeof value !== "string") return undefined;
     const cleaned = value.trim();
@@ -937,6 +962,14 @@ export function useAuth() {
             try {
                 await setPersistence(auth, browserLocalPersistence);
                 const provider = new GoogleAuthProvider();
+                provider.setCustomParameters({ prompt: "select_account" });
+
+                if (shouldPreferGoogleRedirect()) {
+                    markGoogleRedirectPending();
+                    await signInWithRedirect(auth, provider);
+                    return;
+                }
+
                 try {
                     const result = await signInWithPopup(auth, provider);
                     if (result?.user) {
