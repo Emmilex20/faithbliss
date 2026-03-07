@@ -8,14 +8,13 @@ import {
   Zap,
   CheckCircle2,
 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { TopBar } from '@/components/dashboard/TopBar';
 import { SidePanel } from '@/components/dashboard/SidePanel';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { API } from '@/services/api';
-import type { SubscriptionPlan } from '@/services/api';
 import {
   PREMIUM_PLAN_CONTENT,
   getSubscriptionTierLabel,
@@ -28,6 +27,7 @@ type DisplayPlan = {
   name: string;
   description: string;
   displayPrice: string;
+  baseUsdPrice?: number;
   originalPrice?: string;
   savingsLabel?: string;
   highlight?: boolean;
@@ -51,11 +51,7 @@ const FREE_PLAN: DisplayPlan = {
   cta: 'Current Plan',
 };
 
-const PREMIUM_MARKETING_PRICE = {
-  original: 'NGN 15,000',
-  discounted: 'NGN 10,000',
-  savingsLabel: 'Save NGN 5,000',
-};
+const PREMIUM_USD_PRICE = 6.99;
 
 const badges = [
   'Verified community',
@@ -64,23 +60,13 @@ const badges = [
   'Cancel anytime',
 ];
 
-const formatPlanAmount = (amount: number, currency: 'NGN' | 'USD') => {
-  const majorAmount = amount / 100;
-
-  if (currency === 'NGN') {
-    return `NGN ${new Intl.NumberFormat('en-NG', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(majorAmount)}`;
-  }
-
-  return new Intl.NumberFormat('en-US', {
+const formatUsdPrice = (amount: number) =>
+  new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(majorAmount);
-};
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
 
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message.trim()) {
@@ -100,33 +86,16 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-declare global {
-  interface Window {
-    PaystackPop?: {
-      setup: (config: Record<string, unknown>) => { openIframe: () => void };
-    };
-  }
-}
-
 const PremiumContent = () => {
   const { user, refetchUser } = useAuthContext();
   const { showError, showSuccess } = useToast();
-  const navigate = useNavigate();
   const planSectionRef = useRef<HTMLDivElement | null>(null);
   const [showSidePanel, setShowSidePanel] = useState(false);
-  const [currency, setCurrency] = useState<'USD' | 'NGN'>('NGN');
-  const [availablePlans, setAvailablePlans] = useState<SubscriptionPlan[]>([]);
-  const [plansLoading, setPlansLoading] = useState(true);
-  const [plansError, setPlansError] = useState<string | null>(null);
   const [loadingTier, setLoadingTier] = useState<'premium' | 'elite' | null>(null);
 
   const layoutName = user?.name || 'User';
   const layoutImage = user?.profilePhoto1 || undefined;
   const layoutUser = user || null;
-  const paystackKey = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '')
-    .trim()
-    .replace(/^['"]|['"]$/g, '')
-    .replace(/[\u200B-\u200D\uFEFF\s]+/g, '');
   const isPremium =
     user?.subscriptionStatus === 'active' &&
     ['premium', 'elite'].includes(user?.subscriptionTier || '');
@@ -135,37 +104,6 @@ const PremiumContent = () => {
     ? (activeTier as 'premium' | 'elite')
     : 'free';
   const subscriptionDisplay = useSubscriptionDisplay(user);
-
-  useEffect(() => {
-    let active = true;
-
-    const fetchPlans = async () => {
-      try {
-        setPlansLoading(true);
-        setPlansError(null);
-        const response = await API.Payment.getPlans();
-        if (!active) {
-          return;
-        }
-        setAvailablePlans(Array.isArray(response?.plans) ? response.plans : []);
-      } catch (error: unknown) {
-        if (!active) {
-          return;
-        }
-        setPlansError(getErrorMessage(error, 'Unable to load plans right now.'));
-      } finally {
-        if (active) {
-          setPlansLoading(false);
-        }
-      }
-    };
-
-    fetchPlans();
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (!user?.id) {
@@ -187,87 +125,30 @@ const PremiumContent = () => {
     };
   }, [refetchUser, user?.id]);
 
-  const availableCurrencies = useMemo(
-    () => [...new Set(availablePlans.map((plan) => plan.currency))] as Array<'NGN' | 'USD'>,
-    [availablePlans],
-  );
-
-  useEffect(() => {
-    if (availableCurrencies.length === 0) {
-      return;
-    }
-
-    if (!availableCurrencies.includes(currency)) {
-      setCurrency(availableCurrencies[0]);
-    }
-  }, [availableCurrencies, currency]);
-
-  const paidPlans = useMemo(
-    () =>
-      availablePlans
-        .filter((plan) => plan.currency === currency)
-        .filter((plan) => plan.tier === 'premium')
-        .sort((left, right) => left.amount - right.amount),
-    [availablePlans, currency],
-  );
-
   const primaryPaidPlan = useMemo(
-    () => paidPlans.find((plan) => plan.tier === 'premium') ?? paidPlans[0] ?? null,
-    [paidPlans],
+    () => ({
+      tier: 'premium' as const,
+      name: 'Premium Plan',
+      displayPrice: formatUsdPrice(PREMIUM_USD_PRICE),
+      baseUsdPrice: PREMIUM_USD_PRICE,
+      ...PREMIUM_PLAN_CONTENT.premium,
+    }),
+    [],
   );
 
   const displayPlans = useMemo<DisplayPlan[]>(
     () => [
       FREE_PLAN,
-      ...paidPlans.map((plan) => ({
-        tier: plan.tier,
-        name: plan.name,
-        displayPrice:
-          plan.currency === 'NGN'
-            ? PREMIUM_MARKETING_PRICE.discounted
-            : formatPlanAmount(plan.amount, plan.currency),
-        originalPrice:
-          plan.tier === 'premium' && plan.currency === 'NGN'
-            ? PREMIUM_MARKETING_PRICE.original
-            : undefined,
-        savingsLabel:
-          plan.tier === 'premium' && plan.currency === 'NGN'
-            ? PREMIUM_MARKETING_PRICE.savingsLabel
-            : undefined,
-        ...PREMIUM_PLAN_CONTENT[plan.tier],
-      })),
+      primaryPaidPlan,
     ],
-    [paidPlans],
+    [primaryPaidPlan],
   );
-
-  const loadPaystackScript = () =>
-    new Promise<void>((resolve, reject) => {
-      if (window.PaystackPop) {
-        resolve();
-        return;
-      }
-
-      const existing = document.querySelector('script[data-paystack]');
-      if (existing) {
-        existing.addEventListener('load', () => resolve());
-        existing.addEventListener('error', () => reject(new Error('Failed to load Paystack')));
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = 'https://js.paystack.co/v1/inline.js';
-      script.async = true;
-      script.dataset.paystack = 'true';
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Failed to load Paystack'));
-      document.body.appendChild(script);
-    });
 
   const handleComparePlans = () => {
     planSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const handleStartPlan = async (plan: SubscriptionPlan) => {
+  const handleStartPlan = async (plan: DisplayPlan) => {
     if (!user?.email) {
       showError('Please sign in to continue.');
       return;
@@ -277,44 +158,23 @@ const PremiumContent = () => {
       showSuccess('Your subscription is already active.');
       return;
     }
-
-    if (!/^(pk_test|pk_live)_/i.test(paystackKey)) {
-      showError('Paystack public key is missing or invalid.');
+    if (plan.tier === 'free' || !plan.baseUsdPrice) {
+      showError('This plan is not payable.');
       return;
     }
 
     try {
       setLoadingTier(plan.tier);
-      await loadPaystackScript();
-      const initResponse = await API.Payment.initialize({
+      const initResponse = await API.Payment.pay({
         tier: plan.tier,
-        currency: plan.currency,
+        baseUsdPrice: plan.baseUsdPrice,
       });
-      const accessCode = initResponse.accessCode;
-      const reference = initResponse.reference;
 
-      if (!accessCode || !reference) {
-        throw new Error('Payment initialization failed. Missing access code or reference.');
+      if (!initResponse.authorizationUrl) {
+        throw new Error('Payment initialization failed. Missing authorization URL.');
       }
 
-      const handler = window.PaystackPop?.setup({
-        key: paystackKey,
-        email: user.email,
-        amount: initResponse.amount,
-        currency: plan.currency,
-        access_code: accessCode,
-        reference,
-        callback: (response: { reference: string }) => {
-          setLoadingTier(null);
-          navigate(`/payment-success?reference=${encodeURIComponent(response.reference)}`);
-        },
-        onClose: () => {
-          setLoadingTier(null);
-          showError('Payment was cancelled.');
-        },
-      });
-
-      handler?.openIframe();
+      window.location.assign(initResponse.authorizationUrl);
     } catch (error: unknown) {
       setLoadingTier(null);
       showError(getErrorMessage(error, 'Unable to start payment.'));
@@ -355,17 +215,14 @@ const PremiumContent = () => {
               </p>
               <div className="flex flex-wrap gap-3">
                 <button
-                  onClick={() => primaryPaidPlan && handleStartPlan(primaryPaidPlan)}
+                  onClick={() => handleStartPlan(primaryPaidPlan)}
                   disabled={
-                    !primaryPaidPlan ||
                     loadingTier === primaryPaidPlan.tier ||
                     (isPremium && activeTier === primaryPaidPlan.tier)
                   }
                   className="rounded-full bg-gradient-to-r from-pink-500 to-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-pink-500/30 transition hover:from-pink-400 hover:to-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {!primaryPaidPlan
-                    ? 'Plans unavailable'
-                    : isPremium && activeTier === primaryPaidPlan.tier
+                  {isPremium && activeTier === primaryPaidPlan.tier
                     ? `${getSubscriptionTierLabel(primaryPaidPlan.tier)} Active`
                     : `Start ${getSubscriptionTierLabel(primaryPaidPlan.tier)}`}
                 </button>
@@ -376,24 +233,6 @@ const PremiumContent = () => {
                   Compare plans
                 </button>
               </div>
-              {availableCurrencies.length > 1 && (
-                <div className="flex items-center gap-2 text-xs text-gray-400">
-                  <span className="uppercase tracking-[0.2em] text-gray-500">Currency</span>
-                  <div className="inline-flex rounded-full border border-white/10 bg-white/5 p-1">
-                    {availableCurrencies.map((code) => (
-                      <button
-                        key={code}
-                        onClick={() => setCurrency(code)}
-                        className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
-                          currency === code ? 'bg-white text-gray-900' : 'text-gray-300 hover:text-white'
-                        }`}
-                      >
-                        {code}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
               <div className="flex flex-wrap gap-3 pt-2 text-xs text-gray-400">
                 {badges.map((badge) => (
                   <span
@@ -469,27 +308,7 @@ const PremiumContent = () => {
           </p>
         </div>
 
-        {plansError ? (
-          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-100">
-            <p>{plansError}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-4 rounded-full border border-red-300/30 bg-white/10 px-4 py-2 font-semibold text-white transition hover:bg-white/15"
-            >
-              Reload plans
-            </button>
-          </div>
-        ) : plansLoading ? (
-          <div className="grid gap-6 lg:grid-cols-3">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <div
-                key={index}
-                className="h-[420px] animate-pulse rounded-3xl border border-white/10 bg-white/5"
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="grid gap-6 lg:grid-cols-3">
+          <div className="grid gap-6 lg:grid-cols-2">
             {displayPlans.map((plan) => {
               const isCurrentPlan = normalizedActiveTier === plan.tier;
 
@@ -542,10 +361,7 @@ const PremiumContent = () => {
 
                 <button
                   onClick={() => {
-                    const paidPlan = paidPlans.find((item) => item.tier === plan.tier);
-                    if (paidPlan) {
-                      handleStartPlan(paidPlan);
-                    }
+                    handleStartPlan(plan);
                   }}
                   disabled={
                     plan.tier === 'free' ||
@@ -570,7 +386,6 @@ const PremiumContent = () => {
               );
             })}
           </div>
-        )}
       </section>
 
       <section className="px-6 pb-16 lg:px-12">

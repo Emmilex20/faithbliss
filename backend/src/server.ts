@@ -11,6 +11,7 @@ import path from 'path';
 import { Server } from 'socket.io';
 
 import authRoutes from './routes/authRoutes';
+import { initializeLocalizedSubscription } from './controllers/paymentController';
 import discoverRoutes from './routes/discoverRoutes';
 import matchRoutes from './routes/matchRoutes';
 import messageRoutes from './routes/messageRoutes';
@@ -89,6 +90,7 @@ app.use('/api/messages', protect, messageRoutes);
 app.use('/api/discover', protect, discoverRoutes);
 app.use('/api/notifications', protect, notificationRoutes);
 app.use('/api/payments', paymentRoutes);
+app.post('/api/pay', protect, initializeLocalizedSubscription);
 app.use('/api/support', protect, supportRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/users', photoRoutes);

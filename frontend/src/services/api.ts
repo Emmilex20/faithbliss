@@ -315,6 +315,17 @@ export interface SubscriptionPlan {
   interval: 'monthly';
 }
 
+export interface LocalizedPaymentInitResponse {
+  authorizationUrl: string;
+  accessCode: string;
+  reference: string;
+  amount: number;
+  currency: 'USD' | 'NGN' | 'GHS' | 'KES' | 'ZAR';
+  countryCode: string | null;
+  exchangeRate: number;
+  convertedMajorAmount: number;
+}
+
 // Generic API request function
 const apiRequest = async <T = unknown>(
   endpoint: string, 
@@ -777,6 +788,12 @@ export const MessageAPI = {
 export const PaymentAPI = {
   getPlans: async (): Promise<{ plans: SubscriptionPlan[] }> => {
     return apiRequest('/api/payments/plans');
+  },
+  pay: async (payload: { tier: 'premium' | 'elite'; baseUsdPrice: number }): Promise<LocalizedPaymentInitResponse> => {
+    return apiRequest('/api/pay', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
   initialize: async (payload: { tier: 'premium' | 'elite'; currency: 'NGN' | 'USD' }): Promise<{
     authorizationUrl: string;

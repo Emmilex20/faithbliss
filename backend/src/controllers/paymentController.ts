@@ -5,14 +5,20 @@ import crypto from 'crypto';
 import * as admin from 'firebase-admin';
 import { usersCollection } from '../config/firebase-admin';
 import { getPlanDetails, initializeTransaction, verifyTransaction } from '../services/paystackService';
+import { extractClientIp } from '../services/geoLocationService';
+import {
+  initializeLocalizedPayment as createLocalizedPayment,
+  type LocalizedCurrency,
+} from '../services/localizedPaymentService';
 
 type PlanTier = 'premium' | 'elite';
 type Currency = 'NGN' | 'USD';
+type PaymentCurrency = Currency | LocalizedCurrency;
 type PublicPlan = {
   tier: PlanTier;
   name: string;
   amount: number;
-  currency: Currency;
+  currency: PaymentCurrency;
   interval: 'monthly';
 };
 type StoredSubscription = {
@@ -30,6 +36,11 @@ type StoredSubscription = {
 const PLAN_METADATA: Record<PlanTier, { name: string }> = {
   premium: { name: 'Premium Plan' },
   elite: { name: 'Pro Plan' },
+};
+
+const USD_PRICE_CATALOG: Record<PlanTier, number> = {
+  premium: 6.99,
+  elite: 12.99,
 };
 
 const removeUndefinedValues = <T extends Record<string, any>>(data: T): Partial<T> => {
@@ -212,6 +223,63 @@ export const initializeSubscription = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Paystack init error:', error);
     const message = error?.message || 'Payment initialization failed.';
+    return res.status(400).json({ message });
+  }
+};
+
+export const initializeLocalizedSubscription = async (req: Request, res: Response) => {
+  try {
+    const userId = req.userId;
+    const email = req.user?.email || req.body?.email;
+    const { tier, baseUsdPrice } = req.body as { tier?: PlanTier; baseUsdPrice?: number };
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized: Firebase UID missing.' });
+    }
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required for payment.' });
+    }
+    if (!tier || !['premium', 'elite'].includes(tier)) {
+      return res.status(400).json({ message: 'Invalid tier provided.' });
+    }
+
+    const expectedUsdPrice = USD_PRICE_CATALOG[tier];
+    const requestedUsdPrice = Number(baseUsdPrice);
+    const resolvedUsdPrice =
+      Number.isFinite(requestedUsdPrice) && Math.abs(requestedUsdPrice - expectedUsdPrice) < 0.0001
+        ? requestedUsdPrice
+        : expectedUsdPrice;
+
+    const callbackBaseUrl = process.env.CLIENT_URL?.trim();
+    const callbackUrl = callbackBaseUrl ? `${callbackBaseUrl.replace(/\/+$/, '')}/payment-success` : undefined;
+
+    const payment = await createLocalizedPayment({
+      email,
+      userId,
+      tier,
+      baseUsdPrice: resolvedUsdPrice,
+      ipAddress: extractClientIp(req.headers as Record<string, unknown>),
+      callbackUrl,
+    });
+
+    await updateSubscription(userId, {
+      status: 'pending',
+      tier,
+      currency: payment.currency,
+      planCode: null,
+      reference: payment.reference,
+      baseUsdPrice: resolvedUsdPrice,
+      exchangeRate: payment.exchangeRate,
+      countryCode: payment.countryCode,
+      amount: payment.amount,
+    });
+
+    return res.status(200).json(payment);
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error && error.message
+        ? error.message
+        : 'Localized payment initialization failed.';
     return res.status(400).json({ message });
   }
 };

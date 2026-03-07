@@ -4,6 +4,7 @@ import express from 'express';
 import { protect } from '../middleware/authMiddleware';
 import {
   handlePaystackWebhook,
+  initializeLocalizedSubscription,
   initializeSubscription,
   listSubscriptionPlans,
   verifySubscription,
@@ -16,6 +17,7 @@ router.post('/webhook', handlePaystackWebhook);
 
 // Authenticated endpoints
 router.get('/plans', protect, listSubscriptionPlans);
+router.post('/pay', protect, initializeLocalizedSubscription);
 router.post('/initialize', protect, initializeSubscription);
 router.post('/verify', protect, verifySubscription);
 
