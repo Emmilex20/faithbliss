@@ -4,7 +4,7 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import * as admin from 'firebase-admin';
 import { usersCollection } from '../config/firebase-admin';
-import { initializeTransaction, verifyTransaction } from '../services/paystackService';
+import { getPlanDetails, initializeTransaction, verifyTransaction } from '../services/paystackService';
 
 type PlanTier = 'premium' | 'elite';
 type Currency = 'NGN' | 'USD';
@@ -42,19 +42,43 @@ const resolvePlanConfig = (tier: PlanTier, currency: Currency) => {
   const envSuffix = `${tier}_${currency}`.toUpperCase();
   const planCode = process.env[`PAYSTACK_PLAN_CODE_${envSuffix}`]?.trim();
   const amountRaw = process.env[`PAYSTACK_AMOUNT_${envSuffix}`];
-  const amount = amountRaw ? Number(amountRaw) : 0;
+  const fallbackAmount = amountRaw ? Number(amountRaw) : 0;
 
   if (!planCode) {
     throw new Error(`Missing PAYSTACK_PLAN_CODE_${envSuffix}. Create the plan in Paystack and set this env var.`);
   }
-  if (!amount || Number.isNaN(amount)) {
+  if (!fallbackAmount || Number.isNaN(fallbackAmount)) {
     throw new Error(`Missing PAYSTACK_AMOUNT_${envSuffix}`);
   }
 
-  return { planCode, amount };
+  return { planCode, fallbackAmount };
 };
 
-const listConfiguredPlans = (): PublicPlan[] => {
+const resolveLivePlanConfig = async (tier: PlanTier, currency: Currency) => {
+  const { planCode, fallbackAmount } = resolvePlanConfig(tier, currency);
+
+  try {
+    const response = await getPlanDetails(planCode);
+    const liveAmount = typeof response?.data?.amount === 'number' ? response.data.amount : fallbackAmount;
+    const liveCurrency = typeof response?.data?.currency === 'string'
+      ? response.data.currency.trim().toUpperCase()
+      : currency;
+
+    return {
+      planCode,
+      amount: liveAmount,
+      currency: (liveCurrency === 'USD' ? 'USD' : 'NGN') as Currency,
+    };
+  } catch {
+    return {
+      planCode,
+      amount: fallbackAmount,
+      currency,
+    };
+  }
+};
+
+const listConfiguredPlans = async (): Promise<PublicPlan[]> => {
   const plans: PublicPlan[] = [];
   const tiers: PlanTier[] = ['premium', 'elite'];
   const currencies: Currency[] = ['NGN', 'USD'];
@@ -62,12 +86,12 @@ const listConfiguredPlans = (): PublicPlan[] => {
   for (const tier of tiers) {
     for (const currency of currencies) {
       try {
-        const { amount } = resolvePlanConfig(tier, currency);
+        const { amount, currency: resolvedCurrency } = await resolveLivePlanConfig(tier, currency);
         plans.push({
           tier,
           name: PLAN_METADATA[tier].name,
           amount,
-          currency,
+          currency: resolvedCurrency,
           interval: 'monthly',
         });
       } catch {
@@ -154,17 +178,17 @@ export const initializeSubscription = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Invalid currency provided.' });
     }
 
-    const { planCode, amount } = resolvePlanConfig(tier, currency);
+    const { planCode, amount, currency: resolvedCurrency } = await resolveLivePlanConfig(tier, currency);
 
     const payload = {
       email,
       amount,
-      currency,
+      currency: resolvedCurrency,
       plan: planCode,
       metadata: {
         userId,
         tier,
-        currency,
+        currency: resolvedCurrency,
       },
     };
 
@@ -173,7 +197,7 @@ export const initializeSubscription = async (req: Request, res: Response) => {
     await updateSubscription(userId, {
       status: 'pending',
       tier,
-      currency,
+      currency: resolvedCurrency,
       planCode,
       reference: response.data.reference,
     });
@@ -183,7 +207,7 @@ export const initializeSubscription = async (req: Request, res: Response) => {
       accessCode: response.data.access_code,
       reference: response.data.reference,
       amount,
-      currency,
+      currency: resolvedCurrency,
     });
   } catch (error: any) {
     console.error('Paystack init error:', error);
@@ -194,7 +218,7 @@ export const initializeSubscription = async (req: Request, res: Response) => {
 
 export const listSubscriptionPlans = async (_req: Request, res: Response) => {
   try {
-    const plans = listConfiguredPlans();
+    const plans = await listConfiguredPlans();
     return res.status(200).json({ plans });
   } catch (error: any) {
     return res.status(500).json({ message: error?.message || 'Failed to load plans.' });

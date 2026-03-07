@@ -52,3 +52,16 @@ export const verifyTransaction = async (reference: string) => {
     method: 'GET',
   });
 };
+
+export const getPlanDetails = async (planCode: string) => {
+  return paystackRequest<{
+    id: number;
+    name: string;
+    plan_code: string;
+    amount: number;
+    interval?: string;
+    currency?: string;
+  }>(`/plan/${encodeURIComponent(planCode)}`, {
+    method: 'GET',
+  });
+};
