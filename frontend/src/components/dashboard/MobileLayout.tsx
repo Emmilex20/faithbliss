@@ -74,7 +74,7 @@ export const MobileLayout = ({
   }, [showBottomNav]);
 
   return (
-    <div className="dashboard-main min-h-screen bg-[radial-gradient(circle_at_10%_10%,rgba(236,72,153,0.15),transparent_35%),radial-gradient(circle_at_90%_0%,rgba(59,130,246,0.14),transparent_35%)] no-horizontal-scroll lg:hidden">
+    <div className="dashboard-main min-h-dvh bg-[radial-gradient(circle_at_10%_10%,rgba(236,72,153,0.15),transparent_35%),radial-gradient(circle_at_90%_0%,rgba(59,130,246,0.14),transparent_35%)] no-horizontal-scroll lg:hidden">
       {/* Mobile Top Bar */}
       <div ref={topBarRef}>
         <TopBar
@@ -94,7 +94,7 @@ export const MobileLayout = ({
         className={`flex min-h-[calc(100svh-62px)] sm:min-h-[calc(100svh-74px)] flex-col px-0 pt-0 ${showBottomNav ? 'pb-[88px]' : 'pb-0'}`}
         style={contentHeight ? { height: `${contentHeight}px` } : undefined}
       >
-        <div className="relative mx-auto h-full w-full flex-1">
+        <div className="relative mx-auto h-full min-h-0 w-full flex-1">
           {children}
         </div>
       </div>

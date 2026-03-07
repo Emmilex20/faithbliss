@@ -41,10 +41,14 @@ export const SwipeCard = ({
     <motion.div
       className={`h-full w-full ${locked ? 'pointer-events-none' : ''}`}
       drag={interactive && !locked && !isCommitting && !isSkeleton ? 'x' : false}
+      dragDirectionLock
       dragElastic={0.2}
       dragMomentum={false}
       dragConstraints={{ left: 0, right: 0 }}
       onDragEnd={handleDragEnd}
+      style={{
+        touchAction: interactive && !locked && !isCommitting && !isSkeleton ? 'pan-y pinch-zoom' : 'auto',
+      }}
       initial={
         isEntering
           ? { opacity: 0, scale: 0.98, y: 10, x: 0, rotate: 0 }
@@ -95,4 +99,3 @@ export const SwipeCard = ({
     </motion.div>
   );
 };
-

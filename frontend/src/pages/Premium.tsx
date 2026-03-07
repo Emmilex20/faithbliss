@@ -82,6 +82,24 @@ const formatPlanAmount = (amount: number, currency: 'NGN' | 'USD') => {
   }).format(majorAmount);
 };
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof (error as { message?: unknown }).message === 'string' &&
+    (error as { message: string }).message.trim()
+  ) {
+    return (error as { message: string }).message;
+  }
+
+  return fallback;
+};
+
 declare global {
   interface Window {
     PaystackPop?: {
@@ -130,11 +148,11 @@ const PremiumContent = () => {
           return;
         }
         setAvailablePlans(Array.isArray(response?.plans) ? response.plans : []);
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (!active) {
           return;
         }
-        setPlansError(error?.message || 'Unable to load plans right now.');
+        setPlansError(getErrorMessage(error, 'Unable to load plans right now.'));
       } finally {
         if (active) {
           setPlansLoading(false);
@@ -297,9 +315,9 @@ const PremiumContent = () => {
       });
 
       handler?.openIframe();
-    } catch (error: any) {
+    } catch (error: unknown) {
       setLoadingTier(null);
-      showError(error?.message || 'Unable to start payment.');
+      showError(getErrorMessage(error, 'Unable to start payment.'));
     }
   };
 
@@ -329,7 +347,7 @@ const PremiumContent = () => {
                 Premium for intentional believers
               </div>
               <h1 className="text-3xl font-semibold text-white md:text-4xl lg:text-5xl">
-                Elevate your faith journey with premium connections.
+                Elevate your love journey with premium connections.
               </h1>
               <p className="text-base text-gray-300 md:text-lg">
                 Designed for believers seeking marriage-minded relationships, FaithBliss Premium

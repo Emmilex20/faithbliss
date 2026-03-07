@@ -615,7 +615,7 @@ export const HingeStyleProfileCard = ({
           </div>
 
           <article className="flex min-h-0 flex-1 flex-col bg-transparent">
-            <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-4 pt-2">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-1 pb-4 pt-2 [-webkit-overflow-scrolling:touch] [touch-action:pan-y]">
               <div className="mb-3 flex items-start justify-between gap-3">
                 <h2 className={`${isCompactHeight ? 'text-[1.9rem]' : 'text-[2.08rem]'} min-w-0 flex-1 truncate font-bold leading-[0.96] tracking-[-0.035em] text-slate-950`}>
                   {mobileDisplayName}

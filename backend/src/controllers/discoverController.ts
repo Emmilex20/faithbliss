@@ -507,10 +507,16 @@ export const discoverByProfileFit = async (req: Request, res: Response) => {
   }
 
   const currentUser = { id: userDoc.id, ...userDoc.data() } as IUserProfile;
+  const hasPremiumExploreAccess =
+    currentUser.subscriptionStatus === 'active' &&
+    ['premium', 'elite'].includes(String(currentUser.subscriptionTier || '').toLowerCase());
   const selectedFit = parseProfileFitQuery(req.query.fit);
 
   if (!selectedFit) {
     return res.status(400).json({ message: 'Provide a profile fit using the fit query parameter.' });
+  }
+  if (!hasPremiumExploreAccess) {
+    return res.status(403).json({ message: 'Explore categories are available for premium users only.' });
   }
 
   const preferredGender = normalizeGenderPreference(

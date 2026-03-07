@@ -265,6 +265,17 @@ const ExploreContent = () => {
 
   const layoutName = user?.name || 'User';
   const layoutImage = user?.profilePhoto1 || undefined;
+  const isPremiumUser =
+    user?.subscriptionStatus === 'active' &&
+    ['premium', 'elite'].includes(String(user?.subscriptionTier || '').toLowerCase());
+
+  const promptUpgradeForExplore = () => {
+    showInfo(
+      'Explore category browsing is a premium feature. Upgrade to unlock these profile-fit sections.',
+      'Premium Feature'
+    );
+    navigate('/premium');
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -293,6 +304,14 @@ const ExploreContent = () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!selectedFit || isPremiumUser) return;
+
+    resetToGrid();
+    promptUpgradeForExplore();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPremiumUser, selectedFit]);
 
   useEffect(() => {
     let cancelled = false;
@@ -369,6 +388,10 @@ const ExploreContent = () => {
 
   const handleNoProfilesAction = async () => {
     if (!selectedFit) return;
+    if (!isPremiumUser) {
+      promptUpgradeForExplore();
+      return;
+    }
 
     setIsExhausted(false);
     setCurrentProfileIndex(0);
@@ -478,7 +501,13 @@ const ExploreContent = () => {
               <button
                 key={option.title}
                 type="button"
-                onClick={() => setSelectedFit(option.title)}
+                onClick={() => {
+                  if (!isPremiumUser) {
+                    promptUpgradeForExplore();
+                    return;
+                  }
+                  setSelectedFit(option.title);
+                }}
                 className="group relative aspect-[0.52] w-full overflow-hidden rounded-[1.5rem] border border-white/10 text-left shadow-[0_18px_40px_rgba(0,0,0,0.35)] transition-[transform,box-shadow,border-color] duration-300 ease-out active:-translate-y-1 active:scale-[0.985] active:border-white/20 active:shadow-[0_24px_52px_rgba(0,0,0,0.45)] sm:aspect-[3/4] sm:rounded-[1.75rem] sm:hover:-translate-y-1 sm:hover:border-white/20 sm:hover:shadow-[0_24px_52px_rgba(0,0,0,0.45)]"
               >
                 {/* Full-bleed image */}
@@ -521,8 +550,17 @@ const ExploreContent = () => {
 
                 {/* Count badge (top-right) */}
                 <div className="absolute right-3 top-3 hidden items-center gap-1 rounded-full bg-black/45 px-2.5 py-1 text-[12px] font-semibold text-white backdrop-blur-md transition duration-300 ease-out group-active:-translate-y-0.5 sm:inline-flex sm:group-hover:-translate-y-0.5">
-                  <Users className="h-3.5 w-3.5" />
-                  {loadingCounts ? '...' : count}
+                  {isPremiumUser ? (
+                    <>
+                      <Users className="h-3.5 w-3.5" />
+                      {loadingCounts ? '...' : count}
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Premium
+                    </>
+                  )}
                 </div>
 
                 {/* Optional small icon pill (top-left) - Tinder doesn't do this, but it looks premium */}
@@ -535,6 +573,12 @@ const ExploreContent = () => {
                   <h2 className="text-[1.22rem] font-semibold leading-[1.08] tracking-tight text-white drop-shadow sm:text-[1.35rem]">
                     {option.title}
                   </h2>
+                  {!isPremiumUser ? (
+                    <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/40 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-pink-100">
+                      <Sparkles className="h-3 w-3" />
+                      Upgrade to open
+                    </p>
+                  ) : null}
                 </div>
               </button>
             );
