@@ -300,10 +300,41 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
       return;
     }
 
-    goToNextProfile();
-
     const key = String(userIdToLike);
     if (pendingActionIdsRef.current.has(key)) return;
+
+    if (passedProfilesStorageKey) {
+      try {
+        const existingRaw = localStorage.getItem(passedProfilesStorageKey);
+        const existingParsed = existingRaw ? JSON.parse(existingRaw) : [];
+        const existingPassedProfileIds = Array.isArray(existingParsed)
+          ? existingParsed.filter(
+              (value): value is string =>
+                typeof value === 'string' && value.trim().length > 0
+            )
+          : [];
+        const nextPersistedPassedProfileIds = existingPassedProfileIds.filter(
+          (value) => value !== key
+        );
+        localStorage.setItem(
+          passedProfilesStorageKey,
+          JSON.stringify(nextPersistedPassedProfileIds)
+        );
+        setPersistedPassedProfileIds(nextPersistedPassedProfileIds);
+      } catch {
+        // Ignore localStorage access errors.
+      }
+    }
+
+    if (isReviewingPassedProfiles) {
+      setFilteredProfiles((prev) => {
+        if (!Array.isArray(prev)) return prev;
+        return prev.filter((profile) => String(profile.id || (profile as any)._id) !== key);
+      });
+      reset();
+    } else {
+      goToNextProfile();
+    }
     pendingActionIdsRef.current.add(key);
 
     // Fire network call in background so UI never blocks.

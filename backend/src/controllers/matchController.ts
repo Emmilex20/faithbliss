@@ -596,6 +596,7 @@ const likeUser = async (req: Request, res: Response) => {
     const currentUserRef = usersCollection.doc(currentUid);
     batch.update(currentUserRef, {
       likes: admin.firestore.FieldValue.arrayUnion(targetUid),
+      passes: admin.firestore.FieldValue.arrayRemove(targetUid),
     });
 
     const targetUserDoc = await usersCollection.doc(targetUid).get();
