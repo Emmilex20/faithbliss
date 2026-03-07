@@ -27,10 +27,12 @@ export const PREMIUM_PLAN_CONTENT: Record<
     cta: 'Start Premium Plan',
     features: [
       'Unlimited likes and swipes',
-      'Advanced filters beyond gender only',
+      'Advanced filters',
       'Voice and video calling',
-      'See who liked you instantly',
-      'All premium-only web app features',
+      'Access to explore page',
+      'Unlimited Rewinds',
+      'Travel Mode',
+      '1 Monthly Profile Booster',
     ],
   },
   elite: {
