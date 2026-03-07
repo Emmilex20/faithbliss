@@ -532,7 +532,7 @@ const getPotentialMatches = async (req: Request, res: Response) => {
         age: u.age,
         gender: u.gender,
         denomination: u.denomination,
-        location: u.location,
+        location: u.location, 
         latitude: u.latitude,
         longitude: u.longitude,
         profilePhoto1: u.profilePhoto1,

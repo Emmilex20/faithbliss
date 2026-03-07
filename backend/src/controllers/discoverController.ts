@@ -225,8 +225,8 @@ export const filterProfiles = async (req: Request, res: Response) => {
   const preferredChurchAttendance = hasPremiumFilters ? normalizeStringArray(body.preferredChurchAttendance) : [];
   const preferredRelationshipGoals = hasPremiumFilters ? normalizeStringArray(body.preferredRelationshipGoals) : [];
 
-  const parsedMinAge = hasPremiumFilters ? parseBoundedInt(body.minAge, 18, 99) : undefined;
-  const parsedMaxAge = hasPremiumFilters ? parseBoundedInt(body.maxAge, 18, 99) : undefined;
+  const parsedMinAge = hasPremiumFilters ? parseBoundedInt(body.minAge, 18, 55) : undefined;
+  const parsedMaxAge = hasPremiumFilters ? parseBoundedInt(body.maxAge, 18, 55) : undefined;
   const minAge = parsedMinAge !== undefined && parsedMaxAge !== undefined
     ? Math.min(parsedMinAge, parsedMaxAge)
     : parsedMinAge;

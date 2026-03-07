@@ -133,8 +133,8 @@ export const FilterPanel = ({
   };
 
   const buildPayload = (): DashboardFiltersPayload => {
-    const safeMinAge = clamp(Math.round(minAge), 18, 99);
-    const safeMaxAge = clamp(Math.round(maxAge), 18, 99);
+    const safeMinAge = clamp(Math.round(minAge), 18, 55);
+    const safeMaxAge = clamp(Math.round(maxAge), 18, 55);
     const normalizedMinAge = Math.min(safeMinAge, safeMaxAge);
     const normalizedMaxAge = Math.max(safeMinAge, safeMaxAge);
 
@@ -195,11 +195,27 @@ export const FilterPanel = ({
     return () => window.clearTimeout(timer);
   }, [initialFocusSection, isOpen, isPremiumUser]);
 
-  const lockedSectionClass = !isPremiumUser ? 'opacity-55 pointer-events-none select-none' : '';
+  const lockedSectionClass = !isPremiumUser
+    ? 'relative overflow-hidden border-amber-400/30 bg-gradient-to-br from-slate-900/95 via-slate-900/92 to-slate-800/95 ring-1 ring-amber-300/15 pointer-events-none select-none'
+    : '';
   const goToPremium = () => {
     onClose();
     navigate('/premium');
   };
+  const renderLockedOverlay = () =>
+    !isPremiumUser ? (
+      <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(135deg,rgba(251,191,36,0.12),transparent_35%,rgba(15,23,42,0.22)_100%)]">
+        <div className="absolute inset-x-3 top-3 flex items-center justify-between rounded-xl border border-amber-300/20 bg-slate-950/78 px-3 py-2 backdrop-blur-sm">
+          <span className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-100">
+            <Lock className="h-3.5 w-3.5" />
+            Premium Only
+          </span>
+          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium text-white/75">
+            Upgrade to use
+          </span>
+        </div>
+      </div>
+    ) : null;
 
   return (
     <div className="h-full flex flex-col">
@@ -254,6 +270,7 @@ export const FilterPanel = ({
         </section>
 
         <section data-filter-section="distance" className={`rounded-2xl border border-pink-400/20 bg-pink-500/10 p-4 ${lockedSectionClass}`}>
+          {renderLockedOverlay()}
           <label className="block text-xs font-semibold uppercase tracking-wide text-pink-200 mb-2">Distance</label>
           {!isPremiumUser && (
             <div className="mb-2 inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/80">
@@ -273,6 +290,7 @@ export const FilterPanel = ({
         </section>
 
         <section data-filter-section="age" className={`rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4 ${lockedSectionClass}`}>
+          {renderLockedOverlay()}
           <label className="block text-xs font-semibold uppercase tracking-wide text-cyan-200 mb-2">Age Range</label>
           {!isPremiumUser && (
             <div className="mb-2 inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/80">
@@ -284,24 +302,25 @@ export const FilterPanel = ({
             <input
               type="number"
               min={18}
-              max={99}
+              max={55}
               value={minAge}
-              onChange={(e) => setMinAge(clamp(sanitizeNumberInput(e.target.value, 22), 18, 99))}
+              onChange={(e) => setMinAge(clamp(sanitizeNumberInput(e.target.value, 22), 18, 55))}
               className="w-24 rounded-xl bg-slate-900/70 border border-cyan-300/30 px-3 py-2 text-white text-center focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
             />
             <span className="text-slate-300 text-sm">to</span>
             <input
               type="number"
               min={18}
-              max={99}
+              max={55}
               value={maxAge}
-              onChange={(e) => setMaxAge(clamp(sanitizeNumberInput(e.target.value, 40), 18, 99))}
+              onChange={(e) => setMaxAge(clamp(sanitizeNumberInput(e.target.value, 40), 18, 55))}
               className="w-24 rounded-xl bg-slate-900/70 border border-cyan-300/30 px-3 py-2 text-white text-center focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
             />
           </div>
         </section>
 
         <section data-filter-section="height" className={`rounded-2xl border border-fuchsia-400/20 bg-fuchsia-500/10 p-4 ${lockedSectionClass}`}>
+          {renderLockedOverlay()}
           <label className="block text-xs font-semibold uppercase tracking-wide text-fuchsia-200 mb-2">Minimum Height</label>
           {!isPremiumUser && (
             <div className="mb-2 inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/80">
@@ -321,6 +340,7 @@ export const FilterPanel = ({
         </section>
 
         <section data-filter-section="faith-journey" className={`rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 ${lockedSectionClass}`}>
+          {renderLockedOverlay()}
           <label className="block text-xs font-semibold uppercase tracking-wide text-emerald-200 mb-2">Faith Journey</label>
           {!isPremiumUser && (
             <div className="mb-2 inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/80">

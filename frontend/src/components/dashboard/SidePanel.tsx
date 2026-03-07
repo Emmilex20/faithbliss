@@ -71,7 +71,7 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
           </button>
         </div>
 
-        <div className={`mt-5 rounded-3xl border p-4 shadow-[0_16px_30px_rgba(2,6,23,0.2)] ${
+        <div className={`mt-4 rounded-[1.6rem] border px-4 py-3 shadow-[0_12px_24px_rgba(2,6,23,0.18)] ${
           subscriptionDisplay.isActivePaid
             ? 'border-yellow-400/30 bg-gradient-to-br from-yellow-500/15 via-amber-500/10 to-transparent'
             : 'border-white/10 bg-white/5'
@@ -79,7 +79,7 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Current plan</p>
-              <h4 className="mt-2 flex items-center gap-2 text-white font-semibold">
+              <h4 className="mt-1.5 flex items-center gap-2 text-white font-semibold leading-tight">
                 {subscriptionDisplay.isActivePaid ? (
                   <Crown className="h-4 w-4 text-yellow-300" />
                 ) : (
@@ -88,7 +88,7 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
                 {subscriptionDisplay.tierLabel}
               </h4>
             </div>
-            <span className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
               subscriptionDisplay.isActivePaid
                 ? 'bg-emerald-500/15 text-emerald-300'
                 : 'bg-white/10 text-gray-300'
@@ -98,7 +98,7 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
           </div>
 
           {subscriptionDisplay.isActivePaid ? (
-            <div className="mt-4 flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5">
+            <div className="mt-3 flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
               <div>
                 <p className="text-[10px] uppercase tracking-[0.22em] text-gray-400">Renewal countdown</p>
                 <p className="mt-1 text-sm font-semibold text-white">
@@ -113,9 +113,18 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
               ) : null}
             </div>
           ) : (
-            <p className="mt-3 text-xs leading-5 text-gray-400">
-              Upgrade to unlock premium visibility, deeper filters, and faster matching.
-            </p>
+            <div className="mt-3 space-y-2">
+              <p className="text-xs leading-5 text-gray-400">
+                Upgrade to unlock premium visibility, deeper filters, and faster matching.
+              </p>
+              <Link
+                to="/premium"
+                onClick={onClose}
+                className="inline-flex items-center rounded-full border border-pink-400/30 bg-pink-500/15 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-pink-200 transition hover:bg-pink-500/25 hover:text-white"
+              >
+                Upgrade Now
+              </Link>
+            </div>
           )}
         </div>
       </div>
