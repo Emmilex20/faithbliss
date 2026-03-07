@@ -107,7 +107,8 @@ const PremiumContent = () => {
   const layoutUser = user || null;
   const paystackKey = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '')
     .trim()
-    .replace(/^['"]|['"]$/g, '');
+    .replace(/^['"]|['"]$/g, '')
+    .replace(/[\u200B-\u200D\uFEFF\s]+/g, '');
   const isPremium =
     user?.subscriptionStatus === 'active' &&
     ['premium', 'elite'].includes(user?.subscriptionTier || '');
