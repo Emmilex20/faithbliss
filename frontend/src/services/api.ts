@@ -319,11 +319,37 @@ export interface LocalizedPaymentInitResponse {
   authorizationUrl: string;
   accessCode: string;
   reference: string;
-  amount: number;
-  currency: 'USD' | 'NGN' | 'GHS' | 'KES' | 'ZAR';
+  chargeCurrency: 'NGN';
+  chargeAmountMajor: number;
+  chargeAmountSubunits: number;
+  displayCurrency: string;
+  displayAmountMajor: number;
+  billingCycle: 'monthly' | 'quarterly';
+  region: 'nigeria' | 'africa' | 'global';
   countryCode: string | null;
+}
+
+export interface LocalizedPricingQuote {
+  tier: 'premium';
+  billingCycle: 'monthly' | 'quarterly';
+  region: 'nigeria' | 'africa' | 'global';
+  countryCode: string | null;
+  displayCurrency: string;
+  displayAmountMajor: number;
+  chargeCurrency: 'NGN';
+  chargeAmountMajor: number;
+  chargeAmountSubunits: number;
   exchangeRate: number;
-  convertedMajorAmount: number;
+  displayLabel: string;
+}
+
+export interface LocalizedPricingQuoteResponse {
+  countryCode: string | null;
+  region: 'nigeria' | 'africa' | 'global';
+  quotes: {
+    monthly: LocalizedPricingQuote;
+    quarterly: LocalizedPricingQuote;
+  };
 }
 
 // Generic API request function
@@ -786,10 +812,13 @@ export const MessageAPI = {
 
 // Payments API
 export const PaymentAPI = {
+  getQuote: async (): Promise<LocalizedPricingQuoteResponse> => {
+    return apiRequest('/api/payments/quote');
+  },
   getPlans: async (): Promise<{ plans: SubscriptionPlan[] }> => {
     return apiRequest('/api/payments/plans');
   },
-  pay: async (payload: { tier: 'premium' | 'elite'; baseUsdPrice: number }): Promise<LocalizedPaymentInitResponse> => {
+  pay: async (payload: { tier: 'premium'; billingCycle: 'monthly' | 'quarterly' }): Promise<LocalizedPaymentInitResponse> => {
     return apiRequest('/api/pay', {
       method: 'POST',
       body: JSON.stringify(payload),

@@ -88,6 +88,13 @@ export interface User {
     status?: string;
     tier?: string;
     currency?: string;
+    billingCycle?: 'monthly' | 'quarterly' | string;
+    pricingRegion?: 'nigeria' | 'africa' | 'global' | string;
+    displayCurrency?: string;
+    displayAmountMajor?: number;
+    chargeAmountMajor?: number;
+    chargeAmountSubunits?: number;
+    exchangeRate?: number;
     planCode?: string;
     reference?: string;
     customerCode?: string;

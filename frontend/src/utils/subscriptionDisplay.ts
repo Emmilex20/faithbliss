@@ -3,6 +3,7 @@ import { getSubscriptionTierLabel } from '@/constants/subscriptionPlans';
 
 const PAID_TIERS = new Set(['premium', 'elite']);
 const MONTH_IN_MS = 30 * 24 * 60 * 60 * 1000;
+const QUARTER_IN_MS = 90 * 24 * 60 * 60 * 1000;
 
 const parseDateLike = (value: unknown): Date | null => {
   if (!value) return null;
@@ -28,7 +29,9 @@ export const getSubscriptionRenewalDate = (user?: User | null): Date | null => {
 
   const updatedAt = parseDateLike(user.subscription?.updatedAt);
   if (updatedAt && user.subscriptionStatus === 'active' && PAID_TIERS.has(user.subscriptionTier || '')) {
-    return new Date(updatedAt.getTime() + MONTH_IN_MS);
+    const billingCycle = user.subscription?.billingCycle;
+    const duration = billingCycle === 'quarterly' ? QUARTER_IN_MS : MONTH_IN_MS;
+    return new Date(updatedAt.getTime() + duration);
   }
 
   return null;

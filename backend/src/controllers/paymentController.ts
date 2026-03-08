@@ -7,13 +7,14 @@ import { usersCollection } from '../config/firebase-admin';
 import { getPlanDetails, initializeTransaction, verifyTransaction } from '../services/paystackService';
 import { extractClientIp } from '../services/geoLocationService';
 import {
-  initializeLocalizedPayment as createLocalizedPayment,
-  type LocalizedCurrency,
-} from '../services/localizedPaymentService';
+  getRegionalPricingQuote,
+  type BillingCycle,
+  type PricingRegion,
+} from '../services/regionalPricingService';
 
 type PlanTier = 'premium' | 'elite';
 type Currency = 'NGN' | 'USD';
-type PaymentCurrency = Currency | LocalizedCurrency;
+type PaymentCurrency = Currency | string;
 type PublicPlan = {
   tier: PlanTier;
   name: string;
@@ -25,6 +26,13 @@ type StoredSubscription = {
   status?: string;
   tier?: string;
   currency?: string;
+  billingCycle?: BillingCycle;
+  pricingRegion?: PricingRegion;
+  displayCurrency?: string;
+  displayAmountMajor?: number;
+  chargeAmountMajor?: number;
+  chargeAmountSubunits?: number;
+  exchangeRate?: number;
   planCode?: string | null;
   reference?: string;
   customerCode?: string;
@@ -38,15 +46,22 @@ const PLAN_METADATA: Record<PlanTier, { name: string }> = {
   elite: { name: 'Pro Plan' },
 };
 
-const USD_PRICE_CATALOG: Record<PlanTier, number> = {
-  premium: 6.99,
-  elite: 12.99,
-};
-
 const removeUndefinedValues = <T extends Record<string, any>>(data: T): Partial<T> => {
   return Object.fromEntries(
     Object.entries(data).filter(([, value]) => value !== undefined)
   ) as Partial<T>;
+};
+
+const addSubscriptionDuration = (date: Date, billingCycle: BillingCycle | undefined): Date => {
+  const nextDate = new Date(date);
+
+  if (billingCycle === 'quarterly') {
+    nextDate.setMonth(nextDate.getMonth() + 3);
+    return nextDate;
+  }
+
+  nextDate.setMonth(nextDate.getMonth() + 1);
+  return nextDate;
 };
 
 const resolvePlanConfig = (tier: PlanTier, currency: Currency) => {
@@ -231,7 +246,7 @@ export const initializeLocalizedSubscription = async (req: Request, res: Respons
   try {
     const userId = req.userId;
     const email = req.user?.email || req.body?.email;
-    const { tier, baseUsdPrice } = req.body as { tier?: PlanTier; baseUsdPrice?: number };
+    const { tier, billingCycle } = req.body as { tier?: PlanTier; billingCycle?: BillingCycle };
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized: Firebase UID missing.' });
@@ -242,45 +257,95 @@ export const initializeLocalizedSubscription = async (req: Request, res: Respons
     if (!tier || !['premium', 'elite'].includes(tier)) {
       return res.status(400).json({ message: 'Invalid tier provided.' });
     }
-
-    const expectedUsdPrice = USD_PRICE_CATALOG[tier];
-    const requestedUsdPrice = Number(baseUsdPrice);
-    const resolvedUsdPrice =
-      Number.isFinite(requestedUsdPrice) && Math.abs(requestedUsdPrice - expectedUsdPrice) < 0.0001
-        ? requestedUsdPrice
-        : expectedUsdPrice;
+    if (tier !== 'premium') {
+      return res.status(400).json({ message: 'Only the premium tier is currently available.' });
+    }
+    if (!billingCycle || !['monthly', 'quarterly'].includes(billingCycle)) {
+      return res.status(400).json({ message: 'Invalid billing cycle provided.' });
+    }
 
     const callbackBaseUrl = process.env.CLIENT_URL?.trim();
     const callbackUrl = callbackBaseUrl ? `${callbackBaseUrl.replace(/\/+$/, '')}/payment-success` : undefined;
+    const clientIp = extractClientIp(req.headers as Record<string, unknown>);
+    const pricingQuote = await getRegionalPricingQuote(billingCycle, clientIp);
 
-    const payment = await createLocalizedPayment({
+    const response = await initializeTransaction({
       email,
-      userId,
-      tier,
-      baseUsdPrice: resolvedUsdPrice,
-      ipAddress: extractClientIp(req.headers as Record<string, unknown>),
-      callbackUrl,
+      amount: pricingQuote.chargeAmountSubunits,
+      currency: pricingQuote.chargeCurrency,
+      callback_url: callbackUrl,
+      metadata: {
+        userId,
+        tier,
+        billingCycle,
+        pricingRegion: pricingQuote.region,
+        countryCode: pricingQuote.countryCode,
+        displayCurrency: pricingQuote.displayCurrency,
+        displayAmountMajor: pricingQuote.displayAmountMajor,
+        chargeAmountMajor: pricingQuote.chargeAmountMajor,
+        chargeAmountSubunits: pricingQuote.chargeAmountSubunits,
+        exchangeRate: pricingQuote.exchangeRate,
+      },
     });
 
     await updateSubscription(userId, {
       status: 'pending',
       tier,
-      currency: payment.currency,
+      currency: pricingQuote.chargeCurrency,
+      billingCycle,
+      pricingRegion: pricingQuote.region,
+      displayCurrency: pricingQuote.displayCurrency,
+      displayAmountMajor: pricingQuote.displayAmountMajor,
+      chargeAmountMajor: pricingQuote.chargeAmountMajor,
+      chargeAmountSubunits: pricingQuote.chargeAmountSubunits,
+      exchangeRate: pricingQuote.exchangeRate,
       planCode: null,
-      reference: payment.reference,
-      baseUsdPrice: resolvedUsdPrice,
-      exchangeRate: payment.exchangeRate,
-      countryCode: payment.countryCode,
-      amount: payment.amount,
+      reference: response.data.reference,
+      countryCode: pricingQuote.countryCode,
     });
 
-    return res.status(200).json(payment);
+    return res.status(200).json({
+      authorizationUrl: response.data.authorization_url,
+      accessCode: response.data.access_code,
+      reference: response.data.reference,
+      chargeCurrency: pricingQuote.chargeCurrency,
+      chargeAmountMajor: pricingQuote.chargeAmountMajor,
+      chargeAmountSubunits: pricingQuote.chargeAmountSubunits,
+      displayCurrency: pricingQuote.displayCurrency,
+      displayAmountMajor: pricingQuote.displayAmountMajor,
+      billingCycle,
+      region: pricingQuote.region,
+      countryCode: pricingQuote.countryCode,
+    });
   } catch (error: unknown) {
     const message =
       error instanceof Error && error.message
         ? error.message
         : 'Localized payment initialization failed.';
     return res.status(400).json({ message });
+  }
+};
+
+export const getLocalizedPricingQuote = async (req: Request, res: Response) => {
+  try {
+    const clientIp = extractClientIp(req.headers as Record<string, unknown>);
+    const monthly = await getRegionalPricingQuote('monthly', clientIp);
+    const quarterly = await getRegionalPricingQuote('quarterly', clientIp);
+
+    return res.status(200).json({
+      countryCode: monthly.countryCode,
+      region: monthly.region,
+      quotes: {
+        monthly,
+        quarterly,
+      },
+    });
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error && error.message
+        ? error.message
+        : 'Pricing quote generation failed.';
+    return res.status(500).json({ message });
   }
 };
 
@@ -325,20 +390,51 @@ export const verifySubscription = async (req: Request, res: Response) => {
       data.currency ||
       metadata.currency ||
       existingSubscription?.currency;
+    const billingCycle =
+      (typeof metadata.billingCycle === 'string' && metadata.billingCycle.trim().toLowerCase()) ||
+      (typeof existingSubscription?.billingCycle === 'string' && existingSubscription.billingCycle.trim().toLowerCase()) ||
+      'monthly';
     const planCode =
       (typeof rawPlanCode === 'string' && rawPlanCode.trim()) ||
       (typeof existingSubscription?.planCode === 'string' && existingSubscription.planCode.trim()) ||
       undefined;
+    const nextPaymentDate =
+      typeof data.next_payment_date === 'string' && data.next_payment_date.trim()
+        ? data.next_payment_date
+        : addSubscriptionDuration(new Date(), billingCycle === 'quarterly' ? 'quarterly' : 'monthly').toISOString();
 
     await updateSubscription(userId, {
       status: 'active',
       tier,
       currency,
+      billingCycle: billingCycle === 'quarterly' ? 'quarterly' : 'monthly',
+      pricingRegion:
+        (typeof metadata.pricingRegion === 'string' && metadata.pricingRegion.trim().toLowerCase()) ||
+        existingSubscription?.pricingRegion,
+      displayCurrency:
+        (typeof metadata.displayCurrency === 'string' && metadata.displayCurrency.trim()) ||
+        existingSubscription?.displayCurrency,
+      displayAmountMajor:
+        typeof metadata.displayAmountMajor === 'number'
+          ? metadata.displayAmountMajor
+          : existingSubscription?.displayAmountMajor,
+      chargeAmountMajor:
+        typeof metadata.chargeAmountMajor === 'number'
+          ? metadata.chargeAmountMajor
+          : existingSubscription?.chargeAmountMajor,
+      chargeAmountSubunits:
+        typeof metadata.chargeAmountSubunits === 'number'
+          ? metadata.chargeAmountSubunits
+          : existingSubscription?.chargeAmountSubunits,
+      exchangeRate:
+        typeof metadata.exchangeRate === 'number'
+          ? metadata.exchangeRate
+          : existingSubscription?.exchangeRate,
       reference: data.reference,
       planCode,
       customerCode: data.customer?.customer_code,
       authorizationCode: data.authorization?.authorization_code,
-      nextPaymentDate: data.next_payment_date,
+      nextPaymentDate,
     });
 
     return res.status(200).json({ message: 'Subscription verified', data });
@@ -400,21 +496,52 @@ export const handlePaystackWebhook = async (req: Request, res: Response) => {
         data.currency ||
         metadata.currency ||
         existingSubscription?.currency;
+      const billingCycle =
+        (typeof metadata.billingCycle === 'string' && metadata.billingCycle.trim().toLowerCase()) ||
+        (typeof existingSubscription?.billingCycle === 'string' && existingSubscription.billingCycle.trim().toLowerCase()) ||
+        'monthly';
       const planCode =
         (typeof rawPlanCode === 'string' && rawPlanCode.trim()) ||
         (typeof existingSubscription?.planCode === 'string' && existingSubscription.planCode.trim()) ||
         undefined;
+      const nextPaymentDate =
+        typeof data.next_payment_date === 'string' && data.next_payment_date.trim()
+          ? data.next_payment_date
+          : addSubscriptionDuration(new Date(), billingCycle === 'quarterly' ? 'quarterly' : 'monthly').toISOString();
 
       await updateSubscription(userId, {
         status: 'active',
         tier,
         currency,
+        billingCycle: billingCycle === 'quarterly' ? 'quarterly' : 'monthly',
+        pricingRegion:
+          (typeof metadata.pricingRegion === 'string' && metadata.pricingRegion.trim().toLowerCase()) ||
+          existingSubscription?.pricingRegion,
+        displayCurrency:
+          (typeof metadata.displayCurrency === 'string' && metadata.displayCurrency.trim()) ||
+          existingSubscription?.displayCurrency,
+        displayAmountMajor:
+          typeof metadata.displayAmountMajor === 'number'
+            ? metadata.displayAmountMajor
+            : existingSubscription?.displayAmountMajor,
+        chargeAmountMajor:
+          typeof metadata.chargeAmountMajor === 'number'
+            ? metadata.chargeAmountMajor
+            : existingSubscription?.chargeAmountMajor,
+        chargeAmountSubunits:
+          typeof metadata.chargeAmountSubunits === 'number'
+            ? metadata.chargeAmountSubunits
+            : existingSubscription?.chargeAmountSubunits,
+        exchangeRate:
+          typeof metadata.exchangeRate === 'number'
+            ? metadata.exchangeRate
+            : existingSubscription?.exchangeRate,
         reference: data.reference,
         planCode,
         customerCode: data.customer?.customer_code,
         subscriptionCode: data.subscription?.subscription_code || data.subscription_code,
         authorizationCode: data.authorization?.authorization_code,
-        nextPaymentDate: data.next_payment_date,
+        nextPaymentDate,
       });
     }
 

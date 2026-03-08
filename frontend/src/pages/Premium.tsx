@@ -1,12 +1,11 @@
-// src/pages/Premium.tsx
-
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  CheckCircle2,
+  Clock3,
   Crown,
   Sparkles,
   Zap,
-  CheckCircle2,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
@@ -14,20 +13,22 @@ import { TopBar } from '@/components/dashboard/TopBar';
 import { SidePanel } from '@/components/dashboard/SidePanel';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
-import { API } from '@/services/api';
+import { API, type LocalizedPricingQuoteResponse } from '@/services/api';
 import {
   PREMIUM_PLAN_CONTENT,
   getSubscriptionTierLabel,
 } from '@/constants/subscriptionPlans';
 import { useSubscriptionDisplay } from '@/hooks/useSubscriptionDisplay';
-import { Clock3 } from 'lucide-react';
+
+type BillingCycle = 'monthly' | 'quarterly';
 
 type DisplayPlan = {
-  tier: 'free' | 'premium' | 'elite';
+  tier: 'free' | 'premium';
+  billingCycle?: BillingCycle;
   name: string;
   description: string;
   displayPrice: string;
-  baseUsdPrice?: number;
+  pricingNote?: string;
   originalPrice?: string;
   savingsLabel?: string;
   highlight?: boolean;
@@ -51,8 +52,6 @@ const FREE_PLAN: DisplayPlan = {
   cta: 'Current Plan',
 };
 
-const PREMIUM_USD_PRICE = 6.99;
-
 const badges = [
   'Verified community',
   'Faith-first matching',
@@ -60,13 +59,38 @@ const badges = [
   'Cancel anytime',
 ];
 
-const formatUsdPrice = (amount: number) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+const fallbackQuote: LocalizedPricingQuoteResponse = {
+  countryCode: null,
+  region: 'global',
+  quotes: {
+    monthly: {
+      tier: 'premium',
+      billingCycle: 'monthly',
+      region: 'global',
+      countryCode: null,
+      displayCurrency: 'USD',
+      displayAmountMajor: 11.99,
+      chargeCurrency: 'NGN',
+      chargeAmountMajor: 0,
+      chargeAmountSubunits: 0,
+      exchangeRate: 1,
+      displayLabel: '$11.99',
+    },
+    quarterly: {
+      tier: 'premium',
+      billingCycle: 'quarterly',
+      region: 'global',
+      countryCode: null,
+      displayCurrency: 'USD',
+      displayAmountMajor: 7.99,
+      chargeCurrency: 'NGN',
+      chargeAmountMajor: 0,
+      chargeAmountSubunits: 0,
+      exchangeRate: 1,
+      displayLabel: '$7.99',
+    },
+  },
+};
 
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message.trim()) {
@@ -86,23 +110,36 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+const getPricingNote = (region: 'nigeria' | 'africa' | 'global', displayCurrency: string) => {
+  if (region === 'nigeria') {
+    return 'Charged in NGN at checkout.';
+  }
+
+  if (region === 'africa') {
+    return `Shown in ${displayCurrency}. Paystack still charges in NGN.`;
+  }
+
+  return 'Shown in USD. Paystack charges in NGN at checkout.';
+};
+
 const PremiumContent = () => {
   const { user, refetchUser } = useAuthContext();
   const { showError, showSuccess } = useToast();
   const planSectionRef = useRef<HTMLDivElement | null>(null);
   const [showSidePanel, setShowSidePanel] = useState(false);
-  const [loadingTier, setLoadingTier] = useState<'premium' | 'elite' | null>(null);
+  const [loadingPlanKey, setLoadingPlanKey] = useState<'premium:monthly' | 'premium:quarterly' | null>(null);
+  const [pricingQuote, setPricingQuote] = useState<LocalizedPricingQuoteResponse | null>(null);
+  const [pricingLoading, setPricingLoading] = useState(true);
 
   const layoutName = user?.name || 'User';
   const layoutImage = user?.profilePhoto1 || undefined;
   const layoutUser = user || null;
   const isPremium =
     user?.subscriptionStatus === 'active' &&
-    ['premium', 'elite'].includes(user?.subscriptionTier || '');
+    user?.subscriptionTier === 'premium';
   const activeTier = user?.subscriptionTier || 'free';
-  const normalizedActiveTier: DisplayPlan['tier'] = isPremium && ['premium', 'elite'].includes(activeTier)
-    ? (activeTier as 'premium' | 'elite')
-    : 'free';
+  const activeBillingCycle = user?.subscription?.billingCycle === 'quarterly' ? 'quarterly' : 'monthly';
+  const normalizedActiveTier: DisplayPlan['tier'] = isPremium ? 'premium' : 'free';
   const subscriptionDisplay = useSubscriptionDisplay(user);
 
   useEffect(() => {
@@ -125,23 +162,72 @@ const PremiumContent = () => {
     };
   }, [refetchUser, user?.id]);
 
-  const primaryPaidPlan = useMemo(
-    () => ({
-      tier: 'premium' as const,
-      name: 'Premium Plan',
-      displayPrice: formatUsdPrice(PREMIUM_USD_PRICE),
-      baseUsdPrice: PREMIUM_USD_PRICE,
-      ...PREMIUM_PLAN_CONTENT.premium,
-    }),
-    [],
-  );
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadPricingQuote = async () => {
+      try {
+        setPricingLoading(true);
+        const quote = await API.Payment.getQuote();
+        if (isMounted) {
+          setPricingQuote(quote);
+        }
+      } catch (error: unknown) {
+        if (isMounted) {
+          setPricingQuote(null);
+        }
+        showError(getErrorMessage(error, 'Unable to load localized pricing.'));
+      } finally {
+        if (isMounted) {
+          setPricingLoading(false);
+        }
+      }
+    };
+
+    loadPricingQuote();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [showError]);
+
+  const effectiveQuote = pricingQuote ?? fallbackQuote;
+
+  const paidPlans = useMemo<DisplayPlan[]>(() => {
+    const monthlyQuote = effectiveQuote.quotes.monthly;
+    const quarterlyQuote = effectiveQuote.quotes.quarterly;
+
+    return [
+      {
+        tier: 'premium',
+        billingCycle: 'monthly',
+        name: 'Premium Monthly',
+        ...PREMIUM_PLAN_CONTENT.premium,
+        description: 'Best for steady monthly access to all premium features.',
+        displayPrice: monthlyQuote.displayLabel,
+        pricingNote: getPricingNote(monthlyQuote.region, monthlyQuote.displayCurrency),
+        highlight: true,
+        cta: 'Start Monthly Plan',
+      },
+      {
+        tier: 'premium',
+        billingCycle: 'quarterly',
+        name: 'Premium 3-Month',
+        ...PREMIUM_PLAN_CONTENT.premium,
+        description: 'A 3-month premium access option using your regional price.',
+        displayPrice: quarterlyQuote.displayLabel,
+        pricingNote: getPricingNote(quarterlyQuote.region, quarterlyQuote.displayCurrency),
+        tag: '3 Months',
+        cta: 'Start 3-Month Plan',
+      },
+    ];
+  }, [effectiveQuote]);
+
+  const primaryPaidPlan = paidPlans[0];
 
   const displayPlans = useMemo<DisplayPlan[]>(
-    () => [
-      FREE_PLAN,
-      primaryPaidPlan,
-    ],
-    [primaryPaidPlan],
+    () => [FREE_PLAN, ...paidPlans],
+    [paidPlans],
   );
 
   const handleComparePlans = () => {
@@ -154,20 +240,21 @@ const PremiumContent = () => {
       return;
     }
 
-    if (isPremium && activeTier === plan.tier) {
-      showSuccess('Your subscription is already active.');
-      return;
-    }
-    if (plan.tier === 'free' || !plan.baseUsdPrice) {
+    if (plan.tier === 'free' || !plan.billingCycle) {
       showError('This plan is not payable.');
       return;
     }
 
+    if (isPremium && activeTier === plan.tier && activeBillingCycle === plan.billingCycle) {
+      showSuccess('Your subscription is already active.');
+      return;
+    }
+
     try {
-      setLoadingTier(plan.tier);
+      setLoadingPlanKey(`premium:${plan.billingCycle}`);
       const initResponse = await API.Payment.pay({
-        tier: plan.tier,
-        baseUsdPrice: plan.baseUsdPrice,
+        tier: 'premium',
+        billingCycle: plan.billingCycle,
       });
 
       if (!initResponse.authorizationUrl) {
@@ -176,7 +263,7 @@ const PremiumContent = () => {
 
       window.location.assign(initResponse.authorizationUrl);
     } catch (error: unknown) {
-      setLoadingTier(null);
+      setLoadingPlanKey(null);
       showError(getErrorMessage(error, 'Unable to start payment.'));
     }
   };
@@ -213,16 +300,22 @@ const PremiumContent = () => {
                 Designed for believers seeking marriage-minded relationships, FaithBliss Premium
                 gives you clarity, priority visibility, and a beautifully guided path to the right match.
               </p>
+              <p className="text-sm text-gray-400">
+                Your displayed price is localized by country. Paystack checkout is processed in NGN.
+              </p>
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => handleStartPlan(primaryPaidPlan)}
                   disabled={
-                    loadingTier === primaryPaidPlan.tier ||
-                    (isPremium && activeTier === primaryPaidPlan.tier)
+                    pricingLoading ||
+                    loadingPlanKey === `premium:${primaryPaidPlan.billingCycle}` ||
+                    (isPremium && activeBillingCycle === primaryPaidPlan.billingCycle)
                   }
                   className="rounded-full bg-gradient-to-r from-pink-500 to-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-pink-500/30 transition hover:from-pink-400 hover:to-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isPremium && activeTier === primaryPaidPlan.tier
+                  {pricingLoading
+                    ? 'Loading price...'
+                    : isPremium && activeBillingCycle === primaryPaidPlan.billingCycle
                     ? `${getSubscriptionTierLabel(primaryPaidPlan.tier)} Active`
                     : `Start ${getSubscriptionTierLabel(primaryPaidPlan.tier)}`}
                 </button>
@@ -257,7 +350,7 @@ const PremiumContent = () => {
                     <h3 className="mt-2 text-2xl font-semibold text-white">{subscriptionDisplay.tierLabel}</h3>
                     <p className="mt-2 text-sm text-gray-300">
                       {subscriptionDisplay.isActivePaid
-                        ? 'Your premium benefits are active and available right now.'
+                        ? `Your ${activeBillingCycle === 'quarterly' ? '3-month' : 'monthly'} premium benefits are active right now.`
                         : 'You are currently on the free plan.'}
                     </p>
                   </div>
@@ -275,7 +368,7 @@ const PremiumContent = () => {
                     <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Countdown</p>
                       <p className="mt-2 text-lg font-semibold text-white">
-                        {subscriptionDisplay.countdownLabel || 'Monthly renewal active'}
+                        {subscriptionDisplay.countdownLabel || 'Renewal active'}
                       </p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
@@ -284,13 +377,12 @@ const PremiumContent = () => {
                         Next renewal
                       </p>
                       <p className="mt-2 text-lg font-semibold text-white">
-                        {subscriptionDisplay.renewalLabel || 'Auto-renewing monthly'}
+                        {subscriptionDisplay.renewalLabel || 'Auto-renewing'}
                       </p>
                     </div>
                   </div>
                 ) : null}
               </div>
-
             </div>
           </div>
         </div>
@@ -306,15 +398,21 @@ const PremiumContent = () => {
           <p className="text-sm text-gray-300">
             Unlock the tools that help you connect intentionally with people who share your faith and values.
           </p>
+          <p className="text-xs uppercase tracking-[0.18em] text-gray-400">
+            Region: {effectiveQuote.region}{effectiveQuote.countryCode ? ` • ${effectiveQuote.countryCode}` : ''}
+          </p>
         </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            {displayPlans.map((plan) => {
-              const isCurrentPlan = normalizedActiveTier === plan.tier;
+        <div className="grid gap-6 lg:grid-cols-3">
+          {displayPlans.map((plan) => {
+            const isCurrentPlan =
+              normalizedActiveTier === plan.tier &&
+              (plan.tier === 'free' || activeBillingCycle === plan.billingCycle);
+            const planKey = plan.billingCycle ? (`premium:${plan.billingCycle}` as const) : null;
 
-              return (
+            return (
               <div
-                key={plan.name}
+                key={`${plan.name}-${plan.billingCycle ?? 'free'}`}
                 className={`relative flex h-full flex-col rounded-3xl border p-6 transition ${
                   plan.highlight
                     ? 'border-pink-500/50 bg-gradient-to-br from-pink-500/20 to-purple-600/20 shadow-lg shadow-pink-500/20'
@@ -339,7 +437,11 @@ const PremiumContent = () => {
                 <p className="mt-2 text-sm text-gray-300">{plan.description}</p>
                 <div className="mt-4 flex items-end gap-2">
                   <span className="text-3xl font-semibold text-white">{plan.displayPrice}</span>
-                  {plan.tier !== 'free' && <span className="text-xs text-gray-400">/month</span>}
+                  {plan.tier !== 'free' && (
+                    <span className="text-xs text-gray-400">
+                      /{plan.billingCycle === 'quarterly' ? '3 months' : 'month'}
+                    </span>
+                  )}
                 </div>
                 {plan.originalPrice && (
                   <div className="mt-2 flex items-center gap-2">
@@ -359,13 +461,18 @@ const PremiumContent = () => {
                   ))}
                 </ul>
 
+                {plan.pricingNote ? (
+                  <p className="mt-5 text-xs text-gray-400">{plan.pricingNote}</p>
+                ) : null}
+
                 <button
                   onClick={() => {
                     handleStartPlan(plan);
                   }}
                   disabled={
                     plan.tier === 'free' ||
-                    loadingTier === plan.tier ||
+                    pricingLoading ||
+                    loadingPlanKey === planKey ||
                     isCurrentPlan
                   }
                   className={`mt-8 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
@@ -374,7 +481,9 @@ const PremiumContent = () => {
                       : 'border border-white/15 bg-white/5 text-white/90 hover:border-white/30 hover:bg-white/10'
                   } ${plan.tier === 'free' ? 'cursor-not-allowed opacity-70' : ''}`}
                 >
-                  {loadingTier === plan.tier
+                  {pricingLoading && plan.tier !== 'free'
+                    ? 'Loading price...'
+                    : loadingPlanKey === planKey
                     ? 'Processing...'
                     : isCurrentPlan
                     ? 'Current Plan'
@@ -383,9 +492,9 @@ const PremiumContent = () => {
                     : plan.cta}
                 </button>
               </div>
-              );
-            })}
-          </div>
+            );
+          })}
+        </div>
       </section>
 
       <section className="px-6 pb-16 lg:px-12">
@@ -400,21 +509,21 @@ const PremiumContent = () => {
                 Ready to unlock the full FaithBliss experience?
               </h3>
               <p className="text-sm text-gray-300">
-                Join thousands of believers discovering meaningful, marriage-minded connections.
+                Join believers discovering meaningful, marriage-minded connections with localized pricing.
               </p>
             </div>
             <button
-              onClick={() => primaryPaidPlan && handleStartPlan(primaryPaidPlan)}
+              onClick={() => handleStartPlan(primaryPaidPlan)}
               disabled={
-                !primaryPaidPlan ||
-                loadingTier === primaryPaidPlan.tier ||
-                (isPremium && activeTier === primaryPaidPlan.tier)
+                pricingLoading ||
+                loadingPlanKey === `premium:${primaryPaidPlan.billingCycle}` ||
+                (isPremium && activeBillingCycle === primaryPaidPlan.billingCycle)
               }
               className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-gray-900 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {!primaryPaidPlan
-                ? 'Plans unavailable'
-                : isPremium && activeTier === primaryPaidPlan.tier
+              {pricingLoading
+                ? 'Loading price...'
+                : isPremium && activeBillingCycle === primaryPaidPlan.billingCycle
                 ? `${getSubscriptionTierLabel(primaryPaidPlan.tier)} Active`
                 : `Upgrade to ${getSubscriptionTierLabel(primaryPaidPlan.tier)}`}
             </button>

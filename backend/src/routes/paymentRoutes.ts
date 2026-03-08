@@ -4,6 +4,7 @@ import express from 'express';
 import { protect } from '../middleware/authMiddleware';
 import {
   handlePaystackWebhook,
+  getLocalizedPricingQuote,
   initializeLocalizedSubscription,
   initializeSubscription,
   listSubscriptionPlans,
@@ -16,6 +17,7 @@ const router = express.Router();
 router.post('/webhook', handlePaystackWebhook);
 
 // Authenticated endpoints
+router.get('/quote', protect, getLocalizedPricingQuote);
 router.get('/plans', protect, listSubscriptionPlans);
 router.post('/pay', protect, initializeLocalizedSubscription);
 router.post('/initialize', protect, initializeSubscription);
