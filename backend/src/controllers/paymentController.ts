@@ -41,6 +41,11 @@ type StoredSubscription = {
   nextPaymentDate?: string;
 };
 
+type UserPricingContext = {
+  countryCode?: string;
+  location?: string;
+};
+
 const PLAN_METADATA: Record<PlanTier, { name: string }> = {
   premium: { name: 'Premium Plan' },
   elite: { name: 'Pro Plan' },
@@ -50,6 +55,32 @@ const removeUndefinedValues = <T extends Record<string, any>>(data: T): Partial<
   return Object.fromEntries(
     Object.entries(data).filter(([, value]) => value !== undefined)
   ) as Partial<T>;
+};
+
+const DIAL_CODE_COUNTRY_MAP: Record<string, string> = {
+  '+234': 'NG',
+  '+233': 'GH',
+  '+254': 'KE',
+  '+27': 'ZA',
+};
+
+const inferCountryCodeFromUser = (userData: UserPricingContext | null): string | null => {
+  if (!userData) return null;
+
+  const dialCode = typeof userData.countryCode === 'string' ? userData.countryCode.trim() : '';
+  if (dialCode && DIAL_CODE_COUNTRY_MAP[dialCode]) {
+    return DIAL_CODE_COUNTRY_MAP[dialCode];
+  }
+
+  const location = typeof userData.location === 'string' ? userData.location.toLowerCase() : '';
+  if (!location) return null;
+
+  if (location.includes('nigeria')) return 'NG';
+  if (location.includes('ghana')) return 'GH';
+  if (location.includes('kenya')) return 'KE';
+  if (location.includes('south africa')) return 'ZA';
+
+  return null;
 };
 
 const addSubscriptionDuration = (date: Date, billingCycle: BillingCycle | undefined): Date => {
@@ -142,6 +173,23 @@ const getStoredSubscription = async (userId: string): Promise<StoredSubscription
   }
 
   return subscription as StoredSubscription;
+};
+
+const getUserPricingContext = async (userId: string): Promise<UserPricingContext | null> => {
+  const snapshot = await usersCollection.doc(userId).get();
+  if (!snapshot.exists) {
+    return null;
+  }
+
+  const data = snapshot.data() as Record<string, unknown> | undefined;
+  if (!data) {
+    return null;
+  }
+
+  return {
+    countryCode: typeof data.countryCode === 'string' ? data.countryCode : undefined,
+    location: typeof data.location === 'string' ? data.location : undefined,
+  };
 };
 
 const resolveTierFromPlanCode = (planCode?: string | null): PlanTier | undefined => {
@@ -267,7 +315,9 @@ export const initializeLocalizedSubscription = async (req: Request, res: Respons
     const callbackBaseUrl = process.env.CLIENT_URL?.trim();
     const callbackUrl = callbackBaseUrl ? `${callbackBaseUrl.replace(/\/+$/, '')}/payment-success` : undefined;
     const clientIp = extractClientIp(req.headers as Record<string, unknown>);
-    const pricingQuote = await getRegionalPricingQuote(billingCycle, clientIp);
+    const userPricingContext = await getUserPricingContext(userId);
+    const fallbackCountryCode = inferCountryCodeFromUser(userPricingContext);
+    const pricingQuote = await getRegionalPricingQuote(billingCycle, clientIp, fallbackCountryCode);
 
     const response = await initializeTransaction({
       email,
@@ -329,8 +379,10 @@ export const initializeLocalizedSubscription = async (req: Request, res: Respons
 export const getLocalizedPricingQuote = async (req: Request, res: Response) => {
   try {
     const clientIp = extractClientIp(req.headers as Record<string, unknown>);
-    const monthly = await getRegionalPricingQuote('monthly', clientIp);
-    const quarterly = await getRegionalPricingQuote('quarterly', clientIp);
+    const userPricingContext = req.userId ? await getUserPricingContext(req.userId) : null;
+    const fallbackCountryCode = inferCountryCodeFromUser(userPricingContext);
+    const monthly = await getRegionalPricingQuote('monthly', clientIp, fallbackCountryCode);
+    const quarterly = await getRegionalPricingQuote('quarterly', clientIp, fallbackCountryCode);
 
     return res.status(200).json({
       countryCode: monthly.countryCode,

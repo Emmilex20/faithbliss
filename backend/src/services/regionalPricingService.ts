@@ -176,9 +176,11 @@ const formatDisplayLabel = (currency: string, amount: number): string => {
 export const getRegionalPricingQuote = async (
   billingCycle: BillingCycle,
   ipAddress: string | null,
+  fallbackCountryCode?: string | null,
 ): Promise<RegionalPricingQuote> => {
   const geo = await lookupCountryByIp(ipAddress);
-  const region = getRegionFromCountry(geo.countryCode);
+  const resolvedCountryCode = geo.countryCode || (fallbackCountryCode ? fallbackCountryCode.trim().toUpperCase() : null);
+  const region = getRegionFromCountry(resolvedCountryCode);
   const usdRates = await getUsdExchangeRates();
 
   if (region === 'nigeria') {
@@ -187,7 +189,7 @@ export const getRegionalPricingQuote = async (
       tier: 'premium',
       billingCycle,
       region,
-      countryCode: geo.countryCode,
+      countryCode: resolvedCountryCode,
       displayCurrency: 'NGN',
       displayAmountMajor: ngnAmount,
       chargeCurrency: 'NGN',
@@ -199,7 +201,7 @@ export const getRegionalPricingQuote = async (
   }
 
   if (region === 'africa') {
-    const displayCurrency = getAfricanDisplayCurrency(geo.countryCode);
+    const displayCurrency = getAfricanDisplayCurrency(resolvedCountryCode);
     const ngnAmount = NGN_PRICE_CATALOG[billingCycle];
     const converted = convertNgnToDisplayWholeAmount(ngnAmount, displayCurrency, usdRates);
 
@@ -207,7 +209,7 @@ export const getRegionalPricingQuote = async (
       tier: 'premium',
       billingCycle,
       region,
-      countryCode: geo.countryCode,
+      countryCode: resolvedCountryCode,
       displayCurrency,
       displayAmountMajor: converted.amount,
       chargeCurrency: 'NGN',
@@ -225,7 +227,7 @@ export const getRegionalPricingQuote = async (
     tier: 'premium',
     billingCycle,
     region,
-    countryCode: geo.countryCode,
+    countryCode: resolvedCountryCode,
     displayCurrency: 'USD',
     displayAmountMajor: usdAmount,
     chargeCurrency: 'NGN',
@@ -235,4 +237,3 @@ export const getRegionalPricingQuote = async (
     displayLabel: formatDisplayLabel('USD', usdAmount),
   };
 };
-
