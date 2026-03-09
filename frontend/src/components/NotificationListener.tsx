@@ -56,12 +56,24 @@ export const NotificationListener = () => {
     persistSeenIds();
   }, [persistSeenIds]);
 
+  const markNotificationRead = useCallback(async (notificationId: string) => {
+    if (!notificationId) return;
+    try {
+      await API.Notification.markAsRead(notificationId);
+    } catch {
+      // Ignore notification read failures. Local seen-state still prevents duplicates.
+    }
+  }, []);
+
   const enqueueMatchCelebration = useCallback(async (payload: NotificationPayload) => {
     const fallbackId = `${payload.type}:${payload.data?.otherUserId || 'unknown'}:${payload.createdAt || payload.message}`;
     const notificationId = String(payload.id || fallbackId);
     if (hasSeenNotification(notificationId)) return;
 
     markNotificationSeen(notificationId);
+    if (payload.id) {
+      void markNotificationRead(notificationId);
+    }
 
     const matchedUserId =
       typeof payload.data?.otherUserId === 'string' && payload.data.otherUserId.trim()
@@ -104,7 +116,7 @@ export const NotificationListener = () => {
         },
       ];
     });
-  }, [hasSeenNotification, markNotificationSeen]);
+  }, [hasSeenNotification, markNotificationRead, markNotificationSeen]);
 
   const maybeShowBrowserNotification = useCallback((payload: NotificationPayload) => {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
@@ -188,7 +200,8 @@ export const NotificationListener = () => {
         const unseenMatches = notifications.filter((item) => {
           const notification = item as NotificationPayload;
           const notificationId = String(notification.id || '');
-          return notification.type === 'NEW_MATCH' && notificationId && !hasSeenNotification(notificationId);
+          const isUnread = (item as { isRead?: unknown }).isRead !== true;
+          return notification.type === 'NEW_MATCH' && notificationId && isUnread && !hasSeenNotification(notificationId);
         });
 
         for (const notification of unseenMatches.reverse()) {
