@@ -23,6 +23,8 @@ import { uploadPhotosToCloudinary } from '../api/cloudinaryUpload';
 import { MIN_PROFILE_FITS } from '../constants/profileFitOptions';
 import { MIN_ONBOARDING_PHOTOS } from '../constants/onboarding';
 
+const MIN_ONBOARDING_INTERESTS = 7;
+
 // --- TYPE ---
 type OnboardingUpdateData = Partial<Omit<OnboardingData, 'photos' | 'customDenomination'>> & {
   profilePhoto1?: string;
@@ -115,8 +117,8 @@ const getStepValidationError = (step: number, data: OnboardingData): string | nu
     return 'Please add your bio, choose a prompt, and provide your answer.';
   }
 
-  if (step === 7 && (!Array.isArray(data.interests) || data.interests.length === 0)) {
-    return 'Please select at least one interest.';
+  if (step === 7 && (!Array.isArray(data.interests) || data.interests.length < MIN_ONBOARDING_INTERESTS)) {
+    return `Please select at least ${MIN_ONBOARDING_INTERESTS} interests.`;
   }
 
   return null;

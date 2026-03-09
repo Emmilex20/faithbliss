@@ -10,6 +10,7 @@ interface InterestsSelectionSlideProps {
 }
 
 const MAX_INTERESTS = 10;
+const MIN_INTERESTS = 7;
 const INITIAL_VISIBLE_PER_CATEGORY = 8;
 
 const normalizeInterests = (values: string[] | undefined): string[] => {
@@ -60,10 +61,10 @@ const InterestsSelectionSlide = ({ onboardingData, setOnboardingData, isVisible 
       <div>
         <h2 className="text-4xl font-bold leading-tight text-white">What are you into?</h2>
         <p className="mt-3 text-lg text-slate-300">
-          Add up to {MAX_INTERESTS} interests to help us find people who share what you love.
+          Pick at least {MIN_INTERESTS} interests, and add up to {MAX_INTERESTS}, to help us find people who share what you love.
         </p>
         <div className="mt-4 inline-flex items-center rounded-full border border-pink-400/40 bg-pink-500/10 px-4 py-1.5 text-sm font-semibold text-pink-100">
-          Selected {selectedInterests.length}/{MAX_INTERESTS}
+          Selected {selectedInterests.length}/{MAX_INTERESTS} • Min {MIN_INTERESTS}
         </div>
       </div>
 
