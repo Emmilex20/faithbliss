@@ -82,12 +82,12 @@ const fallbackQuote: LocalizedPricingQuoteResponse = {
       region: 'global',
       countryCode: null,
       displayCurrency: 'USD',
-      displayAmountMajor: 7.99,
+      displayAmountMajor: 23.97,
       chargeCurrency: 'NGN',
       chargeAmountMajor: 0,
       chargeAmountSubunits: 0,
       exchangeRate: 1,
-      displayLabel: '$7.99',
+      displayLabel: '$23.97',
     },
   },
 };
@@ -214,9 +214,10 @@ const PremiumContent = () => {
         billingCycle: 'quarterly',
         name: 'Premium 3-Month',
         ...PREMIUM_PLAN_CONTENT.premium,
-        description: 'A 3-month premium access option using your regional price.',
+        description: 'Commit to three months of uninterrupted premium access.',
         displayPrice: quarterlyQuote.displayLabel,
         pricingNote: getPricingNote(quarterlyQuote.region, quarterlyQuote.displayCurrency),
+        highlight: true,
         tag: '3 Months',
         cta: 'Start 3-Month Plan',
       },
@@ -409,6 +410,7 @@ const PremiumContent = () => {
               normalizedActiveTier === plan.tier &&
               (plan.tier === 'free' || activeBillingCycle === plan.billingCycle);
             const planKey = plan.billingCycle ? (`premium:${plan.billingCycle}` as const) : null;
+            const isPlanLoading = planKey !== null && loadingPlanKey === planKey;
 
             return (
               <div
@@ -472,7 +474,7 @@ const PremiumContent = () => {
                   disabled={
                     plan.tier === 'free' ||
                     pricingLoading ||
-                    loadingPlanKey === planKey ||
+                    isPlanLoading ||
                     isCurrentPlan
                   }
                   className={`mt-8 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
@@ -483,7 +485,7 @@ const PremiumContent = () => {
                 >
                   {pricingLoading && plan.tier !== 'free'
                     ? 'Loading price...'
-                    : loadingPlanKey === planKey
+                    : isPlanLoading
                     ? 'Processing...'
                     : isCurrentPlan
                     ? 'Current Plan'

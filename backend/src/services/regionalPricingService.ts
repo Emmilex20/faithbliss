@@ -28,7 +28,7 @@ const NGN_PRICE_CATALOG: Record<BillingCycle, number> = {
 
 const GLOBAL_USD_PRICE_CATALOG: Record<BillingCycle, number> = {
   monthly: 11.99,
-  quarterly: 7.99,
+  quarterly: 23.97,
 };
 
 const AFRICAN_COUNTRY_CODES = new Set([

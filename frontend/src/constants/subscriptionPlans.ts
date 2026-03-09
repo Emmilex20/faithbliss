@@ -27,12 +27,12 @@ export const PREMIUM_PLAN_CONTENT: Record<
     cta: 'Start Premium Plan',
     features: [
       'Unlimited likes and swipes',
-      'Advanced filters',
-      'Voice and video calling',
-      'Access to explore page',
-      'Unlimited Rewinds',
-      'Travel Mode',
-      '1 Monthly Profile Booster',
+      'Filter by age, distance, height, and faith',
+      'Connect safely with in-app voice and video calls',
+      'Bond over shared interests on the Explore page',
+      'Instantly undo accidental skips',
+      'Change location to match anywhere in the world',
+      'Monthly profile booster to increase visibility',
     ],
   },
   elite: {
