@@ -112,6 +112,38 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
         }
     }, [passedProfilesStorageKey]);
 
+    useEffect(() => {
+        if (!passedProfilesStorageKey) return;
+
+        const syncPassedCooldowns = () => {
+            try {
+                const normalized = pruneExpiredPassedProfiles(
+                    normalizePassedProfilesMap(localStorage.getItem(passedProfilesStorageKey))
+                );
+                localStorage.setItem(passedProfilesStorageKey, JSON.stringify(normalized));
+                setPersistedPassedProfileMap((prev) => {
+                    const prevKeys = Object.keys(prev);
+                    const nextKeys = Object.keys(normalized);
+                    if (
+                        prevKeys.length === nextKeys.length &&
+                        prevKeys.every((key) => prev[key] === normalized[key])
+                    ) {
+                        return prev;
+                    }
+                    return normalized;
+                });
+            } catch {
+                // Ignore localStorage access errors.
+            }
+        };
+
+        syncPassedCooldowns();
+        const intervalId = window.setInterval(syncPassedCooldowns, 60 * 1000);
+        return () => {
+            window.clearInterval(intervalId);
+        };
+    }, [passedProfilesStorageKey]);
+
     const activeProfiles = useMemo(() => {
         const hasValidId = (p: User) => p && (p.id || (p as any)._id);
         const hasDisplayName = (p: User) => typeof p.name === 'string' && p.name.trim().length > 0;
@@ -293,6 +325,17 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const handleNoProfilesAction = async () => {
       reset();
       setIsReviewingPassedProfiles(false);
+      if (passedProfilesStorageKey) {
+        try {
+          const normalized = pruneExpiredPassedProfiles(
+            normalizePassedProfilesMap(localStorage.getItem(passedProfilesStorageKey))
+          );
+          localStorage.setItem(passedProfilesStorageKey, JSON.stringify(normalized));
+          setPersistedPassedProfileMap(normalized);
+        } catch {
+          // Ignore localStorage access errors.
+        }
+      }
       if (filteredProfiles !== null) {
         setFilteredProfiles(null);
       }

@@ -502,16 +502,15 @@ const getPotentialMatches = async (req: Request, res: Response) => {
     // Serve a Tinder/Hinge-style feed:
     // - include all registered users
     // - scan in pages so exclusions do not empty the initial result accidentally
-    const FEED_SIZE = 40;
     const QUERY_PAGE_SIZE = 120;
-    const MAX_SCAN_PAGES = 10;
+    const MAX_SCAN_PAGES = 50;
 
     const preferredGenderMatches: IUserProfile[] = [];
     const fallbackGenderMatches: IUserProfile[] = [];
     let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
     let scannedPages = 0;
 
-    while (preferredGenderMatches.length < FEED_SIZE && scannedPages < MAX_SCAN_PAGES) {
+    while (scannedPages < MAX_SCAN_PAGES) {
       let query = usersCollection
         .orderBy(admin.firestore.FieldPath.documentId())
         .limit(QUERY_PAGE_SIZE);
@@ -552,9 +551,9 @@ const getPotentialMatches = async (req: Request, res: Response) => {
       scannedPages += 1;
     }
 
-    const usedFallbackWithoutPreference = Boolean(preferredGender && preferredGenderMatches.length === 0);
-    const baseMatches = usedFallbackWithoutPreference ? fallbackGenderMatches : preferredGenderMatches;
-    const selectedMatches = baseMatches.slice(0, FEED_SIZE);
+    const selectedMatches = preferredGender
+      ? [...preferredGenderMatches, ...fallbackGenderMatches]
+      : preferredGenderMatches;
 
     const canComputeDistanceForCurrentUser =
       typeof currentUser.latitude === 'number' &&
@@ -622,7 +621,6 @@ const getPotentialMatches = async (req: Request, res: Response) => {
             ? u.personalPromptAnswer.trim()
             : '',
         distance: typeof u.distance === 'number' ? Math.round(u.distance) : undefined,
-        usedFallbackWithoutPreference,
       }))
     );
   } catch (error) {

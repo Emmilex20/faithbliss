@@ -223,7 +223,7 @@ const PremiumContent = () => {
             : undefined,
         pricingNote: getPricingNote(quarterlyQuote.region, quarterlyQuote.displayCurrency),
         highlight: true,
-        tag: '3 Months',
+        tag: 'Popular • 3 Months',
         cta: 'Start 3-Month Plan',
       },
     ];
@@ -434,7 +434,7 @@ const PremiumContent = () => {
                       </div>
                     )}
                     {plan.tag && (
-                      <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">
+                      <div className="rounded-full bg-white/12 px-4 py-1.5 text-sm font-semibold text-white shadow-sm shadow-pink-500/10">
                         {plan.tag}
                       </div>
                     )}
