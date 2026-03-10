@@ -378,6 +378,21 @@ export function useMatching() {
     toastRef.current = { showSuccess, showError, showInfo };
   }, [showSuccess, showError, showInfo]);
 
+  const getErrorMessage = (error: unknown, fallback: string): string => {
+    if (error instanceof Error && error.message.trim()) {
+      return error.message;
+    }
+
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+      const message = (error as { message?: unknown }).message;
+      if (typeof message === 'string' && message.trim()) {
+        return message;
+      }
+    }
+
+    return fallback;
+  };
+
   const likeUser = useCallback(async (userId: string, options?: { suppressSuccessToast?: boolean }) => {
     if (!accessToken) {
       throw new Error('Authentication required. Please log in.');
@@ -388,12 +403,13 @@ export function useMatching() {
         toastRef.current.showSuccess(result.isMatch ? "It's a match!" : 'Like sent!');
       }
       return result;
-    } catch (error: any) {
-      if (error.message && error.message.includes('User already liked')) {
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error, 'Failed to like user');
+      if (errorMessage.includes('already liked') || errorMessage.includes('already recorded')) {
         toastRef.current.showInfo('You\'ve already liked this profile!', 'Already Liked');
         return; // Do not re-throw, just inform the user
       }
-      toastRef.current.showError('Failed to like user', 'Error');
+      toastRef.current.showError(errorMessage, 'Error');
       throw error; // Re-throw other errors
     }
   }, [apiClient, accessToken]);
@@ -405,8 +421,8 @@ export function useMatching() {
     try {
       await apiClient.Match.passUser(userId);
       return true;
-    } catch (error) {
-      toastRef.current.showError('Failed to pass user', 'Error');
+    } catch (error: unknown) {
+      toastRef.current.showError(getErrorMessage(error, 'Failed to pass user'), 'Error');
       throw error;
     }
   }, [apiClient, accessToken]);

@@ -31,9 +31,15 @@ interface IUserProfile extends DocumentData {
   likes?: string[];
   passes?: string[];
   passHistory?: Record<string, Timestamp | string | number>;
+  dailySwipeUsage?: {
+    dateKey?: string;
+    count?: number;
+  };
   matches?: string[];
   blockedUsers?: string[];
   distance?: number;
+  subscriptionStatus?: string;
+  subscriptionTier?: string;
 }
 
 interface IMatch extends DocumentData {
@@ -87,6 +93,7 @@ const db = admin.firestore();
 const matchesCollection: CollectionReference = db.collection('matches');
 const messagesCollection: CollectionReference = db.collection('messages');
 const PASS_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const FREE_DAILY_SWIPE_LIMIT = 10;
 
 const messageAttachmentUpload = multer({
   storage: multer.memoryStorage(),
@@ -277,6 +284,30 @@ const getRecentPassedProfileIds = (passHistory: unknown, now = Date.now()): stri
       return passedAtMs !== null && now - passedAtMs < PASS_COOLDOWN_MS;
     })
     .map(([targetUid]) => String(targetUid));
+};
+
+const getUtcDateKey = (now = new Date()): string => now.toISOString().slice(0, 10);
+
+const isPremiumSubscriber = (user: Pick<IUserProfile, 'subscriptionStatus' | 'subscriptionTier'>): boolean => {
+  return user.subscriptionStatus === 'active'
+    && ['premium', 'elite'].includes(String(user.subscriptionTier || '').toLowerCase());
+};
+
+const getDailySwipeCountForDate = (
+  usage: IUserProfile['dailySwipeUsage'],
+  dateKey: string
+): number => {
+  if (!usage || typeof usage !== 'object') return 0;
+  if (usage.dateKey !== dateKey) return 0;
+
+  const count = Number(usage.count);
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+};
+
+const createHttpError = (status: number, message: string): Error & { status: number } => {
+  const error = new Error(message) as Error & { status: number };
+  error.status = status;
+  return error;
 };
 
 const isBlockedBetween = (currentUser: IUserProfile, otherUser: IUserProfile): boolean => {
@@ -619,8 +650,89 @@ const likeUser = async (req: Request, res: Response) => {
   }
 
   try {
-    const currentLikes = Array.isArray(currentUser.likes) ? currentUser.likes.map(String) : [];
-    if (currentLikes.includes(String(targetUid))) {
+    const currentUserRef = usersCollection.doc(currentUid);
+    const targetUserRef = usersCollection.doc(targetUid);
+    const actionResult = await db.runTransaction(async (transaction) => {
+      const [liveCurrentSnap, targetUserDoc] = await Promise.all([
+        transaction.get(currentUserRef),
+        transaction.get(targetUserRef),
+      ]);
+
+      if (!liveCurrentSnap.exists) {
+        throw createHttpError(404, 'User profile not found in database.');
+      }
+
+      if (!targetUserDoc.exists) {
+        console.warn(`?? Target user not found: ${targetUid}`);
+        throw createHttpError(404, 'Target user not found.');
+      }
+
+      const liveCurrentUser = { id: liveCurrentSnap.id, ...liveCurrentSnap.data() } as IUserProfile;
+      const targetUser = { id: targetUserDoc.id, ...targetUserDoc.data() } as IUserProfile;
+
+      if (isBlockedBetween(liveCurrentUser, targetUser)) {
+        throw createHttpError(403, 'You cannot interact with this user.');
+      }
+
+      const currentLikes = Array.isArray(liveCurrentUser.likes) ? liveCurrentUser.likes.map(String) : [];
+      if (currentLikes.includes(String(targetUid))) {
+        return {
+          alreadyLiked: true,
+          isMatch: false,
+          targetUserName: targetUser.name,
+        };
+      }
+
+      if (!isPremiumSubscriber(liveCurrentUser)) {
+        const dateKey = getUtcDateKey();
+        const dailySwipeCount = getDailySwipeCountForDate(liveCurrentUser.dailySwipeUsage, dateKey);
+        if (dailySwipeCount >= FREE_DAILY_SWIPE_LIMIT) {
+          throw createHttpError(403, 'Free plan allows 10 likes or swipes per day. Upgrade to premium for unlimited access.');
+        }
+
+        transaction.update(currentUserRef, {
+          dailySwipeUsage: {
+            dateKey,
+            count: dailySwipeCount + 1,
+          },
+        });
+      }
+
+      const targetLikes = Array.isArray(targetUser.likes) ? targetUser.likes.map(String) : [];
+      const isMatch = targetLikes.includes(currentUid);
+      const currentUserUpdate: Record<string, unknown> = {
+        likes: admin.firestore.FieldValue.arrayUnion(targetUid),
+        passes: admin.firestore.FieldValue.arrayRemove(targetUid),
+        [`passHistory.${targetUid}`]: admin.firestore.FieldValue.delete(),
+      };
+
+      if (isMatch) {
+        const newMatchRef = matchesCollection.doc();
+        const matchId = newMatchRef.id;
+
+        console.log(`?? Mutual match detected! Creating match ${matchId}`);
+
+        transaction.set(newMatchRef, {
+          users: [currentUid, targetUid],
+          createdAt: admin.firestore.Timestamp.now(),
+        });
+
+        currentUserUpdate.matches = admin.firestore.FieldValue.arrayUnion(matchId);
+        transaction.update(targetUserRef, {
+          matches: admin.firestore.FieldValue.arrayUnion(matchId),
+        });
+      }
+
+      transaction.update(currentUserRef, currentUserUpdate);
+
+      return {
+        alreadyLiked: false,
+        isMatch,
+        targetUserName: targetUser.name,
+      };
+    });
+
+    if (actionResult.alreadyLiked) {
       return res.status(200).json({
         message: 'Like already recorded',
         isMatch: false,
@@ -628,56 +740,14 @@ const likeUser = async (req: Request, res: Response) => {
       });
     }
 
-    const batch = db.batch();
-    const currentUserRef = usersCollection.doc(currentUid);
-    batch.update(currentUserRef, {
-      likes: admin.firestore.FieldValue.arrayUnion(targetUid),
-      passes: admin.firestore.FieldValue.arrayRemove(targetUid),
-      [`passHistory.${targetUid}`]: admin.firestore.FieldValue.delete(),
-    });
+    console.log(`? Like processed successfully. Match: ${actionResult.isMatch}`);
 
-    const targetUserDoc = await usersCollection.doc(targetUid).get();
-    if (!targetUserDoc.exists) {
-      console.warn(`?? Target user not found: ${targetUid}`);
-      return res.status(404).json({ message: 'Target user not found.' });
-    }
-
-    const targetUser = { id: targetUserDoc.id, ...targetUserDoc.data() } as IUserProfile;
-    if (isBlockedBetween(currentUser, targetUser)) {
-      return res.status(403).json({ message: 'You cannot interact with this user.' });
-    }
-    const targetLikes = Array.isArray(targetUser.likes) ? targetUser.likes : [];
-    const isMatch = targetLikes.includes(currentUid);
-
-    if (isMatch) {
-      const newMatchRef = matchesCollection.doc();
-      const matchId = newMatchRef.id;
-
-      console.log(`?? Mutual match detected! Creating match ${matchId}`);
-
-      batch.set(newMatchRef, {
-        users: [currentUid, targetUid],
-        createdAt: admin.firestore.Timestamp.now(),
-      });
-
-      const targetUserRef = usersCollection.doc(targetUid);
-      batch.update(currentUserRef, {
-        matches: admin.firestore.FieldValue.arrayUnion(matchId),
-      });
-      batch.update(targetUserRef, {
-        matches: admin.firestore.FieldValue.arrayUnion(matchId),
-      });
-    }
-
-    await batch.commit();
-    console.log(`? Like processed successfully. Match: ${isMatch}`);
-
-    if (isMatch) {
+    if (actionResult.isMatch) {
       await Promise.all([
         createNotification({
           userId: currentUid,
           type: 'NEW_MATCH',
-          message: `You matched with ${targetUser.name || 'a user'}`,
+          message: `You matched with ${actionResult.targetUserName || 'a user'}`,
           data: { otherUserId: targetUid },
         }),
         createNotification({
@@ -697,10 +767,15 @@ const likeUser = async (req: Request, res: Response) => {
     }
 
     res.status(200).json({
-      message: isMatch ? "It's a Match!" : 'Like recorded',
-      isMatch,
+      message: actionResult.isMatch ? "It's a Match!" : 'Like recorded',
+      isMatch: actionResult.isMatch,
     });
   } catch (error) {
+    if (typeof error === 'object' && error !== null && 'status' in error) {
+      const typedError = error as Error & { status: number };
+      return res.status(typedError.status).json({ message: typedError.message });
+    }
+
     const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
     console.error('?? Error liking user:', msg);
     res.status(500).json({ message: `Server Error: ${msg}` });
@@ -722,23 +797,64 @@ const passUser = async (req: Request, res: Response) => {
   }
 
   try {
-    const targetUserDoc = await usersCollection.doc(targetUid).get();
-    if (!targetUserDoc.exists) {
-      return res.status(404).json({ message: 'Target user not found.' });
-    }
+    const currentUserRef = usersCollection.doc(currentUid);
+    const targetUserRef = usersCollection.doc(targetUid);
 
-    const targetUser = { id: targetUserDoc.id, ...targetUserDoc.data() } as IUserProfile;
-    if (isBlockedBetween(currentUser, targetUser)) {
-      return res.status(403).json({ message: 'You cannot interact with this user.' });
-    }
+    await db.runTransaction(async (transaction) => {
+      const [liveCurrentSnap, targetUserDoc] = await Promise.all([
+        transaction.get(currentUserRef),
+        transaction.get(targetUserRef),
+      ]);
 
-    await usersCollection.doc(currentUid).update({
-      passes: admin.firestore.FieldValue.arrayUnion(targetUid),
-      [`passHistory.${targetUid}`]: admin.firestore.FieldValue.serverTimestamp(),
+      if (!liveCurrentSnap.exists) {
+        throw createHttpError(404, 'User profile not found in database.');
+      }
+
+      if (!targetUserDoc.exists) {
+        throw createHttpError(404, 'Target user not found.');
+      }
+
+      const liveCurrentUser = { id: liveCurrentSnap.id, ...liveCurrentSnap.data() } as IUserProfile;
+      const targetUser = { id: targetUserDoc.id, ...targetUserDoc.data() } as IUserProfile;
+
+      if (isBlockedBetween(liveCurrentUser, targetUser)) {
+        throw createHttpError(403, 'You cannot interact with this user.');
+      }
+
+      const recentPassedProfileIds = getRecentPassedProfileIds(liveCurrentUser.passHistory);
+      if (recentPassedProfileIds.includes(String(targetUid))) {
+        return;
+      }
+
+      if (!isPremiumSubscriber(liveCurrentUser)) {
+        const dateKey = getUtcDateKey();
+        const dailySwipeCount = getDailySwipeCountForDate(liveCurrentUser.dailySwipeUsage, dateKey);
+        if (dailySwipeCount >= FREE_DAILY_SWIPE_LIMIT) {
+          throw createHttpError(403, 'Free plan allows 10 likes or swipes per day. Upgrade to premium for unlimited access.');
+        }
+
+        transaction.update(currentUserRef, {
+          dailySwipeUsage: {
+            dateKey,
+            count: dailySwipeCount + 1,
+          },
+        });
+      }
+
+      transaction.update(currentUserRef, {
+        passes: admin.firestore.FieldValue.arrayUnion(targetUid),
+        [`passHistory.${targetUid}`]: admin.firestore.FieldValue.serverTimestamp(),
+      });
     });
+
     console.log(`?? User ${currentUid} passed on ${targetUid}`);
     res.status(204).send();
   } catch (error) {
+    if (typeof error === 'object' && error !== null && 'status' in error) {
+      const typedError = error as Error & { status: number };
+      return res.status(typedError.status).json({ message: typedError.message });
+    }
+
     const msg = isErrorWithMessage(error) ? error.message : 'Unknown error';
     console.error('Error passing user:', error);
     res.status(500).json({ message: `Server Error: ${msg}` });
@@ -1275,6 +1391,12 @@ const getPassedProfiles = async (req: Request, res: Response) => {
   if (!currentUser) return;
 
   try {
+    if (!isPremiumSubscriber(currentUser)) {
+      return res.status(403).json({
+        message: 'Skipped profile review is available on premium only.',
+      });
+    }
+
     const passedIds = normalizeIdList(currentUser.passes);
     if (passedIds.length === 0) {
       return res.status(200).json({ profiles: [] });

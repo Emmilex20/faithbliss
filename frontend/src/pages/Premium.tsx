@@ -28,6 +28,7 @@ type DisplayPlan = {
   name: string;
   description: string;
   displayPrice: string;
+  billingSummary?: string;
   pricingNote?: string;
   originalPrice?: string;
   savingsLabel?: string;
@@ -216,6 +217,10 @@ const PremiumContent = () => {
         ...PREMIUM_PLAN_CONTENT.premium,
         description: 'Commit to three months of uninterrupted premium access.',
         displayPrice: quarterlyQuote.displayLabel,
+        billingSummary:
+          quarterlyQuote.region === 'global'
+            ? 'Equivalent to $7.99 per month, billed as $23.97 every 3 months.'
+            : undefined,
         pricingNote: getPricingNote(quarterlyQuote.region, quarterlyQuote.displayCurrency),
         highlight: true,
         tag: '3 Months',
@@ -453,6 +458,11 @@ const PremiumContent = () => {
                     </span>
                   </div>
                 )}
+                {plan.billingSummary ? (
+                  <p className="mt-2 text-xs font-medium text-pink-100/85">
+                    {plan.billingSummary}
+                  </p>
+                ) : null}
 
                 <ul className="mt-6 space-y-3 text-sm text-gray-300">
                   {plan.features.map((feature) => (

@@ -300,6 +300,12 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     };
 
     const handleReviewPassedProfiles = async () => {
+      if (!isPremiumUser) {
+        showInfo('Review skipped profiles is available on premium only.');
+        navigate('/premium');
+        return;
+      }
+
       reset();
       try {
         const response = await API.Match.getPassedProfiles();
@@ -544,8 +550,8 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
                         }
                         noProfilesActionLabel={isReviewingPassedProfiles ? "Back to Fresh Feed" : "Reload Profiles"}
                         onNoProfilesAction={handleNoProfilesAction}
-                        noProfilesSecondaryActionLabel={isReviewingPassedProfiles ? undefined : "Review Skipped Profiles"}
-                        onNoProfilesSecondaryAction={isReviewingPassedProfiles ? undefined : handleReviewPassedProfiles}
+                        noProfilesSecondaryActionLabel={isReviewingPassedProfiles || !isPremiumUser ? undefined : "Review Skipped Profiles"}
+                        onNoProfilesSecondaryAction={isReviewingPassedProfiles || !isPremiumUser ? undefined : handleReviewPassedProfiles}
                         onOpenFilterSection={openFiltersToSection}
                     />
                 </DesktopLayout>
@@ -590,8 +596,8 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
                         }
                         noProfilesActionLabel={isReviewingPassedProfiles ? "Back to Fresh Feed" : "Reload Profiles"}
                         onNoProfilesAction={handleNoProfilesAction}
-                        noProfilesSecondaryActionLabel={isReviewingPassedProfiles ? undefined : "Review Skipped Profiles"}
-                        onNoProfilesSecondaryAction={isReviewingPassedProfiles ? undefined : handleReviewPassedProfiles}
+                        noProfilesSecondaryActionLabel={isReviewingPassedProfiles || !isPremiumUser ? undefined : "Review Skipped Profiles"}
+                        onNoProfilesSecondaryAction={isReviewingPassedProfiles || !isPremiumUser ? undefined : handleReviewPassedProfiles}
                         onOpenFilterSection={openFiltersToSection}
                     />
                 </MobileLayout>
