@@ -1,12 +1,11 @@
 import { Heart, X } from 'lucide-react';
 
 interface FloatingActionButtonsProps {
-  onGoBack: () => void;
   onPass: () => void;
   onLike: () => void;
 }
 
-export const FloatingActionButtons = ({ onGoBack: _onGoBack, onPass, onLike }: FloatingActionButtonsProps) => {
+export const FloatingActionButtons = ({ onPass, onLike }: FloatingActionButtonsProps) => {
   return (
     <div className="flex items-center justify-center gap-3 sm:gap-4">
       <button

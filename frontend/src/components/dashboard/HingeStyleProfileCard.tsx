@@ -984,7 +984,7 @@ export const HingeStyleProfileCard = ({
           </Link>
 
           <div className="mt-4 border-t border-white/15 pt-4">
-            <FloatingActionButtons onGoBack={onGoBack} onPass={onPass} onLike={onLike} />
+            <FloatingActionButtons onPass={onPass} onLike={onLike} />
           </div>
         </div>
       </div>

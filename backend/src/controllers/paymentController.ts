@@ -58,27 +58,59 @@ const removeUndefinedValues = <T extends Record<string, any>>(data: T): Partial<
 };
 
 const DIAL_CODE_COUNTRY_MAP: Record<string, string> = {
+  '+20': 'EG',
+  '+212': 'MA',
+  '+213': 'DZ',
+  '+216': 'TN',
   '+234': 'NG',
   '+233': 'GH',
+  '+237': 'CM',
+  '+250': 'RW',
+  '+251': 'ET',
   '+254': 'KE',
+  '+255': 'TZ',
+  '+256': 'UG',
   '+27': 'ZA',
 };
+
+const LOCATION_COUNTRY_KEYWORDS: Array<{ code: string; patterns: string[] }> = [
+  { code: 'NG', patterns: ['nigeria', 'lagos', 'abuja', 'port harcourt'] },
+  { code: 'GH', patterns: ['ghana', 'accra', 'kumasi'] },
+  { code: 'KE', patterns: ['kenya', 'nairobi', 'mombasa'] },
+  { code: 'ZA', patterns: ['south africa', 'johannesburg', 'cape town', 'pretoria'] },
+  { code: 'MA', patterns: ['morocco', 'maroc', 'casablanca', 'rabat', 'marrakesh', 'marrakech', 'fes', 'agadir', 'tangier'] },
+  { code: 'DZ', patterns: ['algeria', 'algiers', 'oran'] },
+  { code: 'TN', patterns: ['tunisia', 'tunis', 'sfax'] },
+  { code: 'EG', patterns: ['egypt', 'cairo', 'alexandria'] },
+  { code: 'UG', patterns: ['uganda', 'kampala'] },
+  { code: 'TZ', patterns: ['tanzania', 'dar es salaam', 'arusha'] },
+  { code: 'ET', patterns: ['ethiopia', 'addis ababa'] },
+  { code: 'RW', patterns: ['rwanda', 'kigali'] },
+  { code: 'CM', patterns: ['cameroon', 'yaounde', 'douala'] },
+];
 
 const inferCountryCodeFromUser = (userData: UserPricingContext | null): string | null => {
   if (!userData) return null;
 
-  const dialCode = typeof userData.countryCode === 'string' ? userData.countryCode.trim() : '';
-  if (dialCode && DIAL_CODE_COUNTRY_MAP[dialCode]) {
-    return DIAL_CODE_COUNTRY_MAP[dialCode];
+  const countryHint = typeof userData.countryCode === 'string' ? userData.countryCode.trim() : '';
+  if (countryHint) {
+    const normalizedHint = countryHint.toUpperCase();
+    if (/^[A-Z]{2}$/.test(normalizedHint)) {
+      return normalizedHint;
+    }
+    if (DIAL_CODE_COUNTRY_MAP[countryHint]) {
+      return DIAL_CODE_COUNTRY_MAP[countryHint];
+    }
   }
 
   const location = typeof userData.location === 'string' ? userData.location.toLowerCase() : '';
   if (!location) return null;
 
-  if (location.includes('nigeria')) return 'NG';
-  if (location.includes('ghana')) return 'GH';
-  if (location.includes('kenya')) return 'KE';
-  if (location.includes('south africa')) return 'ZA';
+  for (const { code, patterns } of LOCATION_COUNTRY_KEYWORDS) {
+    if (patterns.some((pattern) => location.includes(pattern))) {
+      return code;
+    }
+  }
 
   return null;
 };
