@@ -30,6 +30,7 @@ interface IUserProfile extends DocumentData {
   onboardingCompleted: boolean;
   likes?: string[];
   passes?: string[];
+  passHistory?: Record<string, Timestamp | string | number>;
   matches?: string[];
   blockedUsers?: string[];
   distance?: number;
@@ -85,6 +86,7 @@ interface IMessage extends DocumentData {
 const db = admin.firestore();
 const matchesCollection: CollectionReference = db.collection('matches');
 const messagesCollection: CollectionReference = db.collection('messages');
+const PASS_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 const messageAttachmentUpload = multer({
   storage: multer.memoryStorage(),
@@ -247,6 +249,36 @@ function isErrorWithMessage(error: unknown): error is { message: string } {
 const normalizeIdList = (value: unknown): string[] =>
   Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 
+const toEpochMillis = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (value && typeof value === 'object' && 'toDate' in (value as Record<string, unknown>)) {
+    try {
+      return (value as Timestamp).toDate().getTime();
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
+
+const getRecentPassedProfileIds = (passHistory: unknown, now = Date.now()): string[] => {
+  if (!passHistory || typeof passHistory !== 'object' || Array.isArray(passHistory)) {
+    return [];
+  }
+
+  return Object.entries(passHistory as Record<string, unknown>)
+    .filter(([targetUid, passedAt]) => {
+      if (!targetUid) return false;
+      const passedAtMs = toEpochMillis(passedAt);
+      return passedAtMs !== null && now - passedAtMs < PASS_COOLDOWN_MS;
+    })
+    .map(([targetUid]) => String(targetUid));
+};
+
 const isBlockedBetween = (currentUser: IUserProfile, otherUser: IUserProfile): boolean => {
   const currentBlocked = normalizeIdList(currentUser.blockedUsers);
   const otherBlocked = normalizeIdList(otherUser.blockedUsers);
@@ -272,10 +304,12 @@ const removeRelationshipArtifacts = async (currentUid: string, targetUid: string
   const currentUpdate: Record<string, unknown> = {
     likes: admin.firestore.FieldValue.arrayRemove(targetUid),
     passes: admin.firestore.FieldValue.arrayRemove(targetUid),
+    [`passHistory.${targetUid}`]: admin.firestore.FieldValue.delete(),
   };
   const targetUpdate: Record<string, unknown> = {
     likes: admin.firestore.FieldValue.arrayRemove(currentUid),
     passes: admin.firestore.FieldValue.arrayRemove(currentUid),
+    [`passHistory.${currentUid}`]: admin.firestore.FieldValue.delete(),
   };
 
   if (sharedMatchIds.length > 0) {
@@ -409,10 +443,12 @@ const getPotentialMatches = async (req: Request, res: Response) => {
       (currentUser as IUserProfile).lookingFor
     );
 
+    const recentPassedIds = getRecentPassedProfileIds(currentUser.passHistory);
+
     const excludedUids = new Set<string>([
       currentUser.id,
       ...(currentUser.likes || []),
-      ...(currentUser.passes || []),
+      ...recentPassedIds,
       ...(currentUser.blockedUsers || []),
     ].map(String));
 
@@ -597,6 +633,7 @@ const likeUser = async (req: Request, res: Response) => {
     batch.update(currentUserRef, {
       likes: admin.firestore.FieldValue.arrayUnion(targetUid),
       passes: admin.firestore.FieldValue.arrayRemove(targetUid),
+      [`passHistory.${targetUid}`]: admin.firestore.FieldValue.delete(),
     });
 
     const targetUserDoc = await usersCollection.doc(targetUid).get();
@@ -697,6 +734,7 @@ const passUser = async (req: Request, res: Response) => {
 
     await usersCollection.doc(currentUid).update({
       passes: admin.firestore.FieldValue.arrayUnion(targetUid),
+      [`passHistory.${targetUid}`]: admin.firestore.FieldValue.serverTimestamp(),
     });
     console.log(`?? User ${currentUid} passed on ${targetUid}`);
     res.status(204).send();
@@ -982,11 +1020,13 @@ const unmatchAndBlockUser = async (req: Request, res: Response) => {
       likes: admin.firestore.FieldValue.arrayRemove(targetUid),
       passes: admin.firestore.FieldValue.arrayRemove(targetUid),
       blockedUsers: admin.firestore.FieldValue.arrayUnion(targetUid),
+      [`passHistory.${targetUid}`]: admin.firestore.FieldValue.delete(),
     };
 
     const targetUpdate: Record<string, unknown> = {
       likes: admin.firestore.FieldValue.arrayRemove(currentUid),
       passes: admin.firestore.FieldValue.arrayRemove(currentUid),
+      [`passHistory.${currentUid}`]: admin.firestore.FieldValue.delete(),
     };
 
     if (sharedMatchIds.length > 0) {

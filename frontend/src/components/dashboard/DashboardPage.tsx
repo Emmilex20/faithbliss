@@ -22,6 +22,37 @@ import { API, type User } from '@/services/api';
 insertScrollbarStyles();
 
 const DASHBOARD_PASSED_PROFILES_STORAGE_KEY_PREFIX = 'faithbliss_dashboard_passed_profiles';
+const PASS_REVIEW_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+type PersistedPassedProfilesMap = Record<string, number>;
+
+const normalizePassedProfilesMap = (raw: string | null): PersistedPassedProfilesMap => {
+  if (!raw) return {};
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>).filter((entry): entry is [string, number] => {
+        const [key, value] = entry;
+        return Boolean(key) && typeof value === 'number' && Number.isFinite(value);
+      })
+    );
+  } catch {
+    return {};
+  }
+};
+
+const pruneExpiredPassedProfiles = (
+  passedProfiles: PersistedPassedProfilesMap,
+  now = Date.now()
+): PersistedPassedProfilesMap =>
+  Object.fromEntries(
+    Object.entries(passedProfiles).filter(([, passedAt]) => now - passedAt < PASS_REVIEW_COOLDOWN_MS)
+  );
 
 export const DashboardPage = ({ user: activeUser }: { user: User }) => {
   const navigate = useNavigate();
@@ -36,7 +67,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const hasCompletedInitialLoadRef = useRef(false);
     const [showForcedOnboardingPrompt, setShowForcedOnboardingPrompt] = useState(false);
     const ONBOARDING_PAUSE_STORAGE_KEY = 'faithbliss_onboarding_pause_state';
-    const [persistedPassedProfileIds, setPersistedPassedProfileIds] = useState<string[]>([]);
+    const [persistedPassedProfileMap, setPersistedPassedProfileMap] = useState<PersistedPassedProfilesMap>({});
     const [isReviewingPassedProfiles, setIsReviewingPassedProfiles] = useState(false);
 
   // Fetch real potential matches from backend
@@ -67,19 +98,17 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
 
     useEffect(() => {
         if (!passedProfilesStorageKey) {
-            setPersistedPassedProfileIds([]);
+            setPersistedPassedProfileMap({});
             return;
         }
 
         try {
             const raw = localStorage.getItem(passedProfilesStorageKey);
-            const parsed = raw ? JSON.parse(raw) : [];
-            const items = Array.isArray(parsed)
-                ? parsed.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-                : [];
-            setPersistedPassedProfileIds(items);
+            const normalized = pruneExpiredPassedProfiles(normalizePassedProfilesMap(raw));
+            localStorage.setItem(passedProfilesStorageKey, JSON.stringify(normalized));
+            setPersistedPassedProfileMap(normalized);
         } catch {
-            setPersistedPassedProfileIds([]);
+            setPersistedPassedProfileMap({});
         }
     }, [passedProfilesStorageKey]);
 
@@ -87,7 +116,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
         const hasValidId = (p: User) => p && (p.id || (p as any)._id);
         const hasDisplayName = (p: User) => typeof p.name === 'string' && p.name.trim().length > 0;
         const currentUserId = currentUserData?.id ? String(currentUserData.id) : null;
-        const passedIdSet = new Set(persistedPassedProfileIds);
+        const recentPassedIdSet = new Set(Object.keys(persistedPassedProfileMap));
 
         const sourceProfiles =
             filteredProfiles !== null
@@ -104,12 +133,10 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
             return baseProfiles;
         }
 
-        const unpassedProfiles = baseProfiles.filter(
-            (profile) => !passedIdSet.has(String(profile.id || (profile as any)._id))
+        return baseProfiles.filter(
+            (profile) => !recentPassedIdSet.has(String(profile.id || (profile as any)._id))
         );
-
-        return unpassedProfiles.length > 0 ? unpassedProfiles : baseProfiles;
-    }, [profiles, filteredProfiles, currentUserData?.id, isReviewingPassedProfiles, persistedPassedProfileIds]);
+    }, [profiles, filteredProfiles, currentUserData?.id, isReviewingPassedProfiles, persistedPassedProfileMap]);
 
     const {
       queue: profileQueue,
@@ -281,9 +308,9 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
         setIsReviewingPassedProfiles(true);
 
         if (passedProfiles.length > 0) {
-          showInfo(`Reviewing ${passedProfiles.length} passed profile${passedProfiles.length > 1 ? 's' : ''}.`);
+          showInfo(`Reviewing ${passedProfiles.length} skipped profile${passedProfiles.length > 1 ? 's' : ''}.`);
         } else {
-          showInfo('You have no passed profiles to review right now.');
+          showInfo('You have no skipped profiles to review right now.');
         }
       } catch (error) {
         console.error('Failed to load passed profiles:', error);
@@ -305,22 +332,16 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
 
     if (passedProfilesStorageKey) {
       try {
-        const existingRaw = localStorage.getItem(passedProfilesStorageKey);
-        const existingParsed = existingRaw ? JSON.parse(existingRaw) : [];
-        const existingPassedProfileIds = Array.isArray(existingParsed)
-          ? existingParsed.filter(
-              (value): value is string =>
-                typeof value === 'string' && value.trim().length > 0
-            )
-          : [];
-        const nextPersistedPassedProfileIds = existingPassedProfileIds.filter(
-          (value) => value !== key
+        const existingPassedProfileMap = pruneExpiredPassedProfiles(
+          normalizePassedProfilesMap(localStorage.getItem(passedProfilesStorageKey))
         );
+        const nextPersistedPassedProfileMap = { ...existingPassedProfileMap };
+        delete nextPersistedPassedProfileMap[key];
         localStorage.setItem(
           passedProfilesStorageKey,
-          JSON.stringify(nextPersistedPassedProfileIds)
+          JSON.stringify(nextPersistedPassedProfileMap)
         );
-        setPersistedPassedProfileIds(nextPersistedPassedProfileIds);
+        setPersistedPassedProfileMap(nextPersistedPassedProfileMap);
       } catch {
         // Ignore localStorage access errors.
       }
@@ -362,21 +383,18 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const key = String(userIdToPass);
     if (passedProfilesStorageKey) {
       try {
-        const existingRaw = localStorage.getItem(passedProfilesStorageKey);
-        const existingParsed = existingRaw ? JSON.parse(existingRaw) : [];
-        const existingPassedProfileIds = Array.isArray(existingParsed)
-          ? existingParsed.filter(
-              (value): value is string =>
-                typeof value === 'string' && value.trim().length > 0
-            )
-          : [];
-        const nextPersistedPassedProfileIds = Array.from(
-          new Set([...existingPassedProfileIds, key])
-        ).slice(-500);
+        const existingPassedProfileMap = pruneExpiredPassedProfiles(
+          normalizePassedProfilesMap(localStorage.getItem(passedProfilesStorageKey))
+        );
+        const nextPersistedPassedProfileMap = {
+          ...existingPassedProfileMap,
+          [key]: Date.now(),
+        };
         localStorage.setItem(
           passedProfilesStorageKey,
-          JSON.stringify(nextPersistedPassedProfileIds)
+          JSON.stringify(nextPersistedPassedProfileMap)
         );
+        setPersistedPassedProfileMap(nextPersistedPassedProfileMap);
       } catch {
         // Ignore localStorage access errors.
       }
@@ -518,15 +536,15 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
                         onGoBack={handleGoBack}
                         onLike={handleLike}
                         onPass={handlePass}
-                        noProfilesTitle={isReviewingPassedProfiles ? "No passed profiles to review" : "No new matches yet"}
+                        noProfilesTitle={isReviewingPassedProfiles ? "No skipped profiles to review" : "No new matches yet"}
                         noProfilesDescription={
                           isReviewingPassedProfiles
-                            ? "You have no passed profiles available to review right now. Go back to the fresh feed anytime."
+                            ? "You have no skipped profiles available to review right now. Go back to the fresh feed anytime."
                             : "You have liked or passed everyone available for now. Tap reload and we will fetch fresh profiles instantly."
                         }
                         noProfilesActionLabel={isReviewingPassedProfiles ? "Back to Fresh Feed" : "Reload Profiles"}
                         onNoProfilesAction={handleNoProfilesAction}
-                        noProfilesSecondaryActionLabel={isReviewingPassedProfiles ? undefined : "Review Passed Profiles"}
+                        noProfilesSecondaryActionLabel={isReviewingPassedProfiles ? undefined : "Review Skipped Profiles"}
                         onNoProfilesSecondaryAction={isReviewingPassedProfiles ? undefined : handleReviewPassedProfiles}
                         onOpenFilterSection={openFiltersToSection}
                     />
@@ -564,15 +582,15 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
                         onGoBack={handleGoBack}
                         onLike={handleLike}
                         onPass={handlePass}
-                        noProfilesTitle={isReviewingPassedProfiles ? "No passed profiles to review" : "No new matches yet"}
+                        noProfilesTitle={isReviewingPassedProfiles ? "No skipped profiles to review" : "No new matches yet"}
                         noProfilesDescription={
                           isReviewingPassedProfiles
-                            ? "You have no passed profiles available to review right now. Go back to the fresh feed anytime."
+                            ? "You have no skipped profiles available to review right now. Go back to the fresh feed anytime."
                             : "You have liked or passed everyone available for now. Tap reload and we will fetch fresh profiles instantly."
                         }
                         noProfilesActionLabel={isReviewingPassedProfiles ? "Back to Fresh Feed" : "Reload Profiles"}
                         onNoProfilesAction={handleNoProfilesAction}
-                        noProfilesSecondaryActionLabel={isReviewingPassedProfiles ? undefined : "Review Passed Profiles"}
+                        noProfilesSecondaryActionLabel={isReviewingPassedProfiles ? undefined : "Review Skipped Profiles"}
                         onNoProfilesSecondaryAction={isReviewingPassedProfiles ? undefined : handleReviewPassedProfiles}
                         onOpenFilterSection={openFiltersToSection}
                     />
