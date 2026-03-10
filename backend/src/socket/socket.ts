@@ -203,6 +203,11 @@ interface UserPresencePayload {
     lastSeenAt?: string;
 }
 
+type CallAccessProfile = {
+    subscriptionStatus?: string;
+    subscriptionTier?: string;
+};
+
 // Map to store connected users and their socket IDs (for direct messaging/notifications)
 // In a production environment, this should be a distributed cache like Redis
 const usersSocketMap = new Map<string, Set<string>>();
@@ -271,6 +276,23 @@ const buildPresenceForUsers = async (userIds: string[]): Promise<UserPresencePay
             lastSeenAt: online ? new Date().toISOString() : persistedLastSeen,
         };
     });
+};
+
+const hasPremiumCallAccess = (user: CallAccessProfile | null | undefined): boolean => {
+    return user?.subscriptionStatus === 'active'
+        && ['premium', 'elite'].includes(String(user.subscriptionTier || '').toLowerCase());
+};
+
+const getUserCallAccessProfile = async (userId: string): Promise<CallAccessProfile | null> => {
+    try {
+        const snapshot = await db.collection('users').doc(userId).get();
+        if (!snapshot.exists) return null;
+        const data = snapshot.data() as CallAccessProfile | undefined;
+        return data || null;
+    } catch (error) {
+        console.error(`Failed to resolve call access for user ${userId}:`, error);
+        return null;
+    }
 };
 
 // This function is called from server.ts to start listening for connections
@@ -532,7 +554,7 @@ export const initializeSocketIO = (io: Server) => {
             }
         );
 
-        socket.on('call:offer', (payload: unknown) => {
+        socket.on('call:offer', async (payload: unknown) => {
             const data = sanitizeRecord(payload);
             if (!data) {
                 return socket.emit('error', 'Invalid call offer payload.');
@@ -544,6 +566,27 @@ export const initializeSocketIO = (io: Server) => {
             const matchId = sanitizeOptionalString(data.matchId);
             if (!targetUserId || !callType || !sdp) {
                 return socket.emit('error', 'Invalid call offer payload.');
+            }
+
+            const [callerProfile, targetProfile] = await Promise.all([
+                getUserCallAccessProfile(userId),
+                getUserCallAccessProfile(targetUserId),
+            ]);
+
+            if (!hasPremiumCallAccess(callerProfile)) {
+                return io.to(userId).emit('call:reject', {
+                    fromUserId: targetUserId,
+                    matchId,
+                    reason: 'premium-required',
+                });
+            }
+
+            if (!hasPremiumCallAccess(targetProfile)) {
+                return io.to(userId).emit('call:reject', {
+                    fromUserId: targetUserId,
+                    matchId,
+                    reason: 'premium-required',
+                });
             }
 
             if (!isUserOnlineInMemory(targetUserId)) {
@@ -576,7 +619,7 @@ export const initializeSocketIO = (io: Server) => {
             });
         });
 
-        socket.on('call:answer', (payload: unknown) => {
+        socket.on('call:answer', async (payload: unknown) => {
             const data = sanitizeRecord(payload);
             if (!data) {
                 return socket.emit('error', 'Invalid call answer payload.');
@@ -587,6 +630,19 @@ export const initializeSocketIO = (io: Server) => {
             const sdp = sanitizeRecord(data.sdp);
             if (!targetUserId || !callType || !sdp) {
                 return socket.emit('error', 'Invalid call answer payload.');
+            }
+
+            const [answeringProfile, targetProfile] = await Promise.all([
+                getUserCallAccessProfile(userId),
+                getUserCallAccessProfile(targetUserId),
+            ]);
+
+            if (!hasPremiumCallAccess(answeringProfile) || !hasPremiumCallAccess(targetProfile)) {
+                return io.to(userId).emit('call:reject', {
+                    fromUserId: targetUserId,
+                    matchId: sanitizeOptionalString(data.matchId),
+                    reason: 'premium-required',
+                });
             }
 
             io.to(targetUserId).emit('call:answer', {
