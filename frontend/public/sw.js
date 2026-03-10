@@ -1,4 +1,4 @@
-const CACHE_NAME = 'faithbliss-pwa-v1';
+const CACHE_NAME = 'faithbliss-pwa-v2';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -59,7 +59,25 @@ self.addEventListener('fetch', (event) => {
 
   if (!isStaticAsset) return;
 
-  // Stale-while-revalidate for static assets.
+  const isCodeAsset = /\.(?:js|css)$/i.test(url.pathname);
+
+  if (isCodeAsset) {
+    // Network-first for code assets so new deployments win on the first load.
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
+          }
+          return response;
+        })
+        .catch(async () => caches.match(request))
+    );
+    return;
+  }
+
+  // Stale-while-revalidate for media and other static assets.
   event.respondWith(
     caches.match(request).then((cached) => {
       const networkFetch = fetch(request)
