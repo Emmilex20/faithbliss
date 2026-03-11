@@ -9,6 +9,7 @@ interface CountryCodeSelectProps {
   onPhoneChange: (phone: string) => void;
 }
 
+
 const getFlag = (countryCode: string) =>
   countryCode
     .toUpperCase()
