@@ -20,8 +20,18 @@ type EditableUser = {
   isActive: boolean;
 };
 
-type EditableSource = Partial<Omit<EditableUser, 'id'>> & {
+type EditableSource = {
   id: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  age?: number;
+  gender?: string;
+  location?: string;
+  bio?: string;
+  denomination?: string;
+  onboardingCompleted?: boolean;
+  isActive?: boolean;
   subscriptionStatus?: string;
 };
 
