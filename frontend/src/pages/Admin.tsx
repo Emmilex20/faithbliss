@@ -6,22 +6,29 @@ import { API, type AdminUpdateUserPayload } from '@/services/api';
 import { useToast } from '@/contexts/ToastContext';
 import type { User } from '@/types/User';
 
-type EditableUser = Pick<
-  User,
-  | 'id'
-  | 'name'
-  | 'email'
-  | 'role'
-  | 'age'
-  | 'gender'
-  | 'location'
-  | 'bio'
-  | 'denomination'
-  | 'onboardingCompleted'
-  | 'isActive'
->;
+type EditableUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: 'user' | 'admin' | string;
+  age: number;
+  gender: 'MALE' | 'FEMALE';
+  location: string;
+  bio: string;
+  denomination: string;
+  onboardingCompleted: boolean;
+  isActive: boolean;
+};
 
-type EditableSource = EditableUser & Partial<Pick<User, 'subscriptionStatus'>>;
+type EditableSource = Partial<Omit<EditableUser, 'id'>> & {
+  id: string;
+  subscriptionStatus?: string;
+};
+
+const normalizeEditableGender = (value: unknown): 'MALE' | 'FEMALE' => {
+  const normalized = typeof value === 'string' ? value.trim().toUpperCase() : '';
+  return normalized === 'FEMALE' ? 'FEMALE' : 'MALE';
+};
 
 const toEditableUser = (user: EditableSource): EditableUser => ({
   id: user.id,
@@ -29,10 +36,10 @@ const toEditableUser = (user: EditableSource): EditableUser => ({
   email: user.email || '',
   role: (user.role || 'user') as 'user' | 'admin' | string,
   age: typeof user.age === 'number' ? user.age : 18,
-  gender: user.gender || 'MALE',
+  gender: normalizeEditableGender(user.gender),
   location: user.location || '',
   bio: user.bio || '',
-  denomination: user.denomination || '',
+  denomination: typeof user.denomination === 'string' ? user.denomination : '',
   onboardingCompleted: Boolean(user.onboardingCompleted),
   isActive: user.isActive !== false,
 });
@@ -429,7 +436,7 @@ const AdminPage = () => {
               </label>
               <label className="space-y-2">
                 <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Gender</span>
-                <select value={editingUser.gender} onChange={(e) => updateEditingField('gender', e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none">
+                <select value={editingUser.gender} onChange={(e) => updateEditingField('gender', normalizeEditableGender(e.target.value))} className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none">
                   <option value="MALE">MALE</option>
                   <option value="FEMALE">FEMALE</option>
                 </select>
