@@ -1,7 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type { ConversationMessagesResponse } from '@/hooks/useAPI';
-import type { GetUsersResponse, UpdateProfileDto, User } from '@/services/api';
+import type {
+  AdminResetPasswordResponse,
+  AdminUpdateUserPayload,
+  AdminUpdateUserResponse,
+  GetUsersResponse,
+  UpdateProfileDto,
+  UpdateUserRoleResponse,
+  User,
+} from '@/services/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -123,6 +131,34 @@ export const getApiClient = (accessToken: string | null) => ({
         accessToken
       );
     },
+
+    updateUserRole: (userId: string, role: 'user' | 'admin') =>
+      apiClientRequest<UpdateUserRoleResponse>(
+        `/api/users/${userId}/role`,
+        { method: 'PATCH', body: JSON.stringify({ role }) },
+        accessToken
+      ),
+
+    adminUpdateUser: (userId: string, payload: AdminUpdateUserPayload) =>
+      apiClientRequest<AdminUpdateUserResponse>(
+        `/api/users/${userId}`,
+        { method: 'PATCH', body: JSON.stringify(payload) },
+        accessToken
+      ),
+
+    adminResetPassword: (userId: string) =>
+      apiClientRequest<AdminResetPasswordResponse>(
+        `/api/users/${userId}/reset-password`,
+        { method: 'POST' },
+        accessToken
+      ),
+
+    adminDeleteUser: (userId: string) =>
+      apiClientRequest<{ message: string }>(
+        `/api/users/${userId}`,
+        { method: 'DELETE' },
+        accessToken
+      ),
   },
 
   Message: {

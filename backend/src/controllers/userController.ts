@@ -1,211 +1,215 @@
-// src/controllers/userController.ts (FIRESTORE REWRITE)
-
-import { Request, Response } from 'express'; 
-import { db, usersCollection } from '../config/firebase-admin'; // Firestore Import
-import * as admin from 'firebase-admin'; // Admin SDK for types
+import { Request, Response } from 'express';
+import * as admin from 'firebase-admin';
+import { db, usersCollection } from '../config/firebase-admin';
 import { countProfilePhotos } from '../utils/profilePhotos';
 
-// Interface for the Firestore Profile
 interface IFirestoreUser {
-    // Note: The Firestore document ID is the Firebase UID
-    name: string;
-    email: string;
-    profilePhoto1: string;
-    profilePhoto2?: string;
-    profilePhoto3?: string;
-    profilePhoto4?: string;
-    profilePhoto5?: string;
-    profilePhoto6?: string;
-    profilePhotoCount?: number;
-    onboardingCompleted: boolean;
-    age: number;
-    gender: string;
-    location: string;
-    bio: string;
-    denomination: string;
-    likes?: string[];
-    matches?: string[];
-    profileFits?: string[];
-    // ... all other fields
+  name: string;
+  email: string;
+  role?: string;
+  profilePhoto1: string;
+  profilePhoto2?: string;
+  profilePhoto3?: string;
+  profilePhoto4?: string;
+  profilePhoto5?: string;
+  profilePhoto6?: string;
+  profilePhotoCount?: number;
+  onboardingCompleted: boolean;
+  age: number;
+  gender: string;
+  location: string;
+  bio: string;
+  denomination: string;
+  isActive?: boolean;
+  likes?: string[];
+  matches?: string[];
+  profileFits?: string[];
+  subscriptionStatus?: string;
 }
 
-// Extend Request type to include the Firebase UID
 interface CustomRequest extends Request {
-    userId?: string; // Populated by the Firebase Auth Middleware (Firebase UID)
+  userId?: string;
 }
 
-// Helper to determine if an error has a message property
+const PRIMARY_ADMIN_EMAIL = 'aginaemmanuel6@gmail.com';
+
 function isErrorWithMessage(error: unknown): error is { message: string } {
-    return (
-        typeof error === 'object' && 
-        error !== null && 
-        'message' in error && 
-        typeof (error as { message: unknown }).message === 'string'
-    );
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof (error as { message: unknown }).message === 'string'
+  );
 }
 
-// Helper to fetch the current user's profile from Firestore
-const fetchUserProfile = async (firebaseUid: string, res: Response): Promise<(IFirestoreUser & { firebaseUid: string }) | null> => {
-    try {
-        const userDoc = await usersCollection.doc(firebaseUid).get();
-        
-        if (!userDoc.exists) {
-            res.status(404).json({ message: 'User profile not found in Firestore. Please complete profile creation.' });
-            return null;
-        }
+const getEffectiveRole = (user: IFirestoreUser | null | undefined): string => {
+  const email = typeof user?.email === 'string' ? user.email.trim().toLowerCase() : '';
+  if (email === PRIMARY_ADMIN_EMAIL) return 'admin';
 
-        // Return data combined with the Firestore document ID (which is the Firebase UID)
-        return { ...userDoc.data() as IFirestoreUser, firebaseUid: userDoc.id };
+  const role = typeof user?.role === 'string' ? user.role.trim().toLowerCase() : '';
+  return role || 'user';
+};
 
-    } catch (error) {
-        const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
-        console.error('Firestore fetch error:', error);
-        res.status(500).json({ message: `Server Error fetching user profile: ${errorMessage}` });
-        return null;
+const isAdminUser = (user: IFirestoreUser | null | undefined): boolean =>
+  getEffectiveRole(user) === 'admin';
+
+const fetchUserProfile = async (
+  firebaseUid: string,
+  res: Response
+): Promise<(IFirestoreUser & { firebaseUid: string }) | null> => {
+  try {
+    const userDoc = await usersCollection.doc(firebaseUid).get();
+
+    if (!userDoc.exists) {
+      res.status(404).json({
+        message: 'User profile not found in Firestore. Please complete profile creation.',
+      });
+      return null;
     }
-}
 
+    return { ...(userDoc.data() as IFirestoreUser), firebaseUid: userDoc.id };
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Firestore fetch error:', error);
+    res.status(500).json({ message: `Server Error fetching user profile: ${errorMessage}` });
+    return null;
+  }
+};
 
-/**
- * @route GET /users/me
- * @desc Get the profile data of the currently authenticated user
- * @access Private
- */
+const requireAdmin = async (
+  firebaseUid: string | undefined,
+  res: Response
+): Promise<(IFirestoreUser & { firebaseUid: string }) | null> => {
+  if (!firebaseUid) {
+    res.status(401).json({ message: 'Unauthorized: Missing user context.' });
+    return null;
+  }
+
+  const currentUser = await fetchUserProfile(firebaseUid, res);
+  if (!currentUser) return null;
+
+  if (!isAdminUser(currentUser)) {
+    res.status(403).json({ message: 'Admin access required.' });
+    return null;
+  }
+
+  return currentUser;
+};
+
 const getMe = async (req: CustomRequest, res: Response) => {
-    const firebaseUid = req.userId;
+  const firebaseUid = req.userId;
 
-    if (!firebaseUid) {
-        return res.status(401).json({ message: 'Authentication required: Firebase UID missing.' });
-    }
+  if (!firebaseUid) {
+    return res.status(401).json({ message: 'Authentication required: Firebase UID missing.' });
+  }
 
-    const user = await fetchUserProfile(firebaseUid, res);
-    if (!user) return; // Response handled by helper
+  const user = await fetchUserProfile(firebaseUid, res);
+  if (!user) return;
 
-    // 3. Return full profile data so edits persist on reload
-    const { firebaseUid: uid, ...userData } = user as any;
-    return res.status(200).json({
-        id: uid,
-        firebaseUid: uid,
-        ...userData,
-        profilePhotoCount: countProfilePhotos(userData),
-    });
+  const { firebaseUid: uid, ...userData } = user as IFirestoreUser & { firebaseUid: string };
+  return res.status(200).json({
+    id: uid,
+    firebaseUid: uid,
+    ...userData,
+    role: getEffectiveRole(userData),
+    profilePhotoCount: countProfilePhotos(userData),
+  });
 };
 
-/**
- * @route GET /users/:id
- * @desc Get a single user's profile data by ID (for profile view)
- * @access Private
- * NOTE: Since we are using Firestore, the ID in the route param should be the Firebase UID.
- */
 const getUserById = async (req: CustomRequest, res: Response) => {
-    // The ID here must be the Firebase UID (the Firestore document ID)
-    const userId = req.params.id; 
+  const userId = req.params.id;
 
-    if (!userId || typeof userId !== 'string') {
-        return res.status(400).json({ message: 'Invalid user ID format (must be Firebase UID).' });
-    }
+  if (!userId || typeof userId !== 'string') {
+    return res.status(400).json({ message: 'Invalid user ID format (must be Firebase UID).' });
+  }
 
-    try {
-        // Fetch by Firebase UID (Document ID)
-        const userDoc = await usersCollection.doc(userId).get();
-        
-        if (!userDoc.exists) {
-            return res.status(404).json({ message: 'User not found.' });
-        }
-        
-        const user = userDoc.data() as IFirestoreUser;
+  try {
+    const userDoc = await usersCollection.doc(userId).get();
 
-        // Return only necessary profile fields
-        return res.status(200).json({
-            id: userDoc.id, 
-            name: user.name,
-            profilePhoto1: user.profilePhoto1,
-            profilePhotoCount: countProfilePhotos(user),
-            age: user.age,
-            gender: user.gender,
-            location: user.location,
-            bio: user.bio,
-            denomination: user.denomination,
-            profileFits: Array.isArray(user.profileFits) ? user.profileFits : [],
-        });
+    if (!userDoc.exists) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
 
-    } catch (error) {
-        const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
-        console.error('Error fetching user by ID:', error);
-        return res.status(500).json({ message: `Failed to retrieve user profile: ${errorMessage}` });
-    }
+    const user = userDoc.data() as IFirestoreUser;
+
+    return res.status(200).json({
+      id: userDoc.id,
+      name: user.name,
+      role: getEffectiveRole(user),
+      profilePhoto1: user.profilePhoto1,
+      profilePhotoCount: countProfilePhotos(user),
+      age: user.age,
+      gender: user.gender,
+      location: user.location,
+      bio: user.bio,
+      denomination: user.denomination,
+      profileFits: Array.isArray(user.profileFits) ? user.profileFits : [],
+    });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error fetching user by ID:', error);
+    return res.status(500).json({ message: `Failed to retrieve user profile: ${errorMessage}` });
+  }
 };
 
-
-/**
- * @route GET /users
- * @desc Get a paginated list of all users
- * @access Private
- */
 const getAllUsers = async (req: CustomRequest, res: Response) => {
-    const firebaseUid = req.userId;
+  const firebaseUid = req.userId;
+  const currentUser = await requireAdmin(firebaseUid, res);
+  if (!currentUser) return;
 
-    if (!firebaseUid) {
-        return res.status(401).json({ message: 'Unauthorized: Missing user context.' });
-    }
-    
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const skip = (page - 1) * limit;
-    
-    try {
-        // Firestore doesn't have a built-in total count for a query, 
-        // and pagination requires starting/ending cursors for large sets.
-        // We'll use a simple offset/limit which is okay for small collections.
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+  const skip = (page - 1) * limit;
+  const search = typeof req.query.search === 'string' ? req.query.search.trim().toLowerCase() : '';
 
-        const snapshot = await usersCollection
-            .where('onboardingCompleted', '==', true) 
-            .limit(limit)
-            .offset(skip)
-            .get();
-        
-        // Count documents for pagination (Inefficient in Firestore, but required for the UX)
-        // NOTE: A real-world app would use a counter document for scalability.
-        const totalDocumentsSnapshot = await usersCollection
-            .where('onboardingCompleted', '==', true)
-            .get();
-        const totalDocuments = totalDocumentsSnapshot.size;
+  try {
+    const snapshot = await usersCollection.get();
+    const filteredUsers = snapshot.docs
+      .map((doc) => ({ ...(doc.data() as IFirestoreUser), id: doc.id }))
+      .filter((user) => user.id !== firebaseUid)
+      .filter((user) => {
+        if (!search) return true;
+        const name = typeof user.name === 'string' ? user.name.toLowerCase() : '';
+        const email = typeof user.email === 'string' ? user.email.toLowerCase() : '';
+        const location = typeof user.location === 'string' ? user.location.toLowerCase() : '';
+        return name.includes(search) || email.includes(search) || location.includes(search);
+      });
 
-        const totalPages = Math.ceil(totalDocuments / limit);
+    const total = filteredUsers.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const users = filteredUsers.slice(skip, skip + limit);
 
-        // Filter out the current user in memory (since Firestore lacks a NOT IN query against itself)
-        const users = snapshot.docs
-            .map(doc => ({ ...doc.data() as IFirestoreUser, id: doc.id }))
-            .filter(user => user.id !== firebaseUid);
-            
-        
-        return res.status(200).json({
-            users: users.map(user => ({
-                id: user.id,
-                name: user.name,
-                profilePhoto1: user.profilePhoto1,
-                profilePhotoCount: countProfilePhotos(user),
-                age: user.age,
-                gender: user.gender,
-                location: user.location,
-                bio: user.bio,
-                denomination: user.denomination,
-            })),
-            totalPages: totalPages,
-            currentPage: page,
-        });
-
-    } catch (error) {
-        const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
-        console.error('Error fetching users:', error);
-        return res.status(500).json({ message: `Failed to retrieve user list: ${errorMessage}` });
-    }
+    return res.status(200).json({
+      users: users.map((user) => ({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: getEffectiveRole(user),
+        profilePhoto1: user.profilePhoto1,
+        profilePhotoCount: countProfilePhotos(user),
+        onboardingCompleted: user.onboardingCompleted,
+        subscriptionStatus: user.subscriptionStatus,
+        isActive: user.isActive !== false,
+        age: user.age,
+        gender: user.gender,
+        location: user.location,
+        bio: user.bio,
+        denomination: user.denomination,
+      })),
+      total,
+      totalPages,
+      currentPage: page,
+    });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error fetching users:', error);
+    return res.status(500).json({ message: `Failed to retrieve user list: ${errorMessage}` });
+  }
 };
 
 const getOnboardingDebug = async (req: CustomRequest, res: Response) => {
-  const targetUid = typeof req.params.id === 'string' && req.params.id.trim()
-    ? req.params.id.trim()
-    : req.userId;
+  const targetUid =
+    typeof req.params.id === 'string' && req.params.id.trim() ? req.params.id.trim() : req.userId;
 
   if (!targetUid) {
     return res.status(401).json({ message: 'Authentication required: Firebase UID missing.' });
@@ -229,13 +233,15 @@ const getOnboardingDebug = async (req: CustomRequest, res: Response) => {
   } catch (error) {
     const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
     console.error('Error fetching onboarding debug data:', error);
-    return res.status(500).json({ message: `Failed to retrieve onboarding debug data: ${errorMessage}` });
+    return res
+      .status(500)
+      .json({ message: `Failed to retrieve onboarding debug data: ${errorMessage}` });
   }
 };
 
 const updateUserProfile = async (req: Request, res: Response) => {
   try {
-    const uid = (req as any).userId; // from protect middleware
+    const uid = (req as CustomRequest).userId;
     if (!uid) return res.status(401).json({ message: 'Unauthorized' });
 
     const body = (req.body || {}) as Record<string, unknown>;
@@ -254,13 +260,12 @@ const updateUserProfile = async (req: Request, res: Response) => {
 
     const toStringArray = (value: unknown, maxItems = 20, maxLen = 60): string[] | undefined => {
       if (!Array.isArray(value)) return undefined;
-      const cleaned = value
+      return value
         .filter((item) => typeof item === 'string')
         .map((item) => (item as string).trim())
         .filter(Boolean)
         .slice(0, maxItems)
         .map((item) => item.slice(0, maxLen));
-      return cleaned;
     };
 
     const toProfileFits = (value: unknown): string[] | undefined => {
@@ -282,7 +287,10 @@ const updateUserProfile = async (req: Request, res: Response) => {
     const age = toBoundedNumber(body.age, 18, 99);
     if (age !== undefined) normalizedUpdates.age = Math.round(age);
 
-    const faithJourney = allowedEnum(body.faithJourney, ['GROWING', 'ROOTED', 'EXPLORING', 'PASSIONATE'] as const);
+    const faithJourney = allowedEnum(
+      body.faithJourney,
+      ['GROWING', 'ROOTED', 'EXPLORING', 'PASSIONATE'] as const
+    );
     if (faithJourney) normalizedUpdates.faithJourney = faithJourney;
 
     const churchAttendance = allowedEnum(
@@ -390,26 +398,25 @@ const updateUserProfile = async (req: Request, res: Response) => {
     }
 
     const userRef = db.collection('users').doc(uid);
-
     await userRef.set(normalizedUpdates, { merge: true });
 
     const updatedDoc = await userRef.get();
     const updatedData = updatedDoc.data();
 
-    res.status(200).json({
+    return res.status(200).json({
       message: 'Profile updated successfully',
       user: updatedData,
     });
-  } catch (error: any) {
-    console.error('🔥 Error updating profile:', error);
-    res.status(500).json({ message: error.message });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error updating profile:', error);
+    return res.status(500).json({ message: errorMessage });
   }
 };
 
-
 const updateUserSettings = async (req: Request, res: Response) => {
   try {
-    const uid = (req as any).userId;
+    const uid = (req as CustomRequest).userId;
     if (!uid) return res.status(401).json({ message: 'Unauthorized' });
 
     const settings = req.body || {};
@@ -424,15 +431,246 @@ const updateUserSettings = async (req: Request, res: Response) => {
     );
 
     return res.status(200).json({ message: 'Settings updated successfully.' });
-  } catch (error: any) {
-    console.error('?? Error updating settings:', error);
-    return res.status(500).json({ message: error.message });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error updating settings:', error);
+    return res.status(500).json({ message: errorMessage });
+  }
+};
+
+const updateUserRole = async (req: CustomRequest, res: Response) => {
+  const firebaseUid = req.userId;
+  const currentUser = await requireAdmin(firebaseUid, res);
+  if (!currentUser) return;
+
+  const targetUserId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+  const nextRole = typeof req.body?.role === 'string' ? req.body.role.trim().toLowerCase() : '';
+
+  if (!targetUserId) {
+    return res.status(400).json({ message: 'Target user ID is required.' });
+  }
+
+  if (!['user', 'admin'].includes(nextRole)) {
+    return res.status(400).json({ message: 'Role must be either user or admin.' });
+  }
+
+  try {
+    const targetUserRef = usersCollection.doc(targetUserId);
+    const targetUserDoc = await targetUserRef.get();
+    if (!targetUserDoc.exists) {
+      return res.status(404).json({ message: 'Target user not found.' });
+    }
+
+    await targetUserRef.set(
+      {
+        role: nextRole,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    const updatedUser = targetUserDoc.data() as IFirestoreUser;
+    return res.status(200).json({
+      message: `User role updated to ${nextRole}.`,
+      user: {
+        id: targetUserId,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        role: nextRole,
+      },
+    });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error updating user role:', error);
+    return res.status(500).json({ message: `Failed to update user role: ${errorMessage}` });
+  }
+};
+
+const updateUserByAdmin = async (req: CustomRequest, res: Response) => {
+  const firebaseUid = req.userId;
+  const currentUser = await requireAdmin(firebaseUid, res);
+  if (!currentUser) return;
+
+  const targetUserId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+  if (!targetUserId) {
+    return res.status(400).json({ message: 'Target user ID is required.' });
+  }
+
+  const body = (req.body || {}) as Record<string, unknown>;
+  const targetUserRef = usersCollection.doc(targetUserId);
+
+  try {
+    const targetDoc = await targetUserRef.get();
+    if (!targetDoc.exists) {
+      return res.status(404).json({ message: 'Target user not found.' });
+    }
+
+    const targetUser = targetDoc.data() as IFirestoreUser;
+    const updates: Record<string, unknown> = {};
+
+    const toTrimmedString = (value: unknown, maxLen: number): string | undefined => {
+      if (typeof value !== 'string') return undefined;
+      const trimmed = value.trim();
+      if (!trimmed) return undefined;
+      return trimmed.slice(0, maxLen);
+    };
+
+    const toBoundedNumber = (value: unknown, min: number, max: number): number | undefined => {
+      if (typeof value !== 'number' || Number.isNaN(value)) return undefined;
+      return Math.max(min, Math.min(max, Math.round(value)));
+    };
+
+    const nextName = toTrimmedString(body.name, 120);
+    if (nextName !== undefined) updates.name = nextName;
+
+    const nextEmail = toTrimmedString(body.email, 200)?.toLowerCase();
+    if (nextEmail !== undefined && nextEmail !== targetUser.email) {
+      updates.email = nextEmail;
+      await admin.auth().updateUser(targetUserId, { email: nextEmail });
+    }
+
+    const nextLocation = toTrimmedString(body.location, 160);
+    if (nextLocation !== undefined) updates.location = nextLocation;
+
+    const nextBio = toTrimmedString(body.bio, 500);
+    if (nextBio !== undefined) updates.bio = nextBio;
+
+    const nextDenomination = toTrimmedString(body.denomination, 80);
+    if (nextDenomination !== undefined) updates.denomination = nextDenomination;
+
+    const nextGender = toTrimmedString(body.gender, 20);
+    if (nextGender !== undefined) updates.gender = nextGender;
+
+    const nextAge = toBoundedNumber(body.age, 18, 99);
+    if (nextAge !== undefined) updates.age = nextAge;
+
+    if (typeof body.onboardingCompleted === 'boolean') {
+      updates.onboardingCompleted = body.onboardingCompleted;
+    }
+
+    if (typeof body.isActive === 'boolean') {
+      updates.isActive = body.isActive;
+    }
+
+    const nextRole = typeof body.role === 'string' ? body.role.trim().toLowerCase() : '';
+    if (nextRole) {
+      if (!['user', 'admin'].includes(nextRole)) {
+        return res.status(400).json({ message: 'Role must be either user or admin.' });
+      }
+      updates.role = nextRole;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: 'No valid fields provided for update.' });
+    }
+
+    updates.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+    await targetUserRef.set(updates, { merge: true });
+
+    const updatedDoc = await targetUserRef.get();
+    const updatedUser = updatedDoc.data() as IFirestoreUser;
+
+    return res.status(200).json({
+      message: 'User updated successfully.',
+      user: {
+        id: updatedDoc.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: getEffectiveRole(updatedUser),
+        age: updatedUser.age,
+        gender: updatedUser.gender,
+        location: updatedUser.location,
+        bio: updatedUser.bio,
+        denomination: updatedUser.denomination,
+        onboardingCompleted: updatedUser.onboardingCompleted,
+        isActive: updatedUser.isActive !== false,
+        subscriptionStatus: updatedUser.subscriptionStatus,
+      },
+    });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error updating user by admin:', error);
+    return res.status(500).json({ message: `Failed to update user: ${errorMessage}` });
+  }
+};
+
+const resetUserPasswordByAdmin = async (req: CustomRequest, res: Response) => {
+  const firebaseUid = req.userId;
+  const currentUser = await requireAdmin(firebaseUid, res);
+  if (!currentUser) return;
+
+  const targetUserId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+  if (!targetUserId) {
+    return res.status(400).json({ message: 'Target user ID is required.' });
+  }
+
+  try {
+    const targetUserDoc = await usersCollection.doc(targetUserId).get();
+    if (!targetUserDoc.exists) {
+      return res.status(404).json({ message: 'Target user not found.' });
+    }
+
+    const targetUser = targetUserDoc.data() as IFirestoreUser;
+    if (!targetUser.email) {
+      return res.status(400).json({ message: 'Target user does not have an email address.' });
+    }
+
+    const resetLink = await admin.auth().generatePasswordResetLink(targetUser.email);
+
+    return res.status(200).json({
+      message: 'Password reset link generated successfully.',
+      resetLink,
+      user: {
+        id: targetUserId,
+        email: targetUser.email,
+        name: targetUser.name,
+      },
+    });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error generating password reset link:', error);
+    return res
+      .status(500)
+      .json({ message: `Failed to generate password reset link: ${errorMessage}` });
+  }
+};
+
+const deleteUserByAdmin = async (req: CustomRequest, res: Response) => {
+  const firebaseUid = req.userId;
+  const currentUser = await requireAdmin(firebaseUid, res);
+  if (!currentUser) return;
+
+  const targetUserId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+  if (!targetUserId) {
+    return res.status(400).json({ message: 'Target user ID is required.' });
+  }
+
+  if (targetUserId === firebaseUid) {
+    return res
+      .status(400)
+      .json({ message: 'You cannot delete your own admin account from the admin console.' });
+  }
+
+  try {
+    const targetUserDoc = await usersCollection.doc(targetUserId).get();
+    if (!targetUserDoc.exists) {
+      return res.status(404).json({ message: 'Target user not found.' });
+    }
+
+    await admin.auth().deleteUser(targetUserId);
+    await usersCollection.doc(targetUserId).delete();
+
+    return res.status(200).json({ message: 'User deleted successfully.' });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error deleting user by admin:', error);
+    return res.status(500).json({ message: `Failed to delete user: ${errorMessage}` });
   }
 };
 
 const deactivateAccount = async (req: Request, res: Response) => {
   try {
-    const uid = (req as any).userId;
+    const uid = (req as CustomRequest).userId;
     if (!uid) return res.status(401).json({ message: 'Unauthorized' });
 
     const userRef = db.collection('users').doc(uid);
@@ -445,15 +683,16 @@ const deactivateAccount = async (req: Request, res: Response) => {
     );
 
     return res.status(200).json({ message: 'Account deactivated successfully.' });
-  } catch (error: any) {
-    console.error('?? Error deactivating account:', error);
-    return res.status(500).json({ message: error.message });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error deactivating account:', error);
+    return res.status(500).json({ message: errorMessage });
   }
 };
 
 const reactivateAccount = async (req: Request, res: Response) => {
   try {
-    const uid = (req as any).userId;
+    const uid = (req as CustomRequest).userId;
     if (!uid) return res.status(401).json({ message: 'Unauthorized' });
 
     const userRef = db.collection('users').doc(uid);
@@ -466,15 +705,13 @@ const reactivateAccount = async (req: Request, res: Response) => {
     );
 
     return res.status(200).json({ message: 'Account reactivated successfully.' });
-  } catch (error: any) {
-    console.error('?? Error reactivating account:', error);
-    return res.status(500).json({ message: error.message });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error reactivating account:', error);
+    return res.status(500).json({ message: errorMessage });
   }
 };
 
-// ----------------------------------------
-// FINAL EXPORTS 
-// ----------------------------------------
 export {
   getMe,
   getUserById,
@@ -482,6 +719,10 @@ export {
   getOnboardingDebug,
   updateUserProfile,
   updateUserSettings,
+  updateUserRole,
+  updateUserByAdmin,
+  resetUserPasswordByAdmin,
+  deleteUserByAdmin,
   deactivateAccount,
   reactivateAccount,
 };

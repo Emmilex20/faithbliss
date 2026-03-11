@@ -7,6 +7,10 @@ import {
   getOnboardingDebug,
   updateUserProfile,
   updateUserSettings,
+  updateUserRole,
+  updateUserByAdmin,
+  resetUserPasswordByAdmin,
+  deleteUserByAdmin,
   deactivateAccount,
   reactivateAccount,
 } from '../controllers/userController';
@@ -23,6 +27,10 @@ router.put('/me', protect, updateUserProfile);
 
 // Update settings
 router.patch('/me/settings', protect, updateUserSettings);
+router.patch('/:id/role', protect, updateUserRole);
+router.patch('/:id', protect, updateUserByAdmin);
+router.post('/:id/reset-password', protect, resetUserPasswordByAdmin);
+router.delete('/:id', protect, deleteUserByAdmin);
 
 // Deactivate/reactivate account
 router.post('/me/deactivate', protect, deactivateAccount);

@@ -107,6 +107,19 @@ interface OnboardingData {
 
 const GOOGLE_REDIRECT_PENDING_KEY = "faithbliss_google_redirect_pending";
 const GOOGLE_REDIRECT_PENDING_PERSIST_KEY = "faithbliss_google_redirect_pending_persist";
+const PRIMARY_ADMIN_EMAIL = 'aginaemmanuel6@gmail.com';
+
+const resolveUserRole = (email: unknown, role: unknown): User['role'] => {
+    if (typeof email === 'string' && email.trim().toLowerCase() === PRIMARY_ADMIN_EMAIL) {
+        return 'admin';
+    }
+
+    if (typeof role === 'string' && role.trim()) {
+        return role;
+    }
+
+    return 'user';
+};
 
 const isFirebaseNetworkError = (error: unknown): boolean => {
     const candidates = [
@@ -411,6 +424,7 @@ const fetchUserDataFromFirestore = async (fbUser: FirebaseAuthUser): Promise<Use
         id: fbUser.uid, 
         email: fbUser.email!,
         name: backendData.name || 'User',
+        role: resolveUserRole(backendData.email || fbUser.email, backendData.role),
         onboardingCompleted: backendData.onboardingCompleted || false,
         
         // Core fields (must exist if registration completed)
@@ -490,6 +504,7 @@ const ensureUserProfile = async (fbUser: FirebaseAuthUser) => {
         await setDoc(userDocRef, {
             email: fbUser.email || "",
             name: fbUser.displayName || "New User",
+            role: resolveUserRole(fbUser.email, undefined),
             age: 0,
             gender: "MALE",
             denomination: "",
@@ -1083,6 +1098,7 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
             id: userId,
             email: data.email || "",
             name: data.name || "Unknown User",
+            role: resolveUserRole(data.email, data.role),
             onboardingCompleted: data.onboardingCompleted || false,
             age: data.age || 0,
             gender: data.gender || "MALE",

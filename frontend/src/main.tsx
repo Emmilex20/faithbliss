@@ -28,11 +28,12 @@ import Help from './pages/Help.tsx';
 import Report from './pages/Report.tsx';
 import Deactivate from './pages/Deactivate.tsx';
 import OnboardingDebug from './pages/OnboardingDebug.tsx';
+import Admin from './pages/Admin.tsx';
 
 // Import the Contexts and Gates
 import { ToastProvider } from './contexts/ToastContext.tsx';
 import { AuthProvider } from './contexts/AuthContext.tsx';
-import { AuthGate, PublicOnlyRoute } from './components/AuthGate.tsx';
+import { AdminRoute, AuthGate, PublicOnlyRoute } from './components/AuthGate.tsx';
 
 const isFirebaseNetworkFailure = (reason: unknown): boolean => {
   const candidates = [
@@ -122,7 +123,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="profile" element={<Profile />} />
 
                 <Route path="matches" element={<MatchPage />} />
-
+                <Route element={<AdminRoute />}>
+                  <Route path="admin" element={<Admin />} />
+                </Route>
 
               </Route>
             </Route>

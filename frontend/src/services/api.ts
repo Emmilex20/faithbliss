@@ -343,6 +343,57 @@ export interface LocalizedPricingQuote {
   displayLabel: string;
 }
 
+export interface UpdateUserRoleResponse {
+  message: string;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+  };
+}
+
+export interface AdminUpdateUserPayload {
+  name?: string;
+  email?: string;
+  role?: 'user' | 'admin';
+  age?: number;
+  gender?: string;
+  location?: string;
+  bio?: string;
+  denomination?: string;
+  onboardingCompleted?: boolean;
+  isActive?: boolean;
+}
+
+export interface AdminUpdateUserResponse {
+  message: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role?: string;
+    age: number;
+    gender: string;
+    location: string;
+    bio: string;
+    denomination: string;
+    onboardingCompleted: boolean;
+    isActive: boolean;
+    subscriptionStatus?: string;
+  };
+}
+
+export interface AdminResetPasswordResponse {
+  message: string;
+  resetLink: string;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+  };
+}
+
 export interface LocalizedPricingQuoteResponse {
   countryCode: string | null;
   region: 'nigeria' | 'africa' | 'global';
@@ -681,6 +732,32 @@ export const UserAPI = {
     // FIX: Corrected to `/api/users`
     return apiRequest(`/api/users${query}`);
   },
+
+  updateUserRole: async (userId: string, role: 'user' | 'admin'): Promise<UpdateUserRoleResponse> => {
+    return apiRequest(`/api/users/${userId}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    });
+  },
+
+  adminUpdateUser: async (userId: string, payload: AdminUpdateUserPayload): Promise<AdminUpdateUserResponse> => {
+    return apiRequest(`/api/users/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  adminResetPassword: async (userId: string): Promise<AdminResetPasswordResponse> => {
+    return apiRequest(`/api/users/${userId}/reset-password`, {
+      method: 'POST',
+    });
+  },
+
+  adminDeleteUser: async (userId: string): Promise<{ message: string }> => {
+    return apiRequest(`/api/users/${userId}`, {
+      method: 'DELETE',
+    });
+  },
 
   // Upload multiple photos
   uploadPhotos: async (photos: FormData): Promise<UploadPhotosResponse> => {

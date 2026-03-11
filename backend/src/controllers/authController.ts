@@ -16,6 +16,7 @@ export interface IUserProfile extends DocumentData {
     id: string; // The Firestore Document ID (which is the Firebase UID)
     name: string;
     email: string;
+    role?: string;
     gender: string;
     age: number;
     denomination: string;
@@ -36,6 +37,19 @@ export interface IUserProfile extends DocumentData {
     matches?: string[];
 }
 // -----------------------------------------------------------
+const PRIMARY_ADMIN_EMAIL = 'aginaemmanuel6@gmail.com';
+
+const resolveUserRole = (email: unknown, role?: unknown): string => {
+    if (typeof email === 'string' && email.trim().toLowerCase() === PRIMARY_ADMIN_EMAIL) {
+        return 'admin';
+    }
+
+    if (typeof role === 'string' && role.trim()) {
+        return role.trim().toLowerCase();
+    }
+
+    return 'user';
+};
 
 // Create a Multer instance using the Cloudinary storage engine
 const upload = multer({ storage: storage });
@@ -109,6 +123,7 @@ const createProfileAfterFirebaseRegister = async (req: Request, res: Response) =
         const profileData: Partial<IUserProfile> = {
             name, 
             email, 
+            role: resolveUserRole(email),
             gender, 
             age: parseInt(age), 
             denomination, 

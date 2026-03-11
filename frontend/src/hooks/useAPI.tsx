@@ -815,7 +815,7 @@ export function useAllUsers(filters?: {
 
     const normalizedFilters = {
       page: filters?.page || 1,
-      limit: Math.min(filters?.limit || 20, 20), // Cap at 20 to reduce memory
+      limit: Math.min(filters?.limit || 50, 200),
       search: filters?.search || undefined,
     };
 

@@ -63,3 +63,19 @@ export const PublicOnlyRoute: React.FC = () => {
 
   return <Outlet />;
 };
+
+export const AdminRoute: React.FC = () => {
+  const { isAuthenticated, user, isLoading } = useAuthContext();
+
+  if (isLoading) return null;
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (String(user?.role || 'user').toLowerCase() !== 'admin') {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Outlet />;
+};
