@@ -52,6 +52,7 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const [isOpen, setIsOpen] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState('');
+  const [isMobileSheet, setIsMobileSheet] = React.useState(false);
   const [menuPosition, setMenuPosition] = React.useState({
     top: 0,
     left: 0,
@@ -83,6 +84,21 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
       openAbove: shouldOpenAbove,
     });
   }, []);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const updateResponsiveMode = () => {
+      setIsMobileSheet(window.innerWidth < 640 && searchable);
+    };
+
+    updateResponsiveMode();
+    window.addEventListener('resize', updateResponsiveMode);
+
+    return () => {
+      window.removeEventListener('resize', updateResponsiveMode);
+    };
+  }, [searchable]);
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -123,11 +139,24 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
       setSearchTerm('');
       return;
     }
-    updateMenuPosition();
+    if (!isMobileSheet) {
+      updateMenuPosition();
+    }
     if (searchable) {
       searchInputRef.current?.focus();
     }
-  }, [isOpen, searchable, updateMenuPosition]);
+  }, [isMobileSheet, isOpen, searchable, updateMenuPosition]);
+
+  React.useEffect(() => {
+    if (!isOpen || !isMobileSheet || typeof document === 'undefined') return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMobileSheet, isOpen]);
 
   const selectedOption = React.useMemo(() => options.find((option) => option.value === value), [options, value]);
 
@@ -137,7 +166,7 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
     return options.filter((option) => option.label.toLowerCase().includes(lowered));
   }, [options, searchTerm, searchable]);
 
-  const menuNode = isOpen ? (
+  const desktopMenuNode = isOpen && !isMobileSheet ? (
     <div
       ref={menuRef}
       style={{
@@ -201,6 +230,81 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
     </div>
   ) : null;
 
+  const mobileSheetNode = isOpen && isMobileSheet ? (
+    <div className="fixed inset-0 z-[1300] sm:hidden">
+      <button
+        type="button"
+        aria-label="Close dropdown"
+        className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+        onClick={() => setIsOpen(false)}
+      />
+      <div className="absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-hidden rounded-t-[28px] border-t border-white/10 bg-slate-950 shadow-[0_-20px_60px_rgba(0,0,0,0.45)]">
+        <div className="flex items-center justify-center px-4 pb-2 pt-3">
+          <div className="h-1.5 w-12 rounded-full bg-white/15" />
+        </div>
+
+        <div className="border-b border-slate-800 px-4 pb-4">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white">{ariaLabel || placeholder}</p>
+              {selectedOption?.label ? (
+                <p className="mt-1 text-xs text-slate-400">Selected: {selectedOption.label}</p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80"
+            >
+              Done
+            </button>
+          </div>
+
+          {searchable ? (
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder={searchPlaceholder}
+                className="w-full rounded-2xl border border-slate-700 bg-slate-900/90 py-3 pl-10 pr-4 text-base text-white placeholder-slate-400 outline-none focus:border-pink-500"
+              />
+            </div>
+          ) : null}
+        </div>
+
+        <div className="max-h-[calc(82dvh-132px)] overflow-y-auto overscroll-contain px-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-2">
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((option) => {
+              const isSelected = option.value === value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(option.value);
+                    setIsOpen(false);
+                  }}
+                  className={cx(
+                    'mb-1 flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-left text-base leading-snug transition',
+                    isSelected ? 'bg-pink-500/20 text-pink-100' : 'text-slate-200 hover:bg-slate-900'
+                  )}
+                >
+                  <span className="min-w-0 flex-1 whitespace-normal break-words">{option.label}</span>
+                  {isSelected ? <span className="shrink-0 text-sm font-semibold text-pink-200">Selected</span> : null}
+                </button>
+              );
+            })
+          ) : (
+            <p className="px-4 py-4 text-sm text-slate-400">{emptyText}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div ref={wrapperRef} className={cx('relative', className)}>
       <button
@@ -225,7 +329,8 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
         />
       </button>
 
-      {menuNode && typeof document !== 'undefined' ? createPortal(menuNode, document.body) : null}
+      {typeof document !== 'undefined' && desktopMenuNode ? createPortal(desktopMenuNode, document.body) : null}
+      {typeof document !== 'undefined' && mobileSheetNode ? createPortal(mobileSheetNode, document.body) : null}
     </div>
   );
 };
