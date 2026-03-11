@@ -162,7 +162,7 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pl-9 pr-3 text-sm text-white placeholder-slate-400 outline-none focus:border-pink-500 sm:py-2"
+              className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pl-9 pr-3 text-base text-white placeholder-slate-400 outline-none focus:border-pink-500 sm:py-2 sm:text-sm"
             />
           </div>
         </div>
@@ -184,7 +184,7 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
                   setIsOpen(false);
                 }}
                 className={cx(
-                  'w-full px-4 py-3 text-left text-sm leading-snug transition sm:px-4 sm:py-2.5 sm:text-base',
+                  'w-full px-4 py-3 text-left text-base leading-snug transition sm:px-4 sm:py-2.5 sm:text-sm',
                   isSelected ? 'bg-pink-500/20 text-pink-100' : 'text-slate-200 hover:bg-slate-800',
                   optionClassName,
                   isSelected && selectedOptionClassName
@@ -210,7 +210,7 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
         disabled={disabled}
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
         className={cx(
-          'flex w-full items-center justify-between gap-3 rounded-xl border border-white/20 bg-slate-950/75 px-3 py-2.5 text-left text-sm text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-400/40 disabled:cursor-not-allowed disabled:opacity-60 sm:py-2.5',
+          'flex w-full items-center justify-between gap-3 rounded-xl border border-white/20 bg-slate-950/75 px-3 py-2.5 text-left text-base text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-400/40 disabled:cursor-not-allowed disabled:opacity-60 sm:py-2.5 sm:text-sm',
           triggerClassName
         )}
         aria-haspopup="listbox"
