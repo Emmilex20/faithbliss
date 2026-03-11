@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
+  AlertTriangle,
   ArrowLeft,
   Bell,
   Check,
@@ -32,6 +33,8 @@ const typeMeta = (type?: string) => {
       return { label: 'New Message', icon: MessageCircle, color: 'from-blue-500 to-teal-500' };
     case 'STORY_POSTED':
       return { label: 'New Story', icon: Sparkles, color: 'from-fuchsia-500 to-indigo-500' };
+    case 'REPORT_SUBMITTED':
+      return { label: 'Reported Issue', icon: AlertTriangle, color: 'from-orange-500 to-rose-500' };
     default:
       return { label: 'Notification', icon: Bell, color: 'from-slate-500 to-slate-600' };
   }
@@ -142,6 +145,11 @@ const NotificationsContent = () => {
 
     if (item.type === 'STORY_POSTED') {
       navigate('/dashboard');
+      return;
+    }
+
+    if (item.type === 'REPORT_SUBMITTED') {
+      navigate('/admin');
       return;
     }
 

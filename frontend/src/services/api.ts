@@ -412,6 +412,19 @@ export interface UpdatePassportModeResponse {
   passportCountry: string | null;
 }
 
+export interface SupportTicket {
+  id: string;
+  userId: string;
+  type: 'HELP' | 'REPORT';
+  subject: string;
+  message: string;
+  status: string;
+  metadata: Record<string, unknown>;
+  reporterEmail: string;
+  reporterName: string;
+  createdAt: string | null;
+}
+
 // Generic API request function
 const apiRequest = async <T = unknown>(
   endpoint: string, 
@@ -957,6 +970,9 @@ export const SupportAPI = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  },
+  getTickets: async (): Promise<{ tickets: SupportTicket[] }> => {
+    return apiRequest('/api/support/tickets');
   },
 };
 
