@@ -57,20 +57,30 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
     left: 0,
     width: 0,
     maxHeight: 320,
+    openAbove: false,
   });
 
   const updateMenuPosition = React.useCallback(() => {
     if (!triggerRef.current || typeof window === 'undefined') return;
     const rect = triggerRef.current.getBoundingClientRect();
-    const viewportPadding = 10;
+    const viewportPadding = 12;
     const availableBelow = window.innerHeight - rect.bottom - viewportPadding;
-    const maxHeight = Math.max(160, Math.min(420, availableBelow));
+    const availableAbove = rect.top - viewportPadding;
+    const preferredWidth = Math.max(rect.width, Math.min(window.innerWidth - viewportPadding * 2, 420));
+    const width = Math.min(preferredWidth, window.innerWidth - viewportPadding * 2);
+    const left = Math.min(
+      Math.max(viewportPadding, rect.left),
+      Math.max(viewportPadding, window.innerWidth - width - viewportPadding)
+    );
+    const shouldOpenAbove = availableBelow < 220 && availableAbove > availableBelow;
+    const maxHeight = Math.max(160, Math.min(420, shouldOpenAbove ? availableAbove - 8 : availableBelow));
 
     setMenuPosition({
-      top: rect.bottom + 8,
-      left: rect.left,
-      width: rect.width,
+      top: shouldOpenAbove ? Math.max(viewportPadding, rect.top - maxHeight - 8) : rect.bottom + 8,
+      left,
+      width,
       maxHeight,
+      openAbove: shouldOpenAbove,
     });
   }, []);
 
@@ -143,7 +153,7 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
       )}
     >
       {searchable && (
-        <div className="border-b border-slate-700/70 p-3">
+        <div className="border-b border-slate-700/70 p-3 sm:p-3.5">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
             <input
@@ -152,7 +162,7 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/90 py-2 pl-9 pr-3 text-sm text-white placeholder-slate-400 outline-none focus:border-pink-500"
+              className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pl-9 pr-3 text-sm text-white placeholder-slate-400 outline-none focus:border-pink-500 sm:py-2"
             />
           </div>
         </div>
@@ -174,13 +184,13 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
                   setIsOpen(false);
                 }}
                 className={cx(
-                  'w-full px-4 py-2.5 text-left text-sm transition sm:text-base',
+                  'w-full px-4 py-3 text-left text-sm leading-snug transition sm:px-4 sm:py-2.5 sm:text-base',
                   isSelected ? 'bg-pink-500/20 text-pink-100' : 'text-slate-200 hover:bg-slate-800',
                   optionClassName,
                   isSelected && selectedOptionClassName
                 )}
               >
-                {option.label}
+                <span className="block whitespace-normal break-words">{option.label}</span>
               </button>
             );
           })
@@ -200,14 +210,14 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
         disabled={disabled}
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
         className={cx(
-          'flex w-full items-center justify-between gap-3 rounded-xl border border-white/20 bg-slate-950/75 px-3 py-2.5 text-left text-sm text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-400/40 disabled:cursor-not-allowed disabled:opacity-60',
+          'flex w-full items-center justify-between gap-3 rounded-xl border border-white/20 bg-slate-950/75 px-3 py-2.5 text-left text-sm text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-400/40 disabled:cursor-not-allowed disabled:opacity-60 sm:py-2.5',
           triggerClassName
         )}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-label={ariaLabel}
       >
-        <span className={cx('truncate', selectedOption ? 'text-white' : 'text-slate-400')}>
+        <span className={cx('min-w-0 flex-1 truncate', selectedOption ? 'text-white' : 'text-slate-400')}>
           {selectedOption?.label || placeholder}
         </span>
         <ChevronDown

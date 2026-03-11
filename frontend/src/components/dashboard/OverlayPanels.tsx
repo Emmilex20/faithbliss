@@ -45,7 +45,7 @@ export const OverlayPanels = ({
 
       {/* Filter Panel */}
       <div
-        className={`fixed inset-y-0 right-0 w-full max-w-md bg-gray-900/98 backdrop-blur-xl border-l border-gray-700/50 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${showFilters ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed inset-y-0 right-0 z-50 w-full overflow-hidden bg-gray-900/98 shadow-2xl backdrop-blur-xl transform transition-transform duration-300 ease-in-out sm:max-w-md sm:border-l sm:border-gray-700/50 md:max-w-lg xl:max-w-xl ${showFilters ? 'translate-x-0' : 'translate-x-full'}`}
       >
         <FilterPanel
           onClose={onCloseFilters}

@@ -45,6 +45,9 @@ const sanitizeNumberInput = (value: string, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const getRangePercent = (value: number, min: number, max: number) =>
+  ((value - min) / (max - min)) * 100;
+
 const INTERESTED_IN_OPTIONS = [
   { value: '', label: 'Any' },
   { value: 'MALE', label: 'Men' },
@@ -220,15 +223,15 @@ export const FilterPanel = ({
   };
   const renderLockedHeader = () =>
     !isPremiumUser ? (
-      <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-amber-300/20 bg-slate-950/70 px-3 py-2.5 backdrop-blur-sm">
-        <span className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-100">
-            <Lock className="h-3.5 w-3.5" />
-            Premium Only
+      <div className="mb-3 flex flex-col gap-2 rounded-2xl border border-amber-300/20 bg-slate-950/75 px-3 py-3 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-4 sm:py-2.5">
+        <span className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-100 sm:text-[11px]">
+          <Lock className="h-3.5 w-3.5" />
+          Premium Only
         </span>
         <button
           type="button"
           onClick={goToPremium}
-          className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-medium text-white/80 transition hover:bg-white/10"
+          className="w-full rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.14em] text-white/85 transition hover:bg-white/10 sm:w-auto sm:px-4 sm:py-1.5"
         >
           Upgrade
         </button>
@@ -237,12 +240,12 @@ export const FilterPanel = ({
 
   const renderUnavailableHeader = () =>
     isPremiumUser && !passportModeEnabled ? (
-      <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-slate-300/15 bg-slate-950/70 px-3 py-2.5 backdrop-blur-sm">
-        <span className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200">
+      <div className="mb-3 flex flex-col gap-2 rounded-2xl border border-slate-300/15 bg-slate-950/75 px-3 py-3 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-4 sm:py-2.5">
+        <span className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200 sm:text-[11px]">
           <Lock className="h-3.5 w-3.5" />
           Passport Mode Disabled
         </span>
-        <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400">
+        <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400 sm:text-[11px]">
           Admin controlled
         </span>
       </div>
@@ -260,36 +263,36 @@ export const FilterPanel = ({
   );
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="p-6 border-b border-slate-700/60">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="sticky top-0 z-10 border-b border-slate-700/60 bg-slate-950/95 px-3 py-4 backdrop-blur-xl sm:px-5 sm:py-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-              <Filter className="w-5 h-5 text-pink-400" />
+            <h3 className="flex items-center gap-2 text-lg font-bold text-white sm:text-xl">
+              <Filter className="h-5 w-5 text-pink-400" />
               Match Filters
             </h3>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="mt-1 max-w-sm text-sm text-slate-400">
               Refine your discovery feed with accurate preferences.
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-slate-700/60 transition-colors"
+            className="rounded-xl p-2 transition-colors hover:bg-slate-700/60"
             aria-label="Close filters"
           >
-            <X className="w-5 h-5 text-slate-300" />
+            <X className="h-5 w-5 text-slate-300" />
           </button>
         </div>
-        <div className="mt-3 inline-flex items-center rounded-full bg-pink-500/15 border border-pink-400/30 px-3 py-1 text-xs font-semibold text-pink-200">
+        <div className="mt-3 inline-flex items-center rounded-full border border-pink-400/30 bg-pink-500/15 px-3 py-1 text-xs font-semibold text-pink-200">
           {activeFilterCount} active filter{activeFilterCount === 1 ? '' : 's'}
         </div>
         {!isPremiumUser && (
-          <div className="mt-3 rounded-2xl border border-amber-400/25 bg-amber-500/10 px-3 py-3 text-xs text-amber-100">
-            <p>Free plan allows gender filtering only. All other filters are premium-only.</p>
+          <div className="mt-3 rounded-2xl border border-amber-400/25 bg-amber-500/10 px-3 py-3 text-xs text-amber-100 sm:px-4">
+            <p className="leading-relaxed">Free plan allows gender filtering only. All other filters are premium-only.</p>
             <button
               type="button"
               onClick={goToPremium}
-              className="mt-3 inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-white/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-white transition hover:bg-white/15"
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-amber-300/30 bg-white/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-white transition hover:bg-white/15 sm:w-auto sm:justify-start sm:px-4"
             >
               <Lock className="h-3.5 w-3.5" />
               Upgrade to Premium
@@ -298,8 +301,11 @@ export const FilterPanel = ({
         )}
       </div>
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-6 space-y-5">
-        <section data-filter-section="gender" className="rounded-2xl border border-indigo-400/20 bg-indigo-500/10 p-4">
+      <div
+        ref={scrollContainerRef}
+        className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-3 sm:px-5 sm:py-5"
+      >
+        <section data-filter-section="gender" className="rounded-[22px] border border-indigo-400/20 bg-indigo-500/10 p-4 sm:p-5">
           <label className="block text-xs font-semibold uppercase tracking-wide text-indigo-200 mb-2">Interested In</label>
           <AppDropdown
             value={gender}
@@ -313,7 +319,7 @@ export const FilterPanel = ({
 
         <section
           data-filter-section="passport"
-          className={`rounded-2xl border border-violet-400/20 bg-violet-500/10 p-4 ${
+          className={`rounded-[22px] border border-violet-400/20 bg-violet-500/10 p-4 sm:p-5 ${
             !isPremiumUser || !passportModeEnabled ? 'border-violet-300/20 bg-violet-500/5' : ''
           }`}
         >
@@ -337,7 +343,7 @@ export const FilterPanel = ({
           />
         </section>
 
-        <section data-filter-section="distance" className={`rounded-2xl border border-pink-400/20 bg-pink-500/10 p-4 ${lockedSectionClass}`}>
+        <section data-filter-section="distance" className={`rounded-[22px] border border-pink-400/20 bg-pink-500/10 p-4 sm:p-5 ${lockedSectionClass}`}>
           {renderLockedHeader()}
           <label className="block text-xs font-semibold uppercase tracking-wide text-pink-200 mb-2">Distance</label>
           <input
@@ -352,33 +358,63 @@ export const FilterPanel = ({
           <div className="mt-2 text-sm text-slate-200 font-semibold">{distance} km</div>
         </section>
 
-        <section data-filter-section="age" className={`rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4 ${lockedSectionClass}`}>
+        <section data-filter-section="age" className={`rounded-[22px] border border-cyan-400/20 bg-cyan-500/10 p-4 sm:p-5 ${lockedSectionClass}`}>
           {renderLockedHeader()}
           <label className="block text-xs font-semibold uppercase tracking-wide text-cyan-200 mb-2">Age Range</label>
-          <div className="flex items-center gap-3">
-            <input
-              type="number"
-              min={18}
-              max={55}
-              value={minAge}
-              onChange={(e) => setMinAge(clamp(sanitizeNumberInput(e.target.value, 22), 18, 55))}
-              disabled={!isPremiumUser}
-              className="w-24 rounded-xl bg-slate-900/70 border border-cyan-300/30 px-3 py-2 text-white text-center focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
-            />
-            <span className="text-slate-300 text-sm">to</span>
-            <input
-              type="number"
-              min={18}
-              max={55}
-              value={maxAge}
-              onChange={(e) => setMaxAge(clamp(sanitizeNumberInput(e.target.value, 40), 18, 55))}
-              disabled={!isPremiumUser}
-              className="w-24 rounded-xl bg-slate-900/70 border border-cyan-300/30 px-3 py-2 text-white text-center focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
-            />
+          <div className="rounded-2xl border border-cyan-300/20 bg-slate-950/35 px-3 py-4 sm:px-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="rounded-xl border border-cyan-300/20 bg-slate-900/70 px-3 py-2 text-center">
+                <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-200/80">Min</div>
+                <div className="text-base font-semibold text-white">{minAge}</div>
+              </div>
+              <div className="text-xs font-medium uppercase tracking-[0.16em] text-slate-300">to</div>
+              <div className="rounded-xl border border-cyan-300/20 bg-slate-900/70 px-3 py-2 text-center">
+                <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-200/80">Max</div>
+                <div className="text-base font-semibold text-white">{maxAge}</div>
+              </div>
+            </div>
+
+            <div className="relative h-8">
+              <div className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-slate-700/90" />
+              <div
+                className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-gradient-to-r from-cyan-400 to-sky-400"
+                style={{
+                  left: `${getRangePercent(minAge, 18, 55)}%`,
+                  width: `${getRangePercent(maxAge, 18, 55) - getRangePercent(minAge, 18, 55)}%`,
+                }}
+              />
+              <input
+                type="range"
+                min={18}
+                max={55}
+                value={minAge}
+                onChange={(e) =>
+                  setMinAge(Math.min(clamp(sanitizeNumberInput(e.target.value, 22), 18, 55), maxAge))
+                }
+                disabled={!isPremiumUser}
+                className="pointer-events-none absolute left-0 top-1/2 h-8 w-full -translate-y-1/2 appearance-none bg-transparent [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-cyan-200 [&::-webkit-slider-thumb]:bg-cyan-500 [&::-webkit-slider-thumb]:shadow-[0_0_0_4px_rgba(34,211,238,0.18)] [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-cyan-200 [&::-moz-range-thumb]:bg-cyan-500 [&::-moz-range-thumb]:shadow-[0_0_0_4px_rgba(34,211,238,0.18)] disabled:opacity-60"
+              />
+              <input
+                type="range"
+                min={18}
+                max={55}
+                value={maxAge}
+                onChange={(e) =>
+                  setMaxAge(Math.max(clamp(sanitizeNumberInput(e.target.value, 40), 18, 55), minAge))
+                }
+                disabled={!isPremiumUser}
+                className="pointer-events-none absolute left-0 top-1/2 h-8 w-full -translate-y-1/2 appearance-none bg-transparent [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-cyan-200 [&::-webkit-slider-thumb]:bg-sky-500 [&::-webkit-slider-thumb]:shadow-[0_0_0_4px_rgba(56,189,248,0.18)] [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-cyan-200 [&::-moz-range-thumb]:bg-sky-500 [&::-moz-range-thumb]:shadow-[0_0_0_4px_rgba(56,189,248,0.18)] disabled:opacity-60"
+              />
+            </div>
+
+            <div className="mt-3 flex items-center justify-between text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">
+              <span>18</span>
+              <span>55</span>
+            </div>
           </div>
         </section>
 
-        <section data-filter-section="height" className={`rounded-2xl border border-fuchsia-400/20 bg-fuchsia-500/10 p-4 ${lockedSectionClass}`}>
+        <section data-filter-section="height" className={`rounded-[22px] border border-fuchsia-400/20 bg-fuchsia-500/10 p-4 sm:p-5 ${lockedSectionClass}`}>
           {renderLockedHeader()}
           <label className="block text-xs font-semibold uppercase tracking-wide text-fuchsia-200 mb-2">Minimum Height</label>
           <input
@@ -393,7 +429,7 @@ export const FilterPanel = ({
           <div className="mt-2 text-sm text-slate-200 font-semibold">{minHeight} cm +</div>
         </section>
 
-        <section data-filter-section="faith-journey" className={`rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 ${lockedSectionClass}`}>
+        <section data-filter-section="faith-journey" className={`rounded-[22px] border border-emerald-400/20 bg-emerald-500/10 p-4 sm:p-5 ${lockedSectionClass}`}>
           {renderLockedHeader()}
           <label className="block text-xs font-semibold uppercase tracking-wide text-emerald-200 mb-2">Faith Journey</label>
           <AppDropdown
@@ -416,7 +452,7 @@ export const FilterPanel = ({
             }
             setShowAdvanced((prev) => !prev);
           }}
-          className={`w-full rounded-2xl border border-slate-600/60 bg-slate-800/60 px-4 py-3 text-sm text-white font-semibold flex items-center justify-between transition-colors ${isPremiumUser ? 'hover:bg-slate-700/60' : 'hover:bg-slate-700/60'}`}
+          className="flex w-full items-center justify-between rounded-[22px] border border-slate-600/60 bg-slate-800/60 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-700/60"
         >
           <span className="inline-flex items-center gap-2">
             Advanced Filters
@@ -427,7 +463,7 @@ export const FilterPanel = ({
 
         {showAdvanced && (
           <div className="space-y-4">
-            <section data-filter-section="denomination" className="rounded-2xl border border-purple-400/20 bg-purple-500/10 p-4">
+            <section data-filter-section="denomination" className="rounded-[22px] border border-purple-400/20 bg-purple-500/10 p-4 sm:p-5">
               <label className="block text-xs font-semibold uppercase tracking-wide text-purple-200 mb-2">Denomination</label>
               <AppDropdown
                 value={denomination}
@@ -441,7 +477,7 @@ export const FilterPanel = ({
               />
             </section>
 
-            <section data-filter-section="church-attendance" className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
+            <section data-filter-section="church-attendance" className="rounded-[22px] border border-amber-400/20 bg-amber-500/10 p-4 sm:p-5">
               <label className="block text-xs font-semibold uppercase tracking-wide text-amber-200 mb-2">Church Attendance</label>
               <AppDropdown
                 value={churchAttendance}
@@ -453,7 +489,7 @@ export const FilterPanel = ({
               />
             </section>
 
-            <section data-filter-section="relationship-goal" className="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4">
+            <section data-filter-section="relationship-goal" className="rounded-[22px] border border-rose-400/20 bg-rose-500/10 p-4 sm:p-5">
               <label className="block text-xs font-semibold uppercase tracking-wide text-rose-200 mb-2">Relationship Goal</label>
               <AppDropdown
                 value={relationshipGoal}
@@ -468,22 +504,24 @@ export const FilterPanel = ({
         )}
       </div>
 
-      <div className="p-6 border-t border-slate-700/60 space-y-3">
+      <div className="sticky bottom-0 border-t border-slate-700/60 bg-slate-950/95 px-3 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl sm:px-5 sm:py-5">
+        <div className="space-y-3">
         <button
           type="button"
           onClick={handleApply}
-          className="w-full rounded-2xl bg-gradient-to-r from-pink-500 to-purple-600 px-4 py-3 text-white font-semibold hover:from-pink-400 hover:to-purple-500 transition-colors"
+          className="w-full rounded-[22px] bg-gradient-to-r from-pink-500 to-purple-600 px-4 py-3 text-white font-semibold transition-colors hover:from-pink-400 hover:to-purple-500"
         >
           Apply Filters
         </button>
         <button
           type="button"
           onClick={handleClear}
-          className="w-full rounded-2xl border border-slate-600/70 bg-slate-800/60 px-4 py-3 text-slate-200 font-medium hover:bg-slate-700/60 transition-colors flex items-center justify-center gap-2"
+          className="flex w-full items-center justify-center gap-2 rounded-[22px] border border-slate-600/70 bg-slate-800/60 px-4 py-3 font-medium text-slate-200 transition-colors hover:bg-slate-700/60"
         >
           <RotateCcw className="w-4 h-4" />
           Clear Filters
         </button>
+        </div>
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ export interface Country {
   dialCode: string;
 }
 
-export const countries: Country[] = [
+const rawCountries: Country[] = [
   { name: 'United States', code: 'US', dialCode: '+1' },
   { name: 'Canada', code: 'CA', dialCode: '+1' },
   { name: 'United Kingdom', code: 'GB', dialCode: '+44' },
@@ -89,4 +89,12 @@ export const countries: Country[] = [
   { name: 'Jamaica', code: 'JM', dialCode: '+1' },
 ];
 
-export const defaultCountry = countries[0];
+export const countries: Country[] = [...rawCountries].sort((a, b) => a.name.localeCompare(b.name));
+
+export const commonCountryCodes = ['AU', 'CA', 'GH', 'GB', 'KE', 'MA', 'NG', 'ZA', 'US'] as const;
+
+export const commonCountries: Country[] = countries.filter((country) =>
+  commonCountryCodes.includes(country.code as (typeof commonCountryCodes)[number])
+);
+
+export const defaultCountry = countries.find((country) => country.code === 'US') ?? countries[0];

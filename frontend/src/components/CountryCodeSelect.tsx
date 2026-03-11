@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { ChevronDown, Search, Phone } from 'lucide-react';
-import { countries, type Country } from '@/constants/countries';
+import { commonCountries, countries, type Country } from '@/constants/countries';
 
 interface CountryCodeSelectProps {
   selectedCountry: Country;
@@ -8,7 +8,6 @@ interface CountryCodeSelectProps {
   phoneNumber: string;
   onPhoneChange: (phone: string) => void;
 }
-
 
 const getFlag = (countryCode: string) =>
   countryCode
@@ -25,12 +24,22 @@ export const CountryCodeSelect = ({
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const filteredCountries = countries.filter(
-    (country) =>
-      country.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      country.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      country.dialCode.includes(searchTerm)
-  );
+  const filteredCountries = useMemo(() => {
+    const trimmedSearch = searchTerm.trim().toLowerCase();
+
+    if (trimmedSearch) {
+      return countries.filter(
+        (country) =>
+          country.name.toLowerCase().includes(trimmedSearch) ||
+          country.code.toLowerCase().includes(trimmedSearch) ||
+          country.dialCode.includes(trimmedSearch)
+      );
+    }
+
+    const commonCodes = new Set(commonCountries.map((country) => country.code));
+    const remainingCountries = countries.filter((country) => !commonCodes.has(country.code));
+    return [...commonCountries, ...remainingCountries];
+  }, [searchTerm]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
