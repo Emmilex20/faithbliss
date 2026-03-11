@@ -7,6 +7,7 @@ import multer from 'multer';
 import { Readable } from 'stream';
 import { createNotification } from '../services/notificationService';
 import { cloudinaryUploader } from '../config/cloudinaryConfig';
+import { canViewerSeeCandidate, getPassportFeatureSettings } from '../utils/passportMode';
 
 // --- FIRESTORE DATA STRUCTURES ---
 
@@ -40,6 +41,8 @@ interface IUserProfile extends DocumentData {
   distance?: number;
   subscriptionStatus?: string;
   subscriptionTier?: string;
+  countryCode?: string;
+  passportCountry?: string | null;
 }
 
 interface IMatch extends DocumentData {
@@ -468,6 +471,7 @@ const getPotentialMatches = async (req: Request, res: Response) => {
 
   try {
     console.log(`?? [getPotentialMatches] Fetching potential matches for ${currentUser.id}`);
+    const featureSettings = await getPassportFeatureSettings();
 
     const preferredGender = normalizeGenderPreference(
       (currentUser as IUserProfile).preferredGender,
@@ -530,6 +534,7 @@ const getPotentialMatches = async (req: Request, res: Response) => {
         if (excludedUids.has(candidate.id)) return;
         if (candidate.onboardingCompleted !== true) return;
         if (isBlockedBetween(currentUser, candidate)) return;
+        if (!canViewerSeeCandidate(currentUser, candidate, featureSettings.passportModeEnabled)) return;
 
         if (!preferredGender) {
           preferredGenderMatches.push(candidate);

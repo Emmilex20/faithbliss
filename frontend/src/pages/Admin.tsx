@@ -46,11 +46,43 @@ const AdminPage = () => {
   const [saving, setSaving] = useState(false);
   const [resettingPassword, setResettingPassword] = useState(false);
   const [deletingUser, setDeletingUser] = useState(false);
+  const [passportModeEnabled, setPassportModeEnabled] = useState(false);
+  const [featureLoading, setFeatureLoading] = useState(true);
+  const [featureSaving, setFeatureSaving] = useState(false);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
     return () => window.clearTimeout(timeout);
   }, [search]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadFeatureSettings = async () => {
+      try {
+        const response = await API.User.getFeatureSettings();
+        if (isMounted) {
+          setPassportModeEnabled(Boolean(response.passportModeEnabled));
+        }
+      } catch (settingsError) {
+        const message =
+          settingsError instanceof Error && settingsError.message
+            ? settingsError.message
+            : 'Failed to load feature settings.';
+        showError(message);
+      } finally {
+        if (isMounted) {
+          setFeatureLoading(false);
+        }
+      }
+    };
+
+    void loadFeatureSettings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [showError]);
 
   const { data, loading, error, refetch } = useAllUsers({ page: 1, limit: 200, search: debouncedSearch });
 
@@ -159,6 +191,25 @@ const AdminPage = () => {
     }
   };
 
+  const handleTogglePassportMode = async () => {
+    try {
+      setFeatureSaving(true);
+      const response = await API.User.updateFeatureSettings({
+        passportModeEnabled: !passportModeEnabled,
+      });
+      setPassportModeEnabled(Boolean(response.passportModeEnabled));
+      showSuccess(response.message || 'Feature settings updated.');
+    } catch (toggleError) {
+      const message =
+        toggleError instanceof Error && toggleError.message
+          ? toggleError.message
+          : 'Failed to update Passport Mode.';
+      showError(message);
+    } finally {
+      setFeatureSaving(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(236,72,153,0.18),_transparent_40%),linear-gradient(135deg,#020617,#0f172a_45%,#111827)] px-4 py-8 text-white sm:px-6 lg:px-12">
       <div className="mx-auto max-w-7xl">
@@ -206,6 +257,42 @@ const AdminPage = () => {
               <span className="text-xs font-semibold uppercase tracking-[0.22em]">Completed onboarding</span>
             </div>
             <p className="mt-4 text-3xl font-semibold text-white">{stats.completedOnboarding}</p>
+          </div>
+        </div>
+
+        <div className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-violet-200">Feature control</p>
+              <h2 className="mt-2 text-xl font-semibold text-white">Passport Mode</h2>
+              <p className="mt-2 max-w-2xl text-sm text-gray-400">
+                Controls whether premium users can target any country and be discoverable only within that selected country.
+              </p>
+            </div>
+            <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+              <div className="text-right">
+                <p className="text-xs uppercase tracking-[0.18em] text-gray-400">Status</p>
+                <p className={`text-sm font-semibold ${passportModeEnabled ? 'text-emerald-300' : 'text-slate-300'}`}>
+                  {featureLoading ? 'Loading...' : passportModeEnabled ? 'Enabled' : 'Disabled'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleTogglePassportMode()}
+                disabled={featureLoading || featureSaving}
+                className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  passportModeEnabled
+                    ? 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/20'
+                    : 'bg-violet-500/15 text-violet-200 hover:bg-violet-500/20'
+                } disabled:cursor-not-allowed disabled:opacity-60`}
+              >
+                {featureSaving
+                  ? 'Updating...'
+                  : passportModeEnabled
+                    ? 'Disable Passport Mode'
+                    : 'Enable Passport Mode'}
+              </button>
+            </div>
           </div>
         </div>
 

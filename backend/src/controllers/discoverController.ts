@@ -1,6 +1,11 @@
 import { Request, Response } from 'express';
 import { admin, usersCollection } from '../config/firebase-admin';
 import type { DocumentData } from 'firebase-admin/firestore';
+import {
+  canViewerSeeCandidate,
+  getPassportFeatureSettings,
+  normalizeCountryCode,
+} from '../utils/passportMode';
 
 interface IUserProfile extends DocumentData {
   id: string;
@@ -36,6 +41,8 @@ interface IUserProfile extends DocumentData {
   matches?: string[];
   subscriptionStatus?: string;
   subscriptionTier?: string;
+  countryCode?: string;
+  passportCountry?: string | null;
   distance?: number;
 }
 
@@ -53,6 +60,7 @@ type DiscoveryFilterInput = {
   preferredFaithJourney?: unknown;
   preferredChurchAttendance?: unknown;
   preferredRelationshipGoals?: unknown;
+  passportCountry?: unknown;
 };
 
 const matchesCollection = admin.firestore().collection('matches');
@@ -212,10 +220,37 @@ export const filterProfiles = async (req: Request, res: Response) => {
   }
 
   const currentUser = { id: userDoc.id, ...userDoc.data() } as IUserProfile;
+  const featureSettings = await getPassportFeatureSettings();
   const hasPremiumFilters =
     currentUser.subscriptionStatus === 'active' &&
     ['premium', 'elite'].includes(String(currentUser.subscriptionTier || '').toLowerCase());
   const body = (req.body || {}) as DiscoveryFilterInput;
+  const passportCountryProvided = Object.prototype.hasOwnProperty.call(body, 'passportCountry');
+  const requestedPassportCountry =
+    body.passportCountry === null ? null : normalizeCountryCode(body.passportCountry);
+
+  if (passportCountryProvided) {
+    if (!featureSettings.passportModeEnabled && body.passportCountry !== null) {
+      return res.status(403).json({ message: 'Passport Mode is currently unavailable.' });
+    }
+
+    if (!hasPremiumFilters && body.passportCountry !== null) {
+      return res.status(403).json({ message: 'Passport Mode is available for premium users only.' });
+    }
+
+    if (body.passportCountry !== null && !requestedPassportCountry) {
+      return res.status(400).json({ message: 'A valid passport country code is required.' });
+    }
+
+    await usersCollection.doc(uid).set(
+      {
+        passportCountry: requestedPassportCountry,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    currentUser.passportCountry = requestedPassportCountry;
+  }
 
   const preferredGender = normalizeGender(body.preferredGender);
   const preferredDenominations = hasPremiumFilters
@@ -247,6 +282,7 @@ export const filterProfiles = async (req: Request, res: Response) => {
     if (excluded.has(doc.id)) return;
 
     const candidate = { id: doc.id, ...doc.data() } as IUserProfile;
+    if (!canViewerSeeCandidate(currentUser, candidate, featureSettings.passportModeEnabled)) return;
 
     const candidateGender = normalizeGender(candidate.gender);
     if (preferredGender && candidateGender !== preferredGender) return;
@@ -361,6 +397,7 @@ export const discoverByInterests = async (req: Request, res: Response) => {
   }
 
   const currentUser = { id: userDoc.id, ...userDoc.data() } as IUserProfile;
+  const featureSettings = await getPassportFeatureSettings();
   const selectedInterests = parseInterestQuery(req.query.interests);
   if (selectedInterests.length === 0) {
     return res.status(400).json({ message: 'Provide at least one interest in query parameter: interests' });
@@ -384,6 +421,7 @@ export const discoverByInterests = async (req: Request, res: Response) => {
       if (excluded.has(doc.id)) return;
 
       const candidate = { id: doc.id, ...doc.data() } as IUserProfile;
+      if (!canViewerSeeCandidate(currentUser, candidate, featureSettings.passportModeEnabled)) return;
       const candidateGender = normalizeGender(candidate.gender);
       if (enforceGender && preferredGender && candidateGender !== preferredGender) return;
 
@@ -507,6 +545,7 @@ export const discoverByProfileFit = async (req: Request, res: Response) => {
   }
 
   const currentUser = { id: userDoc.id, ...userDoc.data() } as IUserProfile;
+  const featureSettings = await getPassportFeatureSettings();
   const hasPremiumExploreAccess =
     currentUser.subscriptionStatus === 'active' &&
     ['premium', 'elite'].includes(String(currentUser.subscriptionTier || '').toLowerCase());
@@ -536,6 +575,7 @@ export const discoverByProfileFit = async (req: Request, res: Response) => {
       if (excluded.has(doc.id)) return;
 
       const candidate = { id: doc.id, ...doc.data() } as IUserProfile;
+      if (!canViewerSeeCandidate(currentUser, candidate, featureSettings.passportModeEnabled)) return;
       const candidateGender = normalizeGender(candidate.gender);
       if (enforceGender && preferredGender && candidateGender !== preferredGender) return;
 

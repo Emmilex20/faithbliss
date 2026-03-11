@@ -2,6 +2,11 @@ import { Request, Response } from 'express';
 import * as admin from 'firebase-admin';
 import { db, usersCollection } from '../config/firebase-admin';
 import { countProfilePhotos } from '../utils/profilePhotos';
+import {
+  getPassportFeatureSettings,
+  normalizeCountryCode,
+  setPassportFeatureSettings,
+} from '../utils/passportMode';
 
 interface IFirestoreUser {
   name: string;
@@ -25,6 +30,9 @@ interface IFirestoreUser {
   matches?: string[];
   profileFits?: string[];
   subscriptionStatus?: string;
+  subscriptionTier?: string;
+  countryCode?: string;
+  passportCountry?: string | null;
 }
 
 interface CustomRequest extends Request {
@@ -112,6 +120,7 @@ const getMe = async (req: CustomRequest, res: Response) => {
     firebaseUid: uid,
     ...userData,
     role: getEffectiveRole(userData),
+    passportCountry: normalizeCountryCode(userData.passportCountry) || null,
     profilePhotoCount: countProfilePhotos(userData),
   });
 };
@@ -438,6 +447,96 @@ const updateUserSettings = async (req: Request, res: Response) => {
   }
 };
 
+const updatePassportSettings = async (req: CustomRequest, res: Response) => {
+  try {
+    const uid = req.userId;
+    if (!uid) return res.status(401).json({ message: 'Unauthorized' });
+
+    const userDoc = await usersCollection.doc(uid).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ message: 'User profile not found.' });
+    }
+
+    const currentUser = userDoc.data() as IFirestoreUser;
+    const featureSettings = await getPassportFeatureSettings();
+    if (!featureSettings.passportModeEnabled) {
+      return res.status(403).json({ message: 'Passport Mode is currently unavailable.' });
+    }
+
+    const isPremiumUser =
+      currentUser.subscriptionStatus === 'active' &&
+      ['premium', 'elite'].includes(String(currentUser.subscriptionTier || '').toLowerCase());
+
+    if (!isPremiumUser) {
+      return res.status(403).json({ message: 'Passport Mode is available for premium users only.' });
+    }
+
+    const passportCountry =
+      req.body?.passportCountry === null
+        ? null
+        : normalizeCountryCode(req.body?.passportCountry);
+
+    if (req.body?.passportCountry !== null && !passportCountry) {
+      return res.status(400).json({ message: 'A valid passport country code is required.' });
+    }
+
+    await usersCollection.doc(uid).set(
+      {
+        passportCountry,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    return res.status(200).json({
+      message: passportCountry ? 'Passport country updated successfully.' : 'Passport Mode cleared.',
+      passportCountry,
+    });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error updating passport settings:', error);
+    return res.status(500).json({ message: errorMessage });
+  }
+};
+
+const getFeatureSettings = async (req: CustomRequest, res: Response) => {
+  const uid = req.userId;
+  if (!uid) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  try {
+    const settings = await getPassportFeatureSettings();
+    return res.status(200).json(settings);
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error fetching feature settings:', error);
+    return res.status(500).json({ message: errorMessage });
+  }
+};
+
+const updateFeatureSettings = async (req: CustomRequest, res: Response) => {
+  const firebaseUid = req.userId;
+  const currentUser = await requireAdmin(firebaseUid, res);
+  if (!currentUser) return;
+
+  try {
+    const nextValue = Boolean(req.body?.passportModeEnabled);
+    const settings = await setPassportFeatureSettings({
+      passportModeEnabled: nextValue,
+    });
+
+    return res.status(200).json({
+      message: `Passport Mode ${settings.passportModeEnabled ? 'enabled' : 'disabled'}.`,
+      ...settings,
+    });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error updating feature settings:', error);
+    return res.status(500).json({ message: errorMessage });
+  }
+};
+
 const updateUserRole = async (req: CustomRequest, res: Response) => {
   const firebaseUid = req.userId;
   const currentUser = await requireAdmin(firebaseUid, res);
@@ -719,6 +818,9 @@ export {
   getOnboardingDebug,
   updateUserProfile,
   updateUserSettings,
+  updatePassportSettings,
+  getFeatureSettings,
+  updateFeatureSettings,
   updateUserRole,
   updateUserByAdmin,
   resetUserPasswordByAdmin,

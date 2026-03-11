@@ -1,8 +1,8 @@
 ﻿import React from 'react';
 import type { ProfileData } from '@/types/profile';
 import { BIO_MAX_LENGTH, PROFILE_PROMPT_OPTIONS, PROMPT_ANSWER_MAX_LENGTH } from '@/constants/profilePrompts';
-import { CountryCodeSelect, countries, defaultCountry } from '@/components/CountryCodeSelect';
-import type { Country } from '@/components/CountryCodeSelect';
+import { CountryCodeSelect } from '@/components/CountryCodeSelect';
+import { countries, defaultCountry, type Country } from '@/constants/countries';
 import AppDropdown from '@/components/AppDropdown';
 import { MIN_PROFILE_FITS, PROFILE_FIT_OPTIONS } from '@/constants/profileFitOptions';
 

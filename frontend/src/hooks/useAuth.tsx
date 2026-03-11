@@ -439,6 +439,7 @@ const fetchUserDataFromFirestore = async (fbUser: FirebaseAuthUser): Promise<Use
         longitude: backendData.longitude,
         phoneNumber: backendData.phoneNumber,
         countryCode: backendData.countryCode,
+        passportCountry: backendData.passportCountry || null,
         birthday: backendData.birthday ? new Date(backendData.birthday.seconds * 1000) : undefined, // Handle Firestore Timestamp
         fieldOfStudy: backendData.fieldOfStudy || backendData.education,
         profession: backendData.profession || backendData.occupation,
@@ -1111,6 +1112,7 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
             longitude: data.longitude,
             phoneNumber: data.phoneNumber,
             countryCode: data.countryCode,
+            passportCountry: data.passportCountry || null,
             birthday: data.birthday ? new Date(data.birthday.seconds * 1000) : undefined,
             fieldOfStudy: data.fieldOfStudy || data.education,
             profession: data.profession || data.occupation,

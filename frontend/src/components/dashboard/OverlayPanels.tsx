@@ -15,6 +15,8 @@ interface OverlayPanelsProps {
   onApplyFilters: (filters: DashboardFiltersPayload) => void;
   filterFocusSection?: DashboardFilterFocusSection | null;
   isPremiumUser?: boolean;
+  passportModeEnabled?: boolean;
+  initialPassportCountry?: string | null;
 }
 
 export const OverlayPanels = ({
@@ -28,6 +30,8 @@ export const OverlayPanels = ({
   onApplyFilters,
   filterFocusSection = null,
   isPremiumUser = false,
+  passportModeEnabled = false,
+  initialPassportCountry = null,
 }: OverlayPanelsProps) => {
   return (
     <>
@@ -49,6 +53,8 @@ export const OverlayPanels = ({
           isOpen={showFilters}
           initialFocusSection={filterFocusSection}
           isPremiumUser={isPremiumUser}
+          passportModeEnabled={passportModeEnabled}
+          initialPassportCountry={initialPassportCountry}
         />
       </div>
 

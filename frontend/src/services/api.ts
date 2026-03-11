@@ -403,6 +403,15 @@ export interface LocalizedPricingQuoteResponse {
   };
 }
 
+export interface FeatureSettingsResponse {
+  passportModeEnabled: boolean;
+}
+
+export interface UpdatePassportModeResponse {
+  message: string;
+  passportCountry: string | null;
+}
+
 // Generic API request function
 const apiRequest = async <T = unknown>(
   endpoint: string, 
@@ -657,6 +666,26 @@ export const UserAPI = {
     return apiRequest('/api/users/me/settings', {
       method: 'PATCH',
       body: JSON.stringify(settings),
+    });
+  },
+
+  updatePassportMode: async (payload: { passportCountry: string | null }): Promise<UpdatePassportModeResponse> => {
+    return apiRequest('/api/users/me/passport', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getFeatureSettings: async (): Promise<FeatureSettingsResponse> => {
+    return apiRequest('/api/users/feature-settings');
+  },
+
+  updateFeatureSettings: async (
+    payload: FeatureSettingsResponse
+  ): Promise<FeatureSettingsResponse & { message: string }> => {
+    return apiRequest('/api/users/feature-settings', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
     });
   },
 
@@ -1135,16 +1164,17 @@ export const DiscoveryAPI = {
   },
 
   // Filter profiles based on criteria
-  filterProfiles: async (filters: {
-    preferredGender?: 'MALE' | 'FEMALE';
-    preferredDenominations?: string[];
-    minAge?: number;
-    maxAge?: number;
-    maxDistance?: number;
-    preferredFaithJourney?: string[];
-    preferredChurchAttendance?: string[];
-    preferredRelationshipGoals?: string[];
-  }): Promise<User[]> => {
+  filterProfiles: async (filters: {
+    preferredGender?: 'MALE' | 'FEMALE';
+    preferredDenominations?: string[];
+    minAge?: number;
+    maxAge?: number;
+    maxDistance?: number;
+    preferredFaithJourney?: string[];
+    preferredChurchAttendance?: string[];
+    preferredRelationshipGoals?: string[];
+    passportCountry?: string | null;
+  }): Promise<User[]> => {
     // FIX: Added /api prefix
     return apiRequest('/api/discover/filter', {
       method: 'POST',

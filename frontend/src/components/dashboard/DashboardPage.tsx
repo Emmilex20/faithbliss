@@ -69,6 +69,8 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const ONBOARDING_PAUSE_STORAGE_KEY = 'faithbliss_onboarding_pause_state';
     const [persistedPassedProfileMap, setPersistedPassedProfileMap] = useState<PersistedPassedProfilesMap>({});
     const [isReviewingPassedProfiles, setIsReviewingPassedProfiles] = useState(false);
+    const [passportModeEnabled, setPassportModeEnabled] = useState(false);
+    const [activePassportCountry, setActivePassportCountry] = useState<string | null>(null);
 
   // Fetch real potential matches from backend
   const { 
@@ -111,6 +113,31 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
             setPersistedPassedProfileMap({});
         }
     }, [passedProfilesStorageKey]);
+
+    useEffect(() => {
+        setActivePassportCountry(currentUserData?.passportCountry || null);
+    }, [currentUserData?.passportCountry]);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const loadFeatureSettings = async () => {
+            try {
+                const response = await API.User.getFeatureSettings();
+                if (isMounted) {
+                    setPassportModeEnabled(Boolean(response.passportModeEnabled));
+                }
+            } catch (error) {
+                console.error('Failed to load feature settings:', error);
+            }
+        };
+
+        void loadFeatureSettings();
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
 
     useEffect(() => {
         if (!passedProfilesStorageKey) return;
@@ -469,6 +496,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
 
  
 const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
+        try {
         const normalizedEntries = Object.entries(filters || {}).filter(([, value]) => {
             if (value === undefined || value === null) return false;
             if (Array.isArray(value)) return value.length > 0;
@@ -477,11 +505,21 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
         });
         const normalizedFilters = Object.fromEntries(normalizedEntries) as DashboardFiltersPayload;
         const hasActiveFilters = Object.keys(normalizedFilters).length > 0;
+        const nextPassportCountry =
+          isPremiumUser && passportModeEnabled
+            ? (normalizedFilters.passportCountry ?? null)
+            : null;
+
+        if (isPremiumUser && passportModeEnabled && nextPassportCountry !== activePassportCountry) {
+            await API.User.updatePassportMode({ passportCountry: nextPassportCountry });
+            setActivePassportCountry(nextPassportCountry);
+        }
 
         if (!hasActiveFilters) {
             setFilteredProfiles(null);
             setIsReviewingPassedProfiles(false);
             reset();
+            await refetch();
             showInfo('Filters cleared. Showing all profiles.');
             return;
         }
@@ -501,6 +539,10 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
             console.error('Failed to apply filters:', error);
         } finally {
             setIsLoadingFilters(false);
+        }
+        } catch (error) {
+            console.error('Failed to update dashboard filters:', error);
+            showInfo(error instanceof Error ? error.message : 'Failed to update filters.');
         }
     };
 
@@ -657,6 +699,8 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
         onApplyFilters={handleApplyFilters}
         filterFocusSection={filterFocusSection}
         isPremiumUser={isPremiumUser}
+        passportModeEnabled={passportModeEnabled}
+        initialPassportCountry={activePassportCountry}
       />
     </div>
   );

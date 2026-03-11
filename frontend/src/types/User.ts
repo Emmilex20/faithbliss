@@ -31,6 +31,7 @@ export interface User {
   longitude?: number;
   phoneNumber?: string;
   countryCode?: string;
+  passportCountry?: string | null;
 
   birthday?: string | Date; // 👈 fix for Firestore timestamp conversion
 

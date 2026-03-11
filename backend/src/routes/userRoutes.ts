@@ -7,6 +7,9 @@ import {
   getOnboardingDebug,
   updateUserProfile,
   updateUserSettings,
+  updatePassportSettings,
+  getFeatureSettings,
+  updateFeatureSettings,
   updateUserRole,
   updateUserByAdmin,
   resetUserPasswordByAdmin,
@@ -27,6 +30,9 @@ router.put('/me', protect, updateUserProfile);
 
 // Update settings
 router.patch('/me/settings', protect, updateUserSettings);
+router.patch('/me/passport', protect, updatePassportSettings);
+router.get('/feature-settings', protect, getFeatureSettings);
+router.patch('/feature-settings', protect, updateFeatureSettings);
 router.patch('/:id/role', protect, updateUserRole);
 router.patch('/:id', protect, updateUserByAdmin);
 router.post('/:id/reset-password', protect, resetUserPasswordByAdmin);

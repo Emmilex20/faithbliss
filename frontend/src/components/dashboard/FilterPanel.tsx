@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Filter, Lock, RotateCcw, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AppDropdown from '@/components/AppDropdown';
+import { countries } from '@/constants/countries';
 
 export interface DashboardFiltersPayload {
   preferredGender?: 'MALE' | 'FEMALE';
@@ -13,10 +14,12 @@ export interface DashboardFiltersPayload {
   preferredFaithJourney?: string[];
   preferredChurchAttendance?: string[];
   preferredRelationshipGoals?: string[];
+  passportCountry?: string | null;
 }
 
 export type DashboardFilterFocusSection =
   | 'gender'
+  | 'passport'
   | 'distance'
   | 'age'
   | 'height'
@@ -31,6 +34,8 @@ interface FilterPanelProps {
   isOpen?: boolean;
   initialFocusSection?: DashboardFilterFocusSection | null;
   isPremiumUser?: boolean;
+  passportModeEnabled?: boolean;
+  initialPassportCountry?: string | null;
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -91,6 +96,8 @@ export const FilterPanel = ({
   isOpen = false,
   initialFocusSection = null,
   isPremiumUser = false,
+  passportModeEnabled = false,
+  initialPassportCountry = null,
 }: FilterPanelProps) => {
   const navigate = useNavigate();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -104,11 +111,13 @@ export const FilterPanel = ({
   const [churchAttendance, setChurchAttendance] = useState('');
   const [relationshipGoal, setRelationshipGoal] = useState('');
   const [denomination, setDenomination] = useState('');
+  const [passportCountry, setPassportCountry] = useState<string>('');
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (gender) count += 1;
     if (isPremiumUser) {
+      if (passportModeEnabled && passportCountry) count += 1;
       if (distance !== 50) count += 1;
       if (minAge !== 22 || maxAge !== 40) count += 1;
       if (minHeight > 120) count += 1;
@@ -118,10 +127,11 @@ export const FilterPanel = ({
       if (denomination) count += 1;
     }
     return count;
-  }, [churchAttendance, denomination, distance, faithJourney, gender, isPremiumUser, maxAge, minAge, minHeight, relationshipGoal]);
+  }, [churchAttendance, denomination, distance, faithJourney, gender, isPremiumUser, maxAge, minAge, minHeight, passportCountry, passportModeEnabled, relationshipGoal]);
 
   const resetLocalState = () => {
     setGender('');
+    setPassportCountry('');
     setDistance(50);
     setMinAge(22);
     setMaxAge(40);
@@ -141,6 +151,7 @@ export const FilterPanel = ({
     const payload: DashboardFiltersPayload = {};
     if (gender) payload.preferredGender = gender;
     if (isPremiumUser) {
+      if (passportModeEnabled) payload.passportCountry = passportCountry || null;
       if (distance !== 50) payload.maxDistance = clamp(Math.round(distance), 1, 500);
       if (minAge !== 22 || maxAge !== 40) {
         payload.minAge = normalizedMinAge;
@@ -155,6 +166,11 @@ export const FilterPanel = ({
 
     return payload;
   };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setPassportCountry(initialPassportCountry || '');
+  }, [initialPassportCountry, isOpen]);
 
   const handleApply = () => {
     onApplyFilters(buildPayload());
@@ -219,6 +235,30 @@ export const FilterPanel = ({
       </div>
     ) : null;
 
+  const renderUnavailableHeader = () =>
+    isPremiumUser && !passportModeEnabled ? (
+      <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-slate-300/15 bg-slate-950/70 px-3 py-2.5 backdrop-blur-sm">
+        <span className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200">
+          <Lock className="h-3.5 w-3.5" />
+          Passport Mode Disabled
+        </span>
+        <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400">
+          Admin controlled
+        </span>
+      </div>
+    ) : null;
+
+  const passportOptions = useMemo(
+    () => [
+      { value: '', label: 'Anywhere' },
+      ...countries.map((country) => ({
+        value: country.code,
+        label: country.name,
+      })),
+    ],
+    []
+  );
+
   return (
     <div className="h-full flex flex-col">
       <div className="p-6 border-b border-slate-700/60">
@@ -268,6 +308,32 @@ export const FilterPanel = ({
             placeholder="Any"
             triggerClassName="w-full rounded-xl bg-slate-900/70 border border-indigo-300/30 px-3 py-2.5 text-sm text-white focus:ring-2 focus:ring-indigo-400/40"
             menuClassName="border-indigo-300/30 bg-slate-900/98"
+          />
+        </section>
+
+        <section
+          data-filter-section="passport"
+          className={`rounded-2xl border border-violet-400/20 bg-violet-500/10 p-4 ${
+            !isPremiumUser || !passportModeEnabled ? 'border-violet-300/20 bg-violet-500/5' : ''
+          }`}
+        >
+          {!isPremiumUser ? renderLockedHeader() : renderUnavailableHeader()}
+          <div className="mb-2">
+            <label className="block text-xs font-semibold uppercase tracking-wide text-violet-200">Passport Mode</label>
+            <p className="mt-1 text-xs text-slate-300">
+              Choose a country and only see profiles from there. When active, only users from that country can also discover you.
+            </p>
+          </div>
+          <AppDropdown
+            value={passportCountry}
+            onChange={setPassportCountry}
+            options={passportOptions}
+            placeholder="Anywhere"
+            searchable
+            searchPlaceholder="Search countries..."
+            disabled={!isPremiumUser || !passportModeEnabled}
+            triggerClassName="w-full rounded-xl bg-slate-900/70 border border-violet-300/30 px-3 py-2.5 text-sm text-white focus:ring-2 focus:ring-violet-400/40"
+            menuClassName="border-violet-300/30 bg-slate-900/98"
           />
         </section>
 
