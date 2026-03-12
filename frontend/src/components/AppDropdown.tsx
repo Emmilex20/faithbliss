@@ -53,6 +53,8 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
   const [isOpen, setIsOpen] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState('');
   const [isMobileSheet, setIsMobileSheet] = React.useState(false);
+  const [localValue, setLocalValue] = React.useState(value);
+  const [draftValue, setDraftValue] = React.useState(value);
   const [menuPosition, setMenuPosition] = React.useState({
     top: 0,
     left: 0,
@@ -135,9 +137,16 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
   }, [isOpen, updateMenuPosition]);
 
   React.useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  React.useEffect(() => {
     if (!isOpen) {
       setSearchTerm('');
       return;
+    }
+    if (isMobileSheet) {
+      setDraftValue(localValue);
     }
     if (!isMobileSheet) {
       updateMenuPosition();
@@ -145,7 +154,7 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
     if (searchable) {
       searchInputRef.current?.focus();
     }
-  }, [isMobileSheet, isOpen, searchable, updateMenuPosition]);
+  }, [isMobileSheet, isOpen, localValue, searchable, updateMenuPosition]);
 
   React.useEffect(() => {
     if (!isOpen || !isMobileSheet || typeof document === 'undefined') return;
@@ -158,7 +167,11 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
     };
   }, [isMobileSheet, isOpen]);
 
-  const selectedOption = React.useMemo(() => options.find((option) => option.value === value), [options, value]);
+  const selectedOption = React.useMemo(() => options.find((option) => option.value === localValue), [localValue, options]);
+  const draftSelectedOption = React.useMemo(
+    () => options.find((option) => option.value === draftValue),
+    [draftValue, options]
+  );
 
   const filteredOptions = React.useMemo(() => {
     if (!searchable || !searchTerm.trim()) return options;
@@ -209,6 +222,7 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
                 key={option.value}
                 type="button"
                 onClick={() => {
+                  setLocalValue(option.value);
                   onChange(option.value);
                   setIsOpen(false);
                 }}
@@ -244,19 +258,21 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
         </div>
 
         <div className="border-b border-slate-800 px-4 pb-4">
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-white">{ariaLabel || placeholder}</p>
-              {selectedOption?.label ? (
-                <p className="mt-1 text-xs text-slate-400">Selected: {selectedOption.label}</p>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80"
-            >
-              Done
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white">{ariaLabel || placeholder}</p>
+                {draftSelectedOption?.label ? (
+                  <p className="mt-1 text-xs text-slate-400">Selected: {draftSelectedOption.label}</p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                }}
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80"
+              >
+                Done
             </button>
           </div>
 
@@ -278,14 +294,15 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
         <div className="max-h-[calc(82dvh-132px)] overflow-y-auto overscroll-contain px-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-2">
           {filteredOptions.length > 0 ? (
             filteredOptions.map((option) => {
-              const isSelected = option.value === value;
+              const isSelected = option.value === draftValue;
               return (
                 <button
                   key={option.value}
                   type="button"
                   onClick={() => {
+                    setDraftValue(option.value);
+                    setLocalValue(option.value);
                     onChange(option.value);
-                    setIsOpen(false);
                   }}
                   className={cx(
                     'mb-1 flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-left text-base leading-snug transition',

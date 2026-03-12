@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, Filter, Lock, RotateCcw, X } from 'lucide-react';
+import { ChevronDown, Filter, Lock, RotateCcw, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AppDropdown from '@/components/AppDropdown';
 import { countries } from '@/constants/countries';
@@ -104,6 +104,7 @@ export const FilterPanel = ({
 }: FilterPanelProps) => {
   const navigate = useNavigate();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const wasOpenRef = useRef(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [gender, setGender] = useState<'MALE' | 'FEMALE' | ''>('');
   const [distance, setDistance] = useState(50);
@@ -115,6 +116,8 @@ export const FilterPanel = ({
   const [relationshipGoal, setRelationshipGoal] = useState('');
   const [denomination, setDenomination] = useState('');
   const [passportCountry, setPassportCountry] = useState<string>('');
+  const [passportPickerOpen, setPassportPickerOpen] = useState(false);
+  const [passportSearchTerm, setPassportSearchTerm] = useState('');
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -135,6 +138,8 @@ export const FilterPanel = ({
   const resetLocalState = () => {
     setGender('');
     setPassportCountry('');
+    setPassportSearchTerm('');
+    setPassportPickerOpen(false);
     setDistance(50);
     setMinAge(22);
     setMaxAge(40);
@@ -171,8 +176,13 @@ export const FilterPanel = ({
   };
 
   useEffect(() => {
-    if (!isOpen) return;
-    setPassportCountry(initialPassportCountry || '');
+    if (isOpen && !wasOpenRef.current) {
+      setPassportCountry(initialPassportCountry || '');
+      setPassportSearchTerm('');
+      setPassportPickerOpen(false);
+    }
+
+    wasOpenRef.current = isOpen;
   }, [initialPassportCountry, isOpen]);
 
   const handleApply = () => {
@@ -262,6 +272,17 @@ export const FilterPanel = ({
     []
   );
 
+  const selectedPassportOption = useMemo(
+    () => passportOptions.find((option) => option.value === passportCountry) ?? passportOptions[0],
+    [passportCountry, passportOptions]
+  );
+
+  const filteredPassportOptions = useMemo(() => {
+    const normalizedSearch = passportSearchTerm.trim().toLowerCase();
+    if (!normalizedSearch) return passportOptions;
+    return passportOptions.filter((option) => option.label.toLowerCase().includes(normalizedSearch));
+  }, [passportOptions, passportSearchTerm]);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="sticky top-0 z-10 border-b border-slate-700/60 bg-slate-950/95 px-3 py-4 backdrop-blur-xl sm:px-5 sm:py-5">
@@ -330,17 +351,20 @@ export const FilterPanel = ({
               Choose a country and only see profiles from there. When active, only users from that country can also discover you.
             </p>
           </div>
-          <AppDropdown
-            value={passportCountry}
-            onChange={setPassportCountry}
-            options={passportOptions}
-            placeholder="Anywhere"
-            searchable
-            searchPlaceholder="Search countries..."
+          <button
+            type="button"
             disabled={!isPremiumUser || !passportModeEnabled}
-            triggerClassName="w-full rounded-xl bg-slate-900/70 border border-violet-300/30 px-3 py-2.5 text-sm text-white focus:ring-2 focus:ring-violet-400/40"
-            menuClassName="border-violet-300/30 bg-slate-900/98"
-          />
+            onClick={() => {
+              setPassportSearchTerm('');
+              setPassportPickerOpen(true);
+            }}
+            className="flex w-full items-center justify-between gap-3 rounded-xl border border-violet-300/30 bg-slate-900/70 px-3 py-2.5 text-left text-base text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+          >
+            <span className={passportCountry ? 'text-white' : 'text-slate-400'}>
+              {selectedPassportOption.label}
+            </span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+          </button>
         </section>
 
         <section data-filter-section="distance" className={`rounded-[22px] border border-pink-400/20 bg-pink-500/10 p-4 sm:p-5 ${lockedSectionClass}`}>
@@ -523,6 +547,69 @@ export const FilterPanel = ({
         </button>
         </div>
       </div>
+
+      {passportPickerOpen && isPremiumUser && passportModeEnabled ? (
+        <div className="fixed inset-0 z-[1300] sm:hidden">
+          <button
+            type="button"
+            aria-label="Close passport picker"
+            className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+            onClick={() => setPassportPickerOpen(false)}
+          />
+          <div className="absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-hidden rounded-t-[28px] border-t border-white/10 bg-slate-950 shadow-[0_-20px_60px_rgba(0,0,0,0.45)]">
+            <div className="flex items-center justify-center px-4 pb-2 pt-3">
+              <div className="h-1.5 w-12 rounded-full bg-white/15" />
+            </div>
+            <div className="border-b border-slate-800 px-4 pb-4">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white">Choose country</p>
+                  <p className="mt-1 text-xs text-slate-400">Selected: {selectedPassportOption.label}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPassportPickerOpen(false)}
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80"
+                >
+                  Done
+                </button>
+              </div>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  value={passportSearchTerm}
+                  onChange={(event) => setPassportSearchTerm(event.target.value)}
+                  placeholder="Search countries..."
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-900/90 py-3 pl-10 pr-4 text-base text-white placeholder-slate-400 outline-none focus:border-pink-500"
+                />
+              </div>
+            </div>
+            <div className="max-h-[calc(82dvh-132px)] overflow-y-auto overscroll-contain px-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-2">
+              {filteredPassportOptions.length > 0 ? (
+                filteredPassportOptions.map((option) => {
+                  const isSelected = option.value === passportCountry;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setPassportCountry(option.value)}
+                      className={`mb-1 flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-left text-base leading-snug transition ${
+                        isSelected ? 'bg-pink-500/20 text-pink-100' : 'text-slate-200 hover:bg-slate-900'
+                      }`}
+                    >
+                      <span className="min-w-0 flex-1 whitespace-normal break-words">{option.label}</span>
+                      {isSelected ? <span className="shrink-0 text-sm font-semibold text-pink-200">Selected</span> : null}
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="px-4 py-4 text-sm text-slate-400">No countries found.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };
