@@ -8,6 +8,14 @@ import { createNotification } from '../services/notificationService';
 type TicketType = 'HELP' | 'REPORT';
 const PRIMARY_ADMIN_EMAIL = 'aginaemmanuel6@gmail.com';
 
+type SupportReply = {
+  adminId: string;
+  adminEmail: string;
+  adminName: string;
+  message: string;
+  createdAt: admin.firestore.Timestamp;
+};
+
 type FirestoreUser = {
   email?: string;
   name?: string;
@@ -92,6 +100,7 @@ export const submitSupportTicket = async (req: Request, res: Response) => {
       reporterEmail: reporter?.email || '',
       reporterName: reporter?.name || '',
       status: 'OPEN',
+      replies: [] as SupportReply[],
       createdAt: admin.firestore.Timestamp.now(),
     };
 
@@ -147,6 +156,13 @@ export const getSupportTickets = async (req: Request, res: Response) => {
           metadata?: Record<string, unknown>;
           reporterEmail?: string;
           reporterName?: string;
+          replies?: Array<{
+            adminId?: string;
+            adminEmail?: string;
+            adminName?: string;
+            message?: string;
+            createdAt?: admin.firestore.Timestamp;
+          }>;
           createdAt?: admin.firestore.Timestamp;
         };
 
@@ -160,6 +176,15 @@ export const getSupportTickets = async (req: Request, res: Response) => {
           metadata: data.metadata || {},
           reporterEmail: data.reporterEmail || '',
           reporterName: data.reporterName || '',
+          replies: Array.isArray(data.replies)
+            ? data.replies.map((reply) => ({
+                adminId: reply.adminId || '',
+                adminEmail: reply.adminEmail || '',
+                adminName: reply.adminName || '',
+                message: reply.message || '',
+                createdAt: reply.createdAt?.toDate().toISOString() || null,
+              }))
+            : [],
           createdAt: data.createdAt?.toDate().toISOString() || null,
         };
       })
@@ -173,5 +198,160 @@ export const getSupportTickets = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Support tickets fetch error:', error);
     return res.status(500).json({ message: error.message || 'Failed to fetch support tickets.' });
+  }
+};
+
+export const getMySupportTickets = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId as string | undefined;
+    const typeFilter = typeof req.query.type === 'string' ? req.query.type.trim().toUpperCase() : '';
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized: Firebase UID missing.' });
+    }
+
+    if (typeFilter && !['HELP', 'REPORT'].includes(typeFilter)) {
+      return res.status(400).json({ message: 'Invalid ticket type filter.' });
+    }
+
+    const snapshot = await db.collection('supportTickets').where('userId', '==', userId).get();
+
+    const tickets = snapshot.docs
+      .map((doc) => {
+        const data = doc.data() as {
+          userId?: string;
+          type?: TicketType;
+          subject?: string;
+          message?: string;
+          status?: string;
+          metadata?: Record<string, unknown>;
+          reporterEmail?: string;
+          reporterName?: string;
+          replies?: Array<{
+            adminId?: string;
+            adminEmail?: string;
+            adminName?: string;
+            message?: string;
+            createdAt?: admin.firestore.Timestamp;
+          }>;
+          createdAt?: admin.firestore.Timestamp;
+        };
+
+        return {
+          id: doc.id,
+          userId: data.userId || '',
+          type: data.type || 'HELP',
+          subject: data.subject || '',
+          message: data.message || '',
+          status: data.status || 'OPEN',
+          metadata: data.metadata || {},
+          reporterEmail: data.reporterEmail || '',
+          reporterName: data.reporterName || '',
+          replies: Array.isArray(data.replies)
+            ? data.replies.map((reply) => ({
+                adminId: reply.adminId || '',
+                adminEmail: reply.adminEmail || '',
+                adminName: reply.adminName || '',
+                message: reply.message || '',
+                createdAt: reply.createdAt?.toDate().toISOString() || null,
+              }))
+            : [],
+          createdAt: data.createdAt?.toDate().toISOString() || null,
+        };
+      })
+      .filter((ticket) => (typeFilter ? ticket.type === typeFilter : true))
+      .sort((left, right) => {
+        const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+        const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+        return rightTime - leftTime;
+      });
+
+    return res.status(200).json({ tickets });
+  } catch (error: any) {
+    console.error('My support tickets fetch error:', error);
+    return res.status(500).json({ message: error.message || 'Failed to fetch your support tickets.' });
+  }
+};
+
+export const replyToSupportTicket = async (req: Request, res: Response) => {
+  try {
+    const adminUser = await requireAdmin(req, res);
+    if (!adminUser) return;
+
+    const ticketId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+    const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+
+    if (!ticketId) {
+      return res.status(400).json({ message: 'Ticket ID is required.' });
+    }
+
+    if (!message) {
+      return res.status(400).json({ message: 'Reply message is required.' });
+    }
+
+    const ticketRef = db.collection('supportTickets').doc(ticketId);
+    const ticketDoc = await ticketRef.get();
+
+    if (!ticketDoc.exists) {
+      return res.status(404).json({ message: 'Support ticket not found.' });
+    }
+
+    const ticket = ticketDoc.data() as {
+      userId?: string;
+      subject?: string;
+      type?: TicketType;
+      reporterEmail?: string;
+      reporterName?: string;
+      replies?: SupportReply[];
+    };
+
+    if (!ticket.userId) {
+      return res.status(400).json({ message: 'Ticket owner is missing.' });
+    }
+
+    const reply: SupportReply = {
+      adminId: adminUser.id,
+      adminEmail: adminUser.email || '',
+      adminName: adminUser.name || adminUser.email || 'Admin',
+      message,
+      createdAt: admin.firestore.Timestamp.now(),
+    };
+
+    await ticketRef.set(
+      {
+        replies: admin.firestore.FieldValue.arrayUnion(reply),
+        status: 'RESPONDED',
+        updatedAt: admin.firestore.Timestamp.now(),
+      },
+      { merge: true }
+    );
+
+    await createNotification({
+      userId: ticket.userId,
+      type: 'SUPPORT_REPLY',
+      message: `FaithBliss support replied to your ${ticket.type === 'REPORT' ? 'reported issue' : 'help request'}.`,
+      data: {
+        ticketId,
+        ticketType: ticket.type || 'HELP',
+        subject: ticket.subject || '',
+        replyMessage: message,
+        adminName: reply.adminName,
+        adminEmail: reply.adminEmail,
+      },
+    });
+
+    return res.status(200).json({
+      message: 'Reply sent successfully.',
+      reply: {
+        adminId: reply.adminId,
+        adminEmail: reply.adminEmail,
+        adminName: reply.adminName,
+        message: reply.message,
+        createdAt: reply.createdAt.toDate().toISOString(),
+      },
+    });
+  } catch (error: any) {
+    console.error('Support reply error:', error);
+    return res.status(500).json({ message: error.message || 'Failed to send support reply.' });
   }
 };

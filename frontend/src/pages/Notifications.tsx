@@ -35,6 +35,8 @@ const typeMeta = (type?: string) => {
       return { label: 'New Story', icon: Sparkles, color: 'from-fuchsia-500 to-indigo-500' };
     case 'REPORT_SUBMITTED':
       return { label: 'Reported Issue', icon: AlertTriangle, color: 'from-orange-500 to-rose-500' };
+    case 'SUPPORT_REPLY':
+      return { label: 'Support Reply', icon: MessageCircle, color: 'from-cyan-500 to-blue-500' };
     default:
       return { label: 'Notification', icon: Bell, color: 'from-slate-500 to-slate-600' };
   }
@@ -150,6 +152,12 @@ const NotificationsContent = () => {
 
     if (item.type === 'REPORT_SUBMITTED') {
       navigate('/admin');
+      return;
+    }
+
+    if (item.type === 'SUPPORT_REPLY') {
+      const ticketType = typeof item.data?.ticketType === 'string' ? item.data.ticketType.toUpperCase() : '';
+      navigate(ticketType === 'REPORT' ? '/report' : '/help');
       return;
     }
 

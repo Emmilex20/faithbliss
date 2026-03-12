@@ -427,6 +427,13 @@ export interface SupportTicket {
   metadata: Record<string, unknown>;
   reporterEmail: string;
   reporterName: string;
+  replies?: Array<{
+    adminId: string;
+    adminEmail: string;
+    adminName: string;
+    message: string;
+    createdAt: string | null;
+  }>;
   createdAt: string | null;
 }
 
@@ -1025,8 +1032,27 @@ export const SupportAPI = {
       body: JSON.stringify(payload),
     });
   },
+  getMyTickets: async (type?: 'HELP' | 'REPORT'): Promise<{ tickets: SupportTicket[] }> => {
+    const query = type ? `?type=${encodeURIComponent(type)}` : '';
+    return apiRequest(`/api/support/my-tickets${query}`);
+  },
   getTickets: async (): Promise<{ tickets: SupportTicket[] }> => {
     return apiRequest('/api/support/tickets');
+  },
+  replyToTicket: async (ticketId: string, payload: { message: string }): Promise<{
+    message: string;
+    reply: {
+      adminId: string;
+      adminEmail: string;
+      adminName: string;
+      message: string;
+      createdAt: string;
+    };
+  }> => {
+    return apiRequest(`/api/support/tickets/${ticketId}/reply`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 };
 

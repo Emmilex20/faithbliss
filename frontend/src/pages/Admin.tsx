@@ -85,6 +85,8 @@ const AdminPage = () => {
   const [featureSaving, setFeatureSaving] = useState(false);
   const [supportTickets, setSupportTickets] = useState<Awaited<ReturnType<typeof API.Support.getTickets>>['tickets']>([]);
   const [issuesLoading, setIssuesLoading] = useState(true);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [replyingTicketId, setReplyingTicketId] = useState<string | null>(null);
   const [paymentAnalytics, setPaymentAnalytics] = useState<Awaited<ReturnType<typeof API.Payment.getAdminAnalytics>> | null>(null);
   const [paymentsLoading, setPaymentsLoading] = useState(true);
   const [paymentSearch, setPaymentSearch] = useState('');
@@ -366,14 +368,52 @@ const AdminPage = () => {
     }
   };
 
+  const handleReplyDraftChange = (ticketId: string, value: string) => {
+    setReplyDrafts((current) => ({ ...current, [ticketId]: value }));
+  };
+
+  const handleReplyToTicket = async (ticketId: string) => {
+    const message = replyDrafts[ticketId]?.trim() || '';
+    if (!message) {
+      showError('Reply message is required.');
+      return;
+    }
+
+    try {
+      setReplyingTicketId(ticketId);
+      const response = await API.Support.replyToTicket(ticketId, { message });
+      setSupportTickets((current) =>
+        current.map((ticket) =>
+          ticket.id === ticketId
+            ? {
+                ...ticket,
+                status: 'RESPONDED',
+                replies: [...(ticket.replies || []), response.reply],
+              }
+            : ticket
+        )
+      );
+      setReplyDrafts((current) => ({ ...current, [ticketId]: '' }));
+      showSuccess(response.message || 'Reply sent successfully.');
+    } catch (replyError) {
+      const message =
+        replyError instanceof Error && replyError.message
+          ? replyError.message
+          : 'Failed to send support reply.';
+      showError(message);
+    } finally {
+      setReplyingTicketId(null);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(236,72,153,0.18),_transparent_40%),linear-gradient(135deg,#020617,#0f172a_45%,#111827)] px-3 py-6 text-white sm:px-6 sm:py-8 lg:px-12">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(236,72,153,0.18),_transparent_40%),linear-gradient(135deg,#020617,#0f172a_45%,#111827)] px-2 py-4 text-white sm:px-6 sm:py-8 lg:px-12">
       <div className="mx-auto w-full max-w-7xl">
-        <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">
+        <div className="mb-5 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200">Admin</p>
-            <h1 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">FaithBliss Admin Console</h1>
-            <p className="mt-2 text-sm text-gray-300">Full platform access for account management and user administration.</p>
+            <h1 className="mt-2 text-xl font-semibold text-white sm:text-3xl">FaithBliss Admin Console</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-300">Full platform access for account management, support handling, feature control, and subscription administration.</p>
           </div>
           <Link
             to="/dashboard"
@@ -385,37 +425,37 @@ const AdminPage = () => {
           </Link>
         </div>
 
-        <div className="-mx-3 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0">
-          <div className="grid min-w-max grid-flow-col gap-4 sm:min-w-0 sm:grid-flow-row sm:grid-cols-2 xl:grid-cols-5">
-          <div className="w-[220px] rounded-3xl border border-white/10 bg-white/5 p-5 sm:w-auto">
+        <div className="-mx-2 overflow-x-auto px-2 pb-2 sm:mx-0 sm:px-0">
+          <div className="grid min-w-max snap-x snap-mandatory grid-flow-col gap-3 sm:min-w-0 sm:grid-flow-row sm:grid-cols-2 sm:gap-4 xl:grid-cols-5">
+          <div className="w-[78vw] max-w-[280px] snap-start rounded-3xl border border-white/10 bg-white/5 p-4 sm:w-auto sm:max-w-none sm:p-5">
             <div className="flex items-center gap-3 text-cyan-200">
               <Users className="h-5 w-5" />
               <span className="text-xs font-semibold uppercase tracking-[0.22em]">Total users</span>
             </div>
             <p className="mt-4 text-3xl font-semibold text-white">{stats.total}</p>
           </div>
-          <div className="w-[220px] rounded-3xl border border-white/10 bg-white/5 p-5 sm:w-auto">
+          <div className="w-[78vw] max-w-[280px] snap-start rounded-3xl border border-white/10 bg-white/5 p-4 sm:w-auto sm:max-w-none sm:p-5">
             <div className="flex items-center gap-3 text-emerald-200">
               <ShieldCheck className="h-5 w-5" />
               <span className="text-xs font-semibold uppercase tracking-[0.22em]">Admins</span>
             </div>
             <p className="mt-4 text-3xl font-semibold text-white">{stats.admins}</p>
           </div>
-          <div className="w-[220px] rounded-3xl border border-white/10 bg-white/5 p-5 sm:w-auto">
+          <div className="w-[78vw] max-w-[280px] snap-start rounded-3xl border border-white/10 bg-white/5 p-4 sm:w-auto sm:max-w-none sm:p-5">
             <div className="flex items-center gap-3 text-yellow-200">
               <Crown className="h-5 w-5" />
               <span className="text-xs font-semibold uppercase tracking-[0.22em]">Active premium</span>
             </div>
             <p className="mt-4 text-3xl font-semibold text-white">{stats.premium}</p>
           </div>
-          <div className="w-[220px] rounded-3xl border border-white/10 bg-white/5 p-5 sm:w-auto">
+          <div className="w-[78vw] max-w-[280px] snap-start rounded-3xl border border-white/10 bg-white/5 p-4 sm:w-auto sm:max-w-none sm:p-5">
             <div className="flex items-center gap-3 text-pink-200">
               <ShieldCheck className="h-5 w-5" />
               <span className="text-xs font-semibold uppercase tracking-[0.22em]">Completed onboarding</span>
             </div>
             <p className="mt-4 text-3xl font-semibold text-white">{stats.completedOnboarding}</p>
           </div>
-          <div className="w-[220px] rounded-3xl border border-white/10 bg-white/5 p-5 sm:w-auto">
+          <div className="w-[78vw] max-w-[280px] snap-start rounded-3xl border border-white/10 bg-white/5 p-4 sm:w-auto sm:max-w-none sm:p-5">
             <div className="flex items-center gap-3 text-orange-200">
               <AlertTriangle className="h-5 w-5" />
               <span className="text-xs font-semibold uppercase tracking-[0.22em]">Support inbox</span>
@@ -425,14 +465,14 @@ const AdminPage = () => {
           </div>
         </div>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
-          <aside className="rounded-3xl border border-white/10 bg-white/5 p-3 sm:p-4 lg:sticky lg:top-8 lg:h-fit">
+        <div className="mt-6 grid gap-4 sm:gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <aside className="rounded-3xl border border-white/10 bg-white/5 p-3 lg:sticky lg:top-8 lg:h-fit">
             <p className="px-3 text-xs font-semibold uppercase tracking-[0.22em] text-gray-400">Admin navigation</p>
-            <div className="mt-4 grid grid-cols-2 gap-2 lg:block lg:space-y-2">
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:block lg:space-y-2">
               <button
                 type="button"
                 onClick={() => setActiveSection('users')}
-                className={`col-span-2 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition sm:col-span-1 lg:col-span-2 ${
+                className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition ${
                   activeSection === 'users' ? 'bg-cyan-500/15 text-cyan-200' : 'bg-black/20 text-gray-200 hover:bg-white/10'
                 }`}
               >
@@ -485,7 +525,7 @@ const AdminPage = () => {
 
           <div className="space-y-6">
             {activeSection === 'features' ? (
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-5 sm:p-6">
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-violet-200">Feature control</p>
@@ -523,14 +563,14 @@ const AdminPage = () => {
             ) : null}
 
             {activeSection === 'users' ? (
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-5 sm:p-6">
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
                 <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <h2 className="text-xl font-semibold text-white">User directory</h2>
                     <p className="mt-1 text-sm text-gray-400">All users, including admins and incomplete profiles. Edit any user from one control point.</p>
                   </div>
 
-                  <label className="flex w-full max-w-md items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                  <label className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 lg:max-w-md">
                     <Search className="h-4 w-4 text-gray-400" />
                     <input
                       value={search}
@@ -555,17 +595,17 @@ const AdminPage = () => {
                   </div>
                 ) : (
                   <>
-                    <div className="space-y-4 lg:hidden">
+                    <div className="space-y-3 lg:hidden">
                       {users.map((user) => (
-                        <div key={user.id} className="rounded-3xl border border-white/10 bg-black/20 p-4">
+                        <div key={user.id} className="rounded-[1.75rem] border border-white/10 bg-black/20 p-4 shadow-[0_12px_30px_rgba(2,6,23,0.32)]">
                           <div className="flex flex-col gap-3">
                             <div className="min-w-0">
-                              <p className="truncate text-lg font-semibold text-white">{user.name}</p>
+                              <p className="truncate text-base font-semibold text-white">{user.name}</p>
                               <p className="truncate text-xs text-gray-400">{user.email}</p>
                             </div>
                             <button
                               onClick={() => openEditor(user)}
-                              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-500/20"
+                              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-2.5 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-500/20"
                             >
                               <PencilLine className="h-3.5 w-3.5" />
                               Edit User
@@ -663,8 +703,8 @@ const AdminPage = () => {
             ) : null}
 
             {activeSection === 'payments' ? (
-              <div className="space-y-6">
-                <div className="rounded-3xl border border-white/10 bg-white/5 p-5 sm:p-6">
+                <div className="space-y-4 sm:space-y-6">
+                  <div className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
                   <div className="mb-5">
                     <h2 className="text-xl font-semibold text-white">Subscription payments</h2>
                     <p className="mt-1 text-sm text-gray-400">
@@ -746,7 +786,7 @@ const AdminPage = () => {
                       </div>
 
                       <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-4 sm:p-5">
-                        <div className="mb-4 flex items-center justify-between gap-3">
+                        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <h3 className="text-lg font-semibold text-white">Recent subscription records</h3>
                             <p className="mt-1 text-sm text-gray-400">Latest tracked payment and subscription entries across all users.</p>
@@ -756,8 +796,8 @@ const AdminPage = () => {
                           </span>
                         </div>
 
-                        <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                          <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 md:col-span-2 xl:col-span-2">
+                        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                          <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 sm:col-span-2 xl:col-span-2">
                             <Search className="h-4 w-4 shrink-0 text-gray-400" />
                             <input
                               value={paymentSearch}
@@ -938,7 +978,7 @@ const AdminPage = () => {
             ) : null}
 
             {activeSection === 'reports' ? (
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-5 sm:p-6">
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
                 <div className="mb-5">
                   <h2 className="text-xl font-semibold text-white">Support inbox</h2>
                   <p className="mt-1 text-sm text-gray-400">All help and report tickets submitted by users. Review ticket type, reporter email, subject, and message content here.</p>
@@ -980,6 +1020,41 @@ const AdminPage = () => {
                         </div>
                         <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-4 text-sm leading-6 text-gray-200">
                           {issue.message}
+                        </div>
+                        {Array.isArray(issue.replies) && issue.replies.length > 0 ? (
+                          <div className="mt-4 space-y-3">
+                            {issue.replies.map((reply, index) => (
+                              <div key={`${issue.id}-reply-${index}`} className="rounded-2xl border border-cyan-400/15 bg-cyan-500/5 px-4 py-4">
+                                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">
+                                    Admin reply{reply.adminName ? ` • ${reply.adminName}` : ''}
+                                  </p>
+                                  <span className="text-xs text-gray-400">{formatReportedAt(reply.createdAt)}</span>
+                                </div>
+                                <p className="mt-2 text-sm leading-6 text-gray-200">{reply.message}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                        <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Reply to user</p>
+                          <textarea
+                            value={replyDrafts[issue.id] || ''}
+                            onChange={(event) => handleReplyDraftChange(issue.id, event.target.value)}
+                            rows={3}
+                            placeholder="Write a response that will be sent to the user."
+                            className="mt-3 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none placeholder:text-gray-500"
+                          />
+                          <div className="mt-3 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => void handleReplyToTicket(issue.id)}
+                              disabled={replyingTicketId === issue.id}
+                              className="rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {replyingTicketId === issue.id ? 'Sending...' : 'Send reply'}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}

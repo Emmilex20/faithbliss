@@ -1,6 +1,6 @@
 // src/pages/Help.tsx
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, HelpCircle, Send } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
@@ -17,10 +17,46 @@ const HelpContent = () => {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [tickets, setTickets] = useState<Awaited<ReturnType<typeof API.Support.getMyTickets>>['tickets']>([]);
+  const [loadingTickets, setLoadingTickets] = useState(true);
 
   const layoutName = user?.name || 'User';
   const layoutImage = user?.profilePhoto1 || undefined;
   const layoutUser = user || null;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadTickets = async () => {
+      try {
+        const response = await API.Support.getMyTickets('HELP');
+        if (isMounted) {
+          setTickets(Array.isArray(response.tickets) ? response.tickets : []);
+        }
+      } catch (error: any) {
+        if (isMounted) {
+          showError(error?.message || 'Unable to load your support messages.');
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingTickets(false);
+        }
+      }
+    };
+
+    void loadTickets();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [showError]);
+
+  const formatReportedAt = (value: string | null) => {
+    if (!value) return 'Unknown time';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return 'Unknown time';
+    return parsed.toLocaleString();
+  };
 
   const handleSubmit = async () => {
     if (!message.trim()) {
@@ -31,6 +67,8 @@ const HelpContent = () => {
       setSending(true);
       await API.Support.submitTicket({ type: 'HELP', subject, message });
       showSuccess('Your request has been sent.');
+      const response = await API.Support.getMyTickets('HELP');
+      setTickets(Array.isArray(response.tickets) ? response.tickets : []);
       setSubject('');
       setMessage('');
     } catch (error: any) {
@@ -87,6 +125,64 @@ const HelpContent = () => {
               <Send className="h-4 w-4" />
               {sending ? 'Sending...' : 'Send message'}
             </button>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold text-white">Your support messages</h3>
+              <p className="mt-1 text-sm text-gray-300">Admin responses will appear here on the same thread.</p>
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-4">
+            {loadingTickets ? (
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-5 text-sm text-gray-300">
+                Loading your support history...
+              </div>
+            ) : tickets.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-5 text-sm text-gray-300">
+                You have not sent any help requests yet.
+              </div>
+            ) : (
+              tickets.map((ticket) => (
+                <div key={ticket.id} className="rounded-3xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">Help request</p>
+                      <h4 className="mt-2 text-base font-semibold text-white">{ticket.subject || 'No subject provided'}</h4>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-gray-300">{ticket.status}</span>
+                      <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-gray-300">{formatReportedAt(ticket.createdAt)}</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-4 text-sm leading-6 text-gray-200">
+                    {ticket.message}
+                  </div>
+                  {Array.isArray(ticket.replies) && ticket.replies.length > 0 ? (
+                    <div className="mt-4 space-y-3">
+                      {ticket.replies.map((reply, index) => (
+                        <div key={`${ticket.id}-reply-${index}`} className="rounded-2xl border border-cyan-400/15 bg-cyan-500/5 px-4 py-4">
+                          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">
+                              Support reply{reply.adminName ? ` • ${reply.adminName}` : ''}
+                            </p>
+                            <span className="text-xs text-gray-400">{formatReportedAt(reply.createdAt)}</span>
+                          </div>
+                          <p className="mt-2 text-sm leading-6 text-gray-200">{reply.message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-4 text-sm text-gray-400">
+                      No admin response yet.
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
