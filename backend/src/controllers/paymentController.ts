@@ -46,9 +46,76 @@ type UserPricingContext = {
   location?: string;
 };
 
+type PaymentAnalyticsRecord = {
+  userId: string;
+  name: string;
+  email: string;
+  status: string;
+  tier: string;
+  billingCycle: BillingCycle | 'monthly';
+  pricingRegion: string;
+  displayCurrency: string;
+  displayAmountMajor: number;
+  chargeCurrency: string;
+  chargeAmountMajor: number;
+  chargeAmountSubunits: number;
+  reference: string;
+  planCode: string | null;
+  customerCode: string;
+  authorizationCode: string;
+  nextPaymentDate: string | null;
+  updatedAt: string | null;
+};
+
+const PRIMARY_ADMIN_EMAIL = 'aginaemmanuel6@gmail.com';
+
 const PLAN_METADATA: Record<PlanTier, { name: string }> = {
   premium: { name: 'Premium Plan' },
   elite: { name: 'Pro Plan' },
+};
+
+const isAdminFromUserDoc = (userData: Record<string, any> | undefined): boolean => {
+  const email = typeof userData?.email === 'string' ? userData.email.trim().toLowerCase() : '';
+  if (email === PRIMARY_ADMIN_EMAIL) return true;
+
+  const role = typeof userData?.role === 'string' ? userData.role.trim().toLowerCase() : '';
+  return role === 'admin';
+};
+
+const requireAdminAccess = async (userId: string | undefined, res: Response) => {
+  if (!userId) {
+    res.status(401).json({ message: 'Unauthorized: Firebase UID missing.' });
+    return null;
+  }
+
+  const snapshot = await usersCollection.doc(userId).get();
+  if (!snapshot.exists) {
+    res.status(404).json({ message: 'Admin user not found.' });
+    return null;
+  }
+
+  const userData = snapshot.data() as Record<string, any> | undefined;
+  if (!isAdminFromUserDoc(userData)) {
+    res.status(403).json({ message: 'Admin access required.' });
+    return null;
+  }
+
+  return userData;
+};
+
+const normalizeTimestamp = (value: unknown): string | null => {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (value instanceof Date) return value.toISOString();
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'toDate' in value &&
+    typeof (value as { toDate?: () => Date }).toDate === 'function'
+  ) {
+    return (value as { toDate: () => Date }).toDate().toISOString();
+  }
+  return null;
 };
 
 const removeUndefinedValues = <T extends Record<string, any>>(data: T): Partial<T> => {
@@ -439,6 +506,182 @@ export const listSubscriptionPlans = async (_req: Request, res: Response) => {
     return res.status(200).json({ plans });
   } catch (error: any) {
     return res.status(500).json({ message: error?.message || 'Failed to load plans.' });
+  }
+};
+
+export const getAdminPaymentAnalytics = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId as string | undefined;
+    const adminUser = await requireAdminAccess(userId, res);
+    if (!adminUser) return;
+
+    const snapshot = await usersCollection.get();
+    const records: PaymentAnalyticsRecord[] = [];
+
+    snapshot.forEach((doc) => {
+      const user = doc.data() as Record<string, any>;
+      const subscription = (user.subscription || {}) as StoredSubscription & {
+        updatedAt?: unknown;
+      };
+      const status = typeof user.subscriptionStatus === 'string'
+        ? user.subscriptionStatus
+        : typeof subscription.status === 'string'
+          ? subscription.status
+          : '';
+
+      const tier = typeof user.subscriptionTier === 'string'
+        ? user.subscriptionTier
+        : typeof subscription.tier === 'string'
+          ? subscription.tier
+          : '';
+
+      const hasPaymentRecord = Boolean(
+        status ||
+        tier ||
+        subscription.reference ||
+        subscription.chargeAmountMajor ||
+        subscription.displayAmountMajor
+      );
+
+      if (!hasPaymentRecord) return;
+
+      records.push({
+        userId: doc.id,
+        name: typeof user.name === 'string' ? user.name : 'Unknown user',
+        email: typeof user.email === 'string' ? user.email : '',
+        status: status || 'unknown',
+        tier: tier || 'free',
+        billingCycle: subscription.billingCycle === 'quarterly' ? 'quarterly' : 'monthly',
+        pricingRegion: typeof subscription.pricingRegion === 'string' ? subscription.pricingRegion : 'unknown',
+        displayCurrency: typeof subscription.displayCurrency === 'string' ? subscription.displayCurrency : 'NGN',
+        displayAmountMajor: typeof subscription.displayAmountMajor === 'number' ? subscription.displayAmountMajor : 0,
+        chargeCurrency: typeof subscription.currency === 'string'
+          ? subscription.currency
+          : typeof user.subscriptionCurrency === 'string'
+            ? user.subscriptionCurrency
+            : 'NGN',
+        chargeAmountMajor: typeof subscription.chargeAmountMajor === 'number' ? subscription.chargeAmountMajor : 0,
+        chargeAmountSubunits: typeof subscription.chargeAmountSubunits === 'number' ? subscription.chargeAmountSubunits : 0,
+        reference: typeof subscription.reference === 'string' ? subscription.reference : '',
+        planCode: typeof subscription.planCode === 'string' ? subscription.planCode : null,
+        customerCode: typeof subscription.customerCode === 'string' ? subscription.customerCode : '',
+        authorizationCode: typeof subscription.authorizationCode === 'string' ? subscription.authorizationCode : '',
+        nextPaymentDate: typeof subscription.nextPaymentDate === 'string' ? subscription.nextPaymentDate : null,
+        updatedAt: normalizeTimestamp(subscription.updatedAt) || normalizeTimestamp(user.updatedAt),
+      });
+    });
+
+    records.sort((left, right) => {
+      const rightTime = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
+      const leftTime = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
+      return rightTime - leftTime;
+    });
+
+    const summary = records.reduce(
+      (acc, record) => {
+        acc.totalRecords += 1;
+        if (record.status === 'active') acc.activeSubscriptions += 1;
+        if (record.status === 'pending') acc.pendingSubscriptions += 1;
+        if (record.status === 'inactive') acc.inactiveSubscriptions += 1;
+        if (record.billingCycle === 'monthly') acc.monthlyPlans += 1;
+        if (record.billingCycle === 'quarterly') acc.quarterlyPlans += 1;
+        if (record.status === 'active') {
+          acc.activeChargeVolumeNgn += record.chargeCurrency === 'NGN' ? record.chargeAmountMajor : 0;
+        }
+        if (record.status === 'active' || record.status === 'pending') {
+          acc.trackedChargeVolumeNgn += record.chargeCurrency === 'NGN' ? record.chargeAmountMajor : 0;
+        }
+        return acc;
+      },
+      {
+        totalRecords: 0,
+        activeSubscriptions: 0,
+        pendingSubscriptions: 0,
+        inactiveSubscriptions: 0,
+        monthlyPlans: 0,
+        quarterlyPlans: 0,
+        activeChargeVolumeNgn: 0,
+        trackedChargeVolumeNgn: 0,
+      }
+    );
+
+    const statusBreakdown = records.reduce<Record<string, number>>((acc, record) => {
+      acc[record.status] = (acc[record.status] || 0) + 1;
+      return acc;
+    }, {});
+
+    const regionBreakdown = records.reduce<Record<string, number>>((acc, record) => {
+      acc[record.pricingRegion] = (acc[record.pricingRegion] || 0) + 1;
+      return acc;
+    }, {});
+
+    const tierBreakdown = records.reduce<Record<string, number>>((acc, record) => {
+      acc[record.tier] = (acc[record.tier] || 0) + 1;
+      return acc;
+    }, {});
+
+    return res.status(200).json({
+      adminEmail: adminUser.email,
+      summary,
+      breakdowns: {
+        status: statusBreakdown,
+        region: regionBreakdown,
+        tier: tierBreakdown,
+      },
+      records,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ message: error?.message || 'Failed to load payment analytics.' });
+  }
+};
+
+export const deleteAdminPaymentRecord = async (req: Request, res: Response) => {
+  try {
+    const adminUserId = (req as any).userId as string | undefined;
+    const adminUser = await requireAdminAccess(adminUserId, res);
+    if (!adminUser) return;
+
+    const targetUserId = typeof req.params.userId === 'string' ? req.params.userId.trim() : '';
+    if (!targetUserId) {
+      return res.status(400).json({ message: 'Target user ID is required.' });
+    }
+
+    const targetRef = usersCollection.doc(targetUserId);
+    const targetSnap = await targetRef.get();
+    if (!targetSnap.exists) {
+      return res.status(404).json({ message: 'Payment record owner not found.' });
+    }
+
+    const targetUser = targetSnap.data() as Record<string, any> | undefined;
+    const hadSubscriptionRecord = Boolean(
+      targetUser?.subscription ||
+      targetUser?.subscriptionStatus ||
+      targetUser?.subscriptionTier ||
+      targetUser?.subscriptionCurrency
+    );
+
+    if (!hadSubscriptionRecord) {
+      return res.status(404).json({ message: 'No payment record exists for this user.' });
+    }
+
+    await targetRef.set(
+      {
+        subscription: admin.firestore.FieldValue.delete(),
+        subscriptionStatus: admin.firestore.FieldValue.delete(),
+        subscriptionTier: admin.firestore.FieldValue.delete(),
+        subscriptionCurrency: admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    return res.status(200).json({
+      message: 'Payment record deleted successfully.',
+      userId: targetUserId,
+      email: typeof targetUser?.email === 'string' ? targetUser.email : '',
+    });
+  } catch (error: any) {
+    return res.status(500).json({ message: error?.message || 'Failed to delete payment record.' });
   }
 };
 

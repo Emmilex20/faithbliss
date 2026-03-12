@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeft, Crown, PencilLine, Search, ShieldCheck, SlidersHorizontal, Trash2, Users } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CircleDollarSign, Crown, PencilLine, Search, ShieldCheck, SlidersHorizontal, Trash2, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAllUsers } from '@/hooks/useAPI';
 import { API, type AdminUpdateUserPayload } from '@/services/api';
@@ -18,6 +18,9 @@ type EditableUser = {
   denomination: string;
   onboardingCompleted: boolean;
   isActive: boolean;
+  subscriptionStatus: 'active' | 'pending' | 'inactive';
+  subscriptionTier: 'free' | 'premium' | 'elite';
+  subscriptionBillingCycle: 'monthly' | 'quarterly';
 };
 
 type EditableSource = {
@@ -33,12 +36,16 @@ type EditableSource = {
   onboardingCompleted?: boolean;
   isActive?: boolean;
   subscriptionStatus?: string;
+  subscriptionTier?: string;
+  subscriptionBillingCycle?: string;
 };
 
 const normalizeEditableGender = (value: unknown): 'MALE' | 'FEMALE' => {
   const normalized = typeof value === 'string' ? value.trim().toUpperCase() : '';
   return normalized === 'FEMALE' ? 'FEMALE' : 'MALE';
 };
+
+const isAdminRole = (role: string | undefined) => (role || '').trim().toLowerCase() === 'admin';
 
 const toEditableUser = (user: EditableSource): EditableUser => ({
   id: user.id,
@@ -52,11 +59,20 @@ const toEditableUser = (user: EditableSource): EditableUser => ({
   denomination: typeof user.denomination === 'string' ? user.denomination : '',
   onboardingCompleted: Boolean(user.onboardingCompleted),
   isActive: user.isActive !== false,
+  subscriptionStatus:
+    user.subscriptionStatus === 'active' || user.subscriptionStatus === 'pending' || user.subscriptionStatus === 'inactive'
+      ? user.subscriptionStatus
+      : 'inactive',
+  subscriptionTier:
+    user.subscriptionTier === 'premium' || user.subscriptionTier === 'elite' || user.subscriptionTier === 'free'
+      ? user.subscriptionTier
+      : 'free',
+  subscriptionBillingCycle: user.subscriptionBillingCycle === 'quarterly' ? 'quarterly' : 'monthly',
 });
 
 const AdminPage = () => {
   const { showError, showSuccess, showInfo } = useToast();
-  const [activeSection, setActiveSection] = useState<'users' | 'reports' | 'features'>('users');
+  const [activeSection, setActiveSection] = useState<'users' | 'payments' | 'reports' | 'features'>('users');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<EditableUser | null>(null);
@@ -69,6 +85,14 @@ const AdminPage = () => {
   const [featureSaving, setFeatureSaving] = useState(false);
   const [supportTickets, setSupportTickets] = useState<Awaited<ReturnType<typeof API.Support.getTickets>>['tickets']>([]);
   const [issuesLoading, setIssuesLoading] = useState(true);
+  const [paymentAnalytics, setPaymentAnalytics] = useState<Awaited<ReturnType<typeof API.Payment.getAdminAnalytics>> | null>(null);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
+  const [paymentSearch, setPaymentSearch] = useState('');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<'all' | 'active' | 'pending' | 'inactive' | 'unknown'>('all');
+  const [paymentTierFilter, setPaymentTierFilter] = useState<'all' | 'premium' | 'elite' | 'free'>('all');
+  const [paymentCycleFilter, setPaymentCycleFilter] = useState<'all' | 'monthly' | 'quarterly'>('all');
+  const [paymentSort, setPaymentSort] = useState<'latest' | 'oldest' | 'amount-high' | 'amount-low' | 'name-az'>('latest');
+  const [deletingPaymentUserId, setDeletingPaymentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
@@ -80,14 +104,16 @@ const AdminPage = () => {
 
     const loadAdminData = async () => {
       try {
-        const [settingsResponse, issuesResponse] = await Promise.all([
+        const [settingsResponse, issuesResponse, paymentsResponse] = await Promise.all([
           API.User.getFeatureSettings(),
           API.Support.getTickets(),
+          API.Payment.getAdminAnalytics(),
         ]);
 
         if (isMounted) {
           setPassportModeEnabled(Boolean(settingsResponse.passportModeEnabled));
           setSupportTickets(Array.isArray(issuesResponse.tickets) ? issuesResponse.tickets : []);
+          setPaymentAnalytics(paymentsResponse);
         }
       } catch (settingsError) {
         const message =
@@ -99,6 +125,7 @@ const AdminPage = () => {
         if (isMounted) {
           setFeatureLoading(false);
           setIssuesLoading(false);
+          setPaymentsLoading(false);
         }
       }
     };
@@ -119,8 +146,62 @@ const AdminPage = () => {
     const premium = users.filter((user) => user.subscriptionStatus === 'active').length;
     const completedOnboarding = users.filter((user) => user.onboardingCompleted).length;
     const tickets = supportTickets.length;
-    return { total, admins, premium, completedOnboarding, tickets };
-  }, [data?.total, supportTickets.length, users]);
+    const paymentRecords = paymentAnalytics?.summary.totalRecords ?? 0;
+    return { total, admins, premium, completedOnboarding, tickets, paymentRecords };
+  }, [data?.total, paymentAnalytics?.summary.totalRecords, supportTickets.length, users]);
+
+  const filteredPaymentRecords = useMemo(() => {
+    const records = paymentAnalytics?.records || [];
+    const normalizedSearch = paymentSearch.trim().toLowerCase();
+
+    const filtered = records.filter((record) => {
+      if (paymentStatusFilter !== 'all' && record.status !== paymentStatusFilter) return false;
+      if (paymentTierFilter !== 'all' && record.tier !== paymentTierFilter) return false;
+      if (paymentCycleFilter !== 'all' && record.billingCycle !== paymentCycleFilter) return false;
+
+      if (!normalizedSearch) return true;
+
+      const haystack = [
+        record.name,
+        record.email,
+        record.reference,
+        record.tier,
+        record.status,
+        record.pricingRegion,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return haystack.includes(normalizedSearch);
+    });
+
+    const sorted = [...filtered];
+    sorted.sort((left, right) => {
+      if (paymentSort === 'name-az') {
+        return left.name.localeCompare(right.name);
+      }
+      if (paymentSort === 'amount-high') {
+        return right.chargeAmountMajor - left.chargeAmountMajor;
+      }
+      if (paymentSort === 'amount-low') {
+        return left.chargeAmountMajor - right.chargeAmountMajor;
+      }
+
+      const leftTime = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
+      const rightTime = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
+      return paymentSort === 'oldest' ? leftTime - rightTime : rightTime - leftTime;
+    });
+
+    return sorted;
+  }, [
+    paymentAnalytics?.records,
+    paymentCycleFilter,
+    paymentSearch,
+    paymentSort,
+    paymentStatusFilter,
+    paymentTierFilter,
+  ]);
 
   const openEditor = (user: User) => {
     const editable = toEditableUser(user);
@@ -144,7 +225,7 @@ const AdminPage = () => {
     const payload: AdminUpdateUserPayload = {
       name: editingUser.name.trim(),
       email: editingUser.email.trim().toLowerCase(),
-      role: editingUser.role === 'admin' ? 'admin' : 'user',
+      role: isAdminRole(selectedUser.role) ? undefined : editingUser.role === 'admin' ? 'admin' : 'user',
       age: Number(editingUser.age),
       gender: editingUser.gender,
       location: editingUser.location.trim(),
@@ -152,6 +233,9 @@ const AdminPage = () => {
       denomination: editingUser.denomination.trim(),
       onboardingCompleted: Boolean(editingUser.onboardingCompleted),
       isActive: Boolean(editingUser.isActive),
+      subscriptionStatus: editingUser.subscriptionStatus,
+      subscriptionTier: editingUser.subscriptionTier,
+      subscriptionBillingCycle: editingUser.subscriptionBillingCycle,
     };
 
     try {
@@ -237,11 +321,49 @@ const AdminPage = () => {
     }
   };
 
+  const reloadPaymentAnalytics = async () => {
+    const paymentsResponse = await API.Payment.getAdminAnalytics();
+    setPaymentAnalytics(paymentsResponse);
+  };
+
+  const handleDeletePaymentRecord = async (userId: string, userLabel: string) => {
+    const confirmed = window.confirm(`Delete the stored payment record for ${userLabel}? This clears the current subscription/payment data from admin records.`);
+    if (!confirmed) return;
+
+    try {
+      setDeletingPaymentUserId(userId);
+      const response = await API.Payment.deleteAdminRecord(userId);
+      await reloadPaymentAnalytics();
+      await refetch();
+      showSuccess(response.message || 'Payment record deleted successfully.');
+    } catch (deleteError) {
+      const message =
+        deleteError instanceof Error && deleteError.message
+          ? deleteError.message
+          : 'Failed to delete payment record.';
+      showError(message);
+    } finally {
+      setDeletingPaymentUserId(null);
+    }
+  };
+
   const formatReportedAt = (value: string | null) => {
     if (!value) return 'Unknown time';
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) return 'Unknown time';
     return parsed.toLocaleString();
+  };
+
+  const formatMoney = (amount: number, currency: string) => {
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: currency || 'NGN',
+        maximumFractionDigits: currency === 'NGN' ? 0 : 2,
+      }).format(amount);
+    } catch {
+      return `${currency} ${amount.toLocaleString()}`;
+    }
   };
 
   return (
@@ -319,6 +441,19 @@ const AdminPage = () => {
                   <span className="font-medium">User directory</span>
                 </span>
                 <span className="text-xs text-gray-400">{stats.total}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection('payments')}
+                className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition ${
+                  activeSection === 'payments' ? 'bg-yellow-500/15 text-yellow-200' : 'bg-black/20 text-gray-200 hover:bg-white/10'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <CircleDollarSign className="h-4 w-4" />
+                  <span className="font-medium">Payments</span>
+                </span>
+                <span className="text-xs text-gray-400">{stats.paymentRecords}</span>
               </button>
               <button
                 type="button"
@@ -527,6 +662,281 @@ const AdminPage = () => {
               </div>
             ) : null}
 
+            {activeSection === 'payments' ? (
+              <div className="space-y-6">
+                <div className="rounded-3xl border border-white/10 bg-white/5 p-5 sm:p-6">
+                  <div className="mb-5">
+                    <h2 className="text-xl font-semibold text-white">Subscription payments</h2>
+                    <p className="mt-1 text-sm text-gray-400">
+                      Monitor active subscriptions, tracked charge volume, billing cycles, and recent subscription records.
+                    </p>
+                  </div>
+
+                  {paymentsLoading ? (
+                    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-6 text-sm text-gray-300">
+                      Loading payment analytics...
+                    </div>
+                  ) : !paymentAnalytics ? (
+                    <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-6 text-sm text-red-200">
+                      Failed to load payment analytics.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="-mx-2 overflow-x-auto px-2 pb-1">
+                        <div className="grid min-w-max grid-flow-col gap-4 sm:min-w-0 sm:grid-flow-row sm:grid-cols-2 xl:grid-cols-4">
+                          <div className="w-[220px] rounded-3xl border border-white/10 bg-black/20 p-5 sm:w-auto">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Active subscriptions</p>
+                            <p className="mt-3 text-3xl font-semibold text-white">{paymentAnalytics.summary.activeSubscriptions}</p>
+                          </div>
+                          <div className="w-[220px] rounded-3xl border border-white/10 bg-black/20 p-5 sm:w-auto">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Pending subscriptions</p>
+                            <p className="mt-3 text-3xl font-semibold text-white">{paymentAnalytics.summary.pendingSubscriptions}</p>
+                          </div>
+                          <div className="w-[220px] rounded-3xl border border-white/10 bg-black/20 p-5 sm:w-auto">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Active NGN volume</p>
+                            <p className="mt-3 text-3xl font-semibold text-white">
+                              {formatMoney(paymentAnalytics.summary.activeChargeVolumeNgn, 'NGN')}
+                            </p>
+                          </div>
+                          <div className="w-[220px] rounded-3xl border border-white/10 bg-black/20 p-5 sm:w-auto">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Tracked NGN volume</p>
+                            <p className="mt-3 text-3xl font-semibold text-white">
+                              {formatMoney(paymentAnalytics.summary.trackedChargeVolumeNgn, 'NGN')}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+                        <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Billing cycles</p>
+                          <div className="mt-4 space-y-3">
+                            <div className="flex items-center justify-between text-sm text-gray-200">
+                              <span>Monthly</span>
+                              <span className="font-semibold text-white">{paymentAnalytics.summary.monthlyPlans}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm text-gray-200">
+                              <span>Quarterly</span>
+                              <span className="font-semibold text-white">{paymentAnalytics.summary.quarterlyPlans}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Status breakdown</p>
+                          <div className="mt-4 space-y-3">
+                            {Object.entries(paymentAnalytics.breakdowns.status).map(([key, value]) => (
+                              <div key={key} className="flex items-center justify-between text-sm text-gray-200">
+                                <span className="capitalize">{key}</span>
+                                <span className="font-semibold text-white">{value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Region breakdown</p>
+                          <div className="mt-4 space-y-3">
+                            {Object.entries(paymentAnalytics.breakdowns.region).map(([key, value]) => (
+                              <div key={key} className="flex items-center justify-between text-sm text-gray-200">
+                                <span className="capitalize">{key}</span>
+                                <span className="font-semibold text-white">{value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-4 sm:p-5">
+                        <div className="mb-4 flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="text-lg font-semibold text-white">Recent subscription records</h3>
+                            <p className="mt-1 text-sm text-gray-400">Latest tracked payment and subscription entries across all users.</p>
+                          </div>
+                          <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-gray-300">
+                            {filteredPaymentRecords.length} of {paymentAnalytics.records.length} records
+                          </span>
+                        </div>
+
+                        <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                          <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 md:col-span-2 xl:col-span-2">
+                            <Search className="h-4 w-4 shrink-0 text-gray-400" />
+                            <input
+                              value={paymentSearch}
+                              onChange={(event) => setPaymentSearch(event.target.value)}
+                              placeholder="Search by user, email, or reference"
+                              className="w-full bg-transparent text-sm text-white outline-none placeholder:text-gray-500"
+                            />
+                          </label>
+                          <select
+                            value={paymentStatusFilter}
+                            onChange={(event) => setPaymentStatusFilter(event.target.value as typeof paymentStatusFilter)}
+                            className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none"
+                          >
+                            <option value="all">All statuses</option>
+                            <option value="active">Active</option>
+                            <option value="pending">Pending</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="unknown">Unknown</option>
+                          </select>
+                          <select
+                            value={paymentTierFilter}
+                            onChange={(event) => setPaymentTierFilter(event.target.value as typeof paymentTierFilter)}
+                            className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none"
+                          >
+                            <option value="all">All plans</option>
+                            <option value="premium">Premium</option>
+                            <option value="elite">Pro</option>
+                            <option value="free">Free</option>
+                          </select>
+                          <select
+                            value={paymentCycleFilter}
+                            onChange={(event) => setPaymentCycleFilter(event.target.value as typeof paymentCycleFilter)}
+                            className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none"
+                          >
+                            <option value="all">All cycles</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="quarterly">3-Month</option>
+                          </select>
+                          <select
+                            value={paymentSort}
+                            onChange={(event) => setPaymentSort(event.target.value as typeof paymentSort)}
+                            className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none md:col-span-2 xl:col-span-1"
+                          >
+                            <option value="latest">Sort: Latest</option>
+                            <option value="oldest">Sort: Oldest</option>
+                            <option value="amount-high">Sort: Amount high-low</option>
+                            <option value="amount-low">Sort: Amount low-high</option>
+                            <option value="name-az">Sort: Name A-Z</option>
+                          </select>
+                        </div>
+
+                        {paymentAnalytics.records.length === 0 ? (
+                          <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-6 text-sm text-gray-300">
+                            No subscription records tracked yet.
+                          </div>
+                        ) : filteredPaymentRecords.length === 0 ? (
+                          <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-6 text-sm text-gray-300">
+                            No payment records match the current filters.
+                          </div>
+                        ) : (
+                          <>
+                            <div className="space-y-4 lg:hidden">
+                              {filteredPaymentRecords.map((record) => (
+                                <div key={`${record.userId}-${record.reference || record.updatedAt || record.email}`} className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="truncate text-base font-semibold text-white">{record.name}</p>
+                                      <p className="truncate text-xs text-gray-400">{record.email}</p>
+                                    </div>
+                                    <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${
+                                      record.status === 'active'
+                                        ? 'bg-emerald-500/15 text-emerald-200'
+                                        : record.status === 'pending'
+                                          ? 'bg-yellow-500/15 text-yellow-200'
+                                          : 'bg-white/10 text-gray-300'
+                                    }`}>
+                                      {record.status}
+                                    </span>
+                                  </div>
+                                  <div className="mt-4 grid grid-cols-2 gap-3">
+                                    <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-3">
+                                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Plan</p>
+                                      <p className="mt-1 text-sm text-white capitalize">{record.tier} • {record.billingCycle}</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-3">
+                                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Charge</p>
+                                      <p className="mt-1 text-sm text-white">{formatMoney(record.chargeAmountMajor, record.chargeCurrency)}</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-3">
+                                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Shown to user</p>
+                                      <p className="mt-1 text-sm text-white">{formatMoney(record.displayAmountMajor, record.displayCurrency)}</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-3">
+                                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Region</p>
+                                      <p className="mt-1 text-sm text-white capitalize">{record.pricingRegion}</p>
+                                    </div>
+                                  </div>
+                                  <div className="mt-3 rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-3 text-xs text-gray-300">
+                                    <p className="truncate">Reference: {record.reference || 'N/A'}</p>
+                                    <p className="mt-1">Updated: {formatReportedAt(record.updatedAt)}</p>
+                                    <p className="mt-1">Next payment: {formatReportedAt(record.nextPaymentDate)}</p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleDeletePaymentRecord(record.userId, record.name || record.email)}
+                                    disabled={deletingPaymentUserId === record.userId}
+                                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    {deletingPaymentUserId === record.userId ? 'Deleting...' : 'Delete payment record'}
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="hidden overflow-x-auto rounded-2xl border border-white/10 lg:block">
+                              <div className="min-w-[1260px]">
+                                <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1fr)_auto] gap-4 bg-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-300">
+                                  <span>User</span>
+                                  <span>Plan</span>
+                                  <span>Status</span>
+                                  <span>Charge</span>
+                                  <span>Shown price</span>
+                                  <span>Reference</span>
+                                  <span>Action</span>
+                                </div>
+                                <div className="divide-y divide-white/10">
+                                  {filteredPaymentRecords.map((record) => (
+                                    <div
+                                      key={`${record.userId}-${record.reference || record.updatedAt || record.email}`}
+                                      className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1fr)_auto] gap-4 px-4 py-4 text-sm text-gray-200"
+                                    >
+                                      <div className="min-w-0">
+                                        <p className="truncate font-semibold text-white">{record.name}</p>
+                                        <p className="truncate text-xs text-gray-400">{record.email}</p>
+                                      </div>
+                                      <div className="text-sm capitalize text-white">{record.tier} • {record.billingCycle}</div>
+                                      <div>
+                                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                                          record.status === 'active'
+                                            ? 'bg-emerald-500/15 text-emerald-200'
+                                            : record.status === 'pending'
+                                              ? 'bg-yellow-500/15 text-yellow-200'
+                                              : 'bg-white/10 text-gray-300'
+                                        }`}>
+                                          {record.status}
+                                        </span>
+                                      </div>
+                                      <div className="text-white">{formatMoney(record.chargeAmountMajor, record.chargeCurrency)}</div>
+                                      <div className="text-gray-300">{formatMoney(record.displayAmountMajor, record.displayCurrency)}</div>
+                                      <div className="min-w-0">
+                                        <p className="truncate text-white">{record.reference || 'N/A'}</p>
+                                        <p className="truncate text-xs text-gray-400">{formatReportedAt(record.updatedAt)}</p>
+                                      </div>
+                                      <div className="flex justify-end">
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleDeletePaymentRecord(record.userId, record.name || record.email)}
+                                          disabled={deletingPaymentUserId === record.userId}
+                                          className="inline-flex items-center gap-2 rounded-full border border-red-400/25 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                          {deletingPaymentUserId === record.userId ? 'Deleting...' : 'Delete'}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
             {activeSection === 'reports' ? (
               <div className="rounded-3xl border border-white/10 bg-white/5 p-5 sm:p-6">
                 <div className="mb-5">
@@ -614,10 +1024,19 @@ const AdminPage = () => {
                   </label>
                   <label className="space-y-2">
                     <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Role</span>
-                    <select value={editingUser.role === 'admin' ? 'admin' : 'user'} onChange={(e) => updateEditingField('role', e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none">
-                      <option value="user">User</option>
-                      <option value="admin">Admin</option>
-                    </select>
+                    {isAdminRole(selectedUser.role) ? (
+                      <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white">
+                        <span>Admin</span>
+                        <span className="rounded-full bg-yellow-500/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-yellow-200">
+                          Locked
+                        </span>
+                      </div>
+                    ) : (
+                      <select value={editingUser.role === 'admin' ? 'admin' : 'user'} onChange={(e) => updateEditingField('role', e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none">
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    )}
                   </label>
                   <label className="space-y-2">
                     <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Age</span>
@@ -653,6 +1072,47 @@ const AdminPage = () => {
                     <span className="text-sm text-white">Account active</span>
                     <input type="checkbox" checked={editingUser.isActive !== false} onChange={(e) => updateEditingField('isActive', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
                   </label>
+                </div>
+
+                <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-yellow-200">Subscription access</p>
+                  <div className="mt-4 grid gap-4 md:grid-cols-3">
+                    <label className="space-y-2">
+                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Subscription status</span>
+                      <select
+                        value={editingUser.subscriptionStatus}
+                        onChange={(e) => updateEditingField('subscriptionStatus', e.target.value as EditableUser['subscriptionStatus'])}
+                        className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none"
+                      >
+                        <option value="inactive">Inactive</option>
+                        <option value="pending">Pending</option>
+                        <option value="active">Active</option>
+                      </select>
+                    </label>
+                    <label className="space-y-2">
+                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Subscription tier</span>
+                      <select
+                        value={editingUser.subscriptionTier}
+                        onChange={(e) => updateEditingField('subscriptionTier', e.target.value as EditableUser['subscriptionTier'])}
+                        className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none"
+                      >
+                        <option value="free">Free</option>
+                        <option value="premium">Premium</option>
+                        <option value="elite">Pro</option>
+                      </select>
+                    </label>
+                    <label className="space-y-2">
+                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Billing cycle</span>
+                      <select
+                        value={editingUser.subscriptionBillingCycle}
+                        onChange={(e) => updateEditingField('subscriptionBillingCycle', e.target.value as EditableUser['subscriptionBillingCycle'])}
+                        className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none"
+                      >
+                        <option value="monthly">Monthly</option>
+                        <option value="quarterly">3-Month</option>
+                      </select>
+                    </label>
+                  </div>
                 </div>
               </div>
 

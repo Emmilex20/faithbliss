@@ -3,6 +3,8 @@
 import express from 'express';
 import { protect } from '../middleware/authMiddleware';
 import {
+  deleteAdminPaymentRecord,
+  getAdminPaymentAnalytics,
   handlePaystackWebhook,
   getLocalizedPricingQuote,
   initializeLocalizedSubscription,
@@ -17,6 +19,8 @@ const router = express.Router();
 router.post('/webhook', handlePaystackWebhook);
 
 // Authenticated endpoints
+router.get('/admin/analytics', protect, getAdminPaymentAnalytics);
+router.delete('/admin/records/:userId', protect, deleteAdminPaymentRecord);
 router.get('/quote', protect, getLocalizedPricingQuote);
 router.get('/plans', protect, listSubscriptionPlans);
 router.post('/pay', protect, initializeLocalizedSubscription);

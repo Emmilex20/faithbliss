@@ -364,6 +364,9 @@ export interface AdminUpdateUserPayload {
   denomination?: string;
   onboardingCompleted?: boolean;
   isActive?: boolean;
+  subscriptionStatus?: 'active' | 'pending' | 'inactive';
+  subscriptionTier?: 'free' | 'premium' | 'elite';
+  subscriptionBillingCycle?: 'monthly' | 'quarterly';
 }
 
 export interface AdminUpdateUserResponse {
@@ -381,6 +384,8 @@ export interface AdminUpdateUserResponse {
     onboardingCompleted: boolean;
     isActive: boolean;
     subscriptionStatus?: string;
+    subscriptionTier?: string;
+    subscriptionBillingCycle?: string;
   };
 }
 
@@ -423,6 +428,47 @@ export interface SupportTicket {
   reporterEmail: string;
   reporterName: string;
   createdAt: string | null;
+}
+
+export interface AdminPaymentRecord {
+  userId: string;
+  name: string;
+  email: string;
+  status: string;
+  tier: string;
+  billingCycle: 'monthly' | 'quarterly';
+  pricingRegion: string;
+  displayCurrency: string;
+  displayAmountMajor: number;
+  chargeCurrency: string;
+  chargeAmountMajor: number;
+  chargeAmountSubunits: number;
+  reference: string;
+  planCode: string | null;
+  customerCode: string;
+  authorizationCode: string;
+  nextPaymentDate: string | null;
+  updatedAt: string | null;
+}
+
+export interface AdminPaymentAnalyticsResponse {
+  adminEmail: string;
+  summary: {
+    totalRecords: number;
+    activeSubscriptions: number;
+    pendingSubscriptions: number;
+    inactiveSubscriptions: number;
+    monthlyPlans: number;
+    quarterlyPlans: number;
+    activeChargeVolumeNgn: number;
+    trackedChargeVolumeNgn: number;
+  };
+  breakdowns: {
+    status: Record<string, number>;
+    region: Record<string, number>;
+    tier: Record<string, number>;
+  };
+  records: AdminPaymentRecord[];
 }
 
 // Generic API request function
@@ -931,6 +977,14 @@ export const MessageAPI = {
 
 // Payments API
 export const PaymentAPI = {
+  getAdminAnalytics: async (): Promise<AdminPaymentAnalyticsResponse> => {
+    return apiRequest('/api/payments/admin/analytics');
+  },
+  deleteAdminRecord: async (userId: string): Promise<{ message: string; userId: string; email: string }> => {
+    return apiRequest(`/api/payments/admin/records/${userId}`, {
+      method: 'DELETE',
+    });
+  },
   getQuote: async (): Promise<LocalizedPricingQuoteResponse> => {
     return apiRequest('/api/payments/quote');
   },

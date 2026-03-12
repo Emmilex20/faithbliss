@@ -31,6 +31,13 @@ interface IFirestoreUser {
   profileFits?: string[];
   subscriptionStatus?: string;
   subscriptionTier?: string;
+  subscriptionCurrency?: string;
+  subscription?: {
+    status?: string;
+    tier?: string;
+    billingCycle?: string;
+    currency?: string;
+  };
   countryCode?: string;
   passportCountry?: string | null;
 }
@@ -175,7 +182,6 @@ const getAllUsers = async (req: CustomRequest, res: Response) => {
     const snapshot = await usersCollection.get();
     const filteredUsers = snapshot.docs
       .map((doc) => ({ ...(doc.data() as IFirestoreUser), id: doc.id }))
-      .filter((user) => user.id !== firebaseUid)
       .filter((user) => {
         if (!search) return true;
         const name = typeof user.name === 'string' ? user.name.toLowerCase() : '';
@@ -198,12 +204,15 @@ const getAllUsers = async (req: CustomRequest, res: Response) => {
         profilePhotoCount: countProfilePhotos(user),
         onboardingCompleted: user.onboardingCompleted,
         subscriptionStatus: user.subscriptionStatus,
+        subscriptionTier: user.subscriptionTier,
         isActive: user.isActive !== false,
         age: user.age,
         gender: user.gender,
         location: user.location,
         bio: user.bio,
         denomination: user.denomination,
+        subscriptionBillingCycle:
+          typeof user.subscription?.billingCycle === 'string' ? user.subscription.billingCycle : undefined,
       })),
       total,
       totalPages,
@@ -560,6 +569,11 @@ const updateUserRole = async (req: CustomRequest, res: Response) => {
       return res.status(404).json({ message: 'Target user not found.' });
     }
 
+    const targetUser = targetUserDoc.data() as IFirestoreUser;
+    if (isAdminUser(targetUser)) {
+      return res.status(403).json({ message: 'Admin roles cannot be changed from the admin console.' });
+    }
+
     await targetUserRef.set(
       {
         role: nextRole,
@@ -568,13 +582,12 @@ const updateUserRole = async (req: CustomRequest, res: Response) => {
       { merge: true }
     );
 
-    const updatedUser = targetUserDoc.data() as IFirestoreUser;
     return res.status(200).json({
       message: `User role updated to ${nextRole}.`,
       user: {
         id: targetUserId,
-        email: updatedUser.email,
-        name: updatedUser.name,
+        email: targetUser.email,
+        name: targetUser.name,
         role: nextRole,
       },
     });
@@ -656,7 +669,58 @@ const updateUserByAdmin = async (req: CustomRequest, res: Response) => {
       if (!['user', 'admin'].includes(nextRole)) {
         return res.status(400).json({ message: 'Role must be either user or admin.' });
       }
+      if (isAdminUser(targetUser)) {
+        return res.status(403).json({ message: 'Admin roles cannot be changed from the admin console.' });
+      }
       updates.role = nextRole;
+    }
+
+    const nextSubscriptionStatus =
+      typeof body.subscriptionStatus === 'string' ? body.subscriptionStatus.trim().toLowerCase() : '';
+    const nextSubscriptionTier =
+      typeof body.subscriptionTier === 'string' ? body.subscriptionTier.trim().toLowerCase() : '';
+    const nextSubscriptionBillingCycle =
+      typeof body.subscriptionBillingCycle === 'string'
+        ? body.subscriptionBillingCycle.trim().toLowerCase()
+        : '';
+
+    const hasSubscriptionUpdate =
+      Boolean(nextSubscriptionStatus) || Boolean(nextSubscriptionTier) || Boolean(nextSubscriptionBillingCycle);
+
+    if (hasSubscriptionUpdate) {
+      const resolvedStatus = ['active', 'pending', 'inactive'].includes(nextSubscriptionStatus)
+        ? nextSubscriptionStatus
+        : (typeof targetUser.subscriptionStatus === 'string' ? targetUser.subscriptionStatus : 'inactive');
+      const resolvedTier = ['free', 'premium', 'elite'].includes(nextSubscriptionTier)
+        ? nextSubscriptionTier
+        : (typeof targetUser.subscriptionTier === 'string' ? targetUser.subscriptionTier : 'free');
+      const resolvedBillingCycle = ['monthly', 'quarterly'].includes(nextSubscriptionBillingCycle)
+        ? nextSubscriptionBillingCycle
+        : (typeof targetUser.subscription?.billingCycle === 'string'
+          ? targetUser.subscription.billingCycle
+          : 'monthly');
+
+      updates.subscriptionStatus = resolvedStatus;
+      updates.subscriptionTier = resolvedTier;
+      updates.subscriptionCurrency =
+        typeof targetUser.subscriptionCurrency === 'string'
+          ? targetUser.subscriptionCurrency
+          : typeof targetUser.subscription?.currency === 'string'
+            ? targetUser.subscription?.currency
+            : 'NGN';
+      updates.subscription = {
+        ...(targetUser.subscription || {}),
+        status: resolvedStatus,
+        tier: resolvedTier,
+        billingCycle: resolvedBillingCycle,
+        currency:
+          typeof targetUser.subscription?.currency === 'string'
+            ? targetUser.subscription.currency
+            : typeof targetUser.subscriptionCurrency === 'string'
+              ? targetUser.subscriptionCurrency
+              : 'NGN',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
     }
 
     if (Object.keys(updates).length === 0) {
@@ -684,6 +748,11 @@ const updateUserByAdmin = async (req: CustomRequest, res: Response) => {
         onboardingCompleted: updatedUser.onboardingCompleted,
         isActive: updatedUser.isActive !== false,
         subscriptionStatus: updatedUser.subscriptionStatus,
+        subscriptionTier: updatedUser.subscriptionTier,
+        subscriptionBillingCycle:
+          typeof updatedUser.subscription?.billingCycle === 'string'
+            ? updatedUser.subscription.billingCycle
+            : undefined,
       },
     });
   } catch (error) {
