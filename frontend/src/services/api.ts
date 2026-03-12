@@ -412,6 +412,13 @@ export interface FeatureSettingsResponse {
   passportModeEnabled: boolean;
 }
 
+export interface AdminPlatformStatsResponse {
+  totalUsers: number;
+  completedOnboarding: number;
+  activeToday: number;
+  totalMatches: number;
+}
+
 export interface UpdatePassportModeResponse {
   message: string;
   passportCountry: string | null;
@@ -813,7 +820,7 @@ export const UserAPI = {
   },
 
   // Get all users with optional filters
-  getAllUsers: async (filters?: {
+  getAllUsers: async (filters?: {
     page?: number;
     limit?: number;
     search?: string;
@@ -825,8 +832,12 @@ export const UserAPI = {
 
     const query = Object.keys(queryParams).length > 0 ? `?${new URLSearchParams(queryParams).toString()}` : '';
     // FIX: Corrected to `/api/users`
-    return apiRequest(`/api/users${query}`);
-  },
+    return apiRequest(`/api/users${query}`);
+  },
+
+  getAdminPlatformStats: async (): Promise<AdminPlatformStatsResponse> => {
+    return apiRequest('/api/users/admin/platform-stats');
+  },
 
   updateUserRole: async (userId: string, role: 'user' | 'admin'): Promise<UpdateUserRoleResponse> => {
     return apiRequest(`/api/users/${userId}/role`, {

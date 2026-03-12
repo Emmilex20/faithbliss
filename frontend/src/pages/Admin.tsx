@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeft, CircleDollarSign, Crown, PencilLine, Search, ShieldCheck, SlidersHorizontal, Trash2, Users } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowLeft, CircleDollarSign, Crown, PencilLine, Search, ShieldCheck, SlidersHorizontal, Trash2, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAllUsers } from '@/hooks/useAPI';
 import { API, type AdminUpdateUserPayload } from '@/services/api';
@@ -70,9 +70,310 @@ const toEditableUser = (user: EditableSource): EditableUser => ({
   subscriptionBillingCycle: user.subscriptionBillingCycle === 'quarterly' ? 'quarterly' : 'monthly',
 });
 
+type TimelinePoint = {
+  label: string;
+  value: number;
+};
+
+const getRecentValidDates = (timestamps: Array<string | null | undefined>, days = 7): Date[] => {
+  const now = new Date();
+  const cutoff = new Date(now);
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - (days - 1));
+
+  return timestamps
+    .map((timestamp) => {
+      if (!timestamp) return null;
+      const parsed = new Date(timestamp);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    })
+    .filter((value): value is Date => Boolean(value && value.getTime() >= cutoff.getTime() && value.getTime() <= now.getTime()));
+};
+
+const buildDailySeries = (timestamps: Array<string | null | undefined>, days = 7): TimelinePoint[] => {
+  const now = new Date();
+  const buckets = new Map<string, number>();
+  const labels: string[] = [];
+
+  for (let index = days - 1; index >= 0; index -= 1) {
+    const date = new Date(now);
+    date.setHours(0, 0, 0, 0);
+    date.setDate(now.getDate() - index);
+    const key = date.toISOString().slice(0, 10);
+    labels.push(key);
+    buckets.set(key, 0);
+  }
+
+  timestamps.forEach((timestamp) => {
+    if (!timestamp) return;
+    const parsed = new Date(timestamp);
+    if (Number.isNaN(parsed.getTime())) return;
+    parsed.setHours(0, 0, 0, 0);
+    const key = parsed.toISOString().slice(0, 10);
+    if (!buckets.has(key)) return;
+    buckets.set(key, (buckets.get(key) || 0) + 1);
+  });
+
+  return labels.map((key) => {
+    const parsed = new Date(key);
+    const label = parsed.toLocaleDateString(undefined, { weekday: 'short' });
+    return {
+      label,
+      value: buckets.get(key) || 0,
+    };
+  });
+};
+
+const buildHourlySeries = (timestamps: Array<string | null | undefined>, days = 7): TimelinePoint[] => {
+  const buckets = Array.from({ length: 24 }, () => 0);
+  const recentDates = getRecentValidDates(timestamps, days);
+
+  recentDates.forEach((date) => {
+    buckets[date.getHours()] += 1;
+  });
+
+  return buckets.map((value, hour) => ({
+    label: formatHourLabel(hour),
+    value,
+  }));
+};
+
+const buildWeekdayBreakdown = (timestamps: Array<string | null | undefined>, days = 7) => {
+  const buckets = [
+    { label: 'Sun', value: 0 },
+    { label: 'Mon', value: 0 },
+    { label: 'Tue', value: 0 },
+    { label: 'Wed', value: 0 },
+    { label: 'Thu', value: 0 },
+    { label: 'Fri', value: 0 },
+    { label: 'Sat', value: 0 },
+  ];
+
+  getRecentValidDates(timestamps, days).forEach((date) => {
+    buckets[date.getDay()].value += 1;
+  });
+
+  return buckets;
+};
+
+const formatHourLabel = (hour: number) => {
+  const normalized = ((hour % 24) + 24) % 24;
+  const period = normalized >= 12 ? 'PM' : 'AM';
+  const base = normalized % 12 === 0 ? 12 : normalized % 12;
+  return `${base}${period}`;
+};
+
+const getPeakPoint = (points: TimelinePoint[]) =>
+  points.reduce<TimelinePoint | null>((peak, point) => {
+    if (!peak || point.value > peak.value) return point;
+    return peak;
+  }, null);
+
+const LineTrendCard = ({
+  title,
+  subtitle,
+  data,
+  accentClass,
+}: {
+  title: string;
+  subtitle: string;
+  data: TimelinePoint[];
+  accentClass: string;
+}) => {
+  const peak = Math.max(...data.map((point) => point.value), 1);
+  const total = data.reduce((sum, point) => sum + point.value, 0);
+  const width = 360;
+  const height = 168;
+  const paddingX = 18;
+  const paddingTop = 14;
+  const paddingBottom = 24;
+  const chartWidth = width - paddingX * 2;
+  const chartHeight = height - paddingTop - paddingBottom;
+  const stepX = data.length > 1 ? chartWidth / (data.length - 1) : 0;
+
+  const points = data.map((point, index) => {
+    const x = paddingX + stepX * index;
+    const y = paddingTop + chartHeight - (point.value / peak) * chartHeight;
+    return { ...point, x, y };
+  });
+
+  const linePath = points
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+    .join(' ');
+  const areaPath = points.length
+    ? `${linePath} L ${points[points.length - 1].x} ${height - paddingBottom} L ${points[0].x} ${height - paddingBottom} Z`
+    : '';
+  const visibleLabelStep =
+    data.length <= 10 ? 1 : data.length <= 31 ? 5 : 10;
+
+  return (
+    <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-white">{title}</h3>
+          <p className="mt-1 text-sm text-gray-400">{subtitle}</p>
+        </div>
+        <div className="rounded-full bg-white/10 px-3 py-1 text-xs text-gray-300">
+          {total} total
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <div className="rounded-3xl border border-white/10 bg-black/20 p-3">
+          <svg viewBox={`0 0 ${width} ${height}`} className="h-44 w-full">
+            <defs>
+              <linearGradient id={`${title.replace(/\s+/g, '-').toLowerCase()}-gradient`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="rgba(255,255,255,0.32)" />
+                <stop offset="100%" stopColor="rgba(255,255,255,0.02)" />
+              </linearGradient>
+            </defs>
+            {[0, 0.5, 1].map((tick, index) => {
+              const y = paddingTop + chartHeight - chartHeight * tick;
+              return (
+                <line
+                  key={`${title}-grid-${index}`}
+                  x1={paddingX}
+                  x2={width - paddingX}
+                  y1={y}
+                  y2={y}
+                  stroke="rgba(148,163,184,0.16)"
+                  strokeDasharray="4 6"
+                />
+              );
+            })}
+            {areaPath ? (
+              <path
+                d={areaPath}
+                fill={`url(#${title.replace(/\s+/g, '-').toLowerCase()}-gradient)`}
+              />
+            ) : null}
+            {linePath ? (
+              <path
+                d={linePath}
+                fill="none"
+                className={accentClass.replace('bg-gradient-to-t ', '').replace('from-', 'stroke-').replace(' to-', ' ')}
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            ) : null}
+            {points.map((point, index) => (
+              <g key={`${title}-point-${index}`}>
+                <circle cx={point.x} cy={point.y} r="3.5" fill="white" opacity="0.9" />
+                {(index % visibleLabelStep === 0 || index === points.length - 1) ? (
+                  <>
+                    <text
+                      x={point.x}
+                      y={height - 6}
+                      textAnchor="middle"
+                      fontSize="10"
+                      fill="rgba(203,213,225,0.8)"
+                    >
+                      {point.label}
+                    </text>
+                    <text
+                      x={point.x}
+                      y={Math.max(point.y - 10, 10)}
+                      textAnchor="middle"
+                      fontSize="10"
+                      fill="rgba(255,255,255,0.92)"
+                    >
+                      {point.value}
+                    </text>
+                  </>
+                ) : null}
+              </g>
+            ))}
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DonutBreakdownCard = ({
+  title,
+  subtitle,
+  values,
+  colors,
+}: {
+  title: string;
+  subtitle: string;
+  values: Array<{ label: string; value: number }>;
+  colors: string[];
+}) => {
+  const total = values.reduce((sum, item) => sum + item.value, 0);
+  const circumference = 2 * Math.PI * 44;
+  let accumulated = 0;
+
+  return (
+    <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+      <div>
+        <h3 className="text-lg font-semibold text-white">{title}</h3>
+        <p className="mt-1 text-sm text-gray-400">{subtitle}</p>
+      </div>
+
+      <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-center">
+        <div className="mx-auto sm:mx-0">
+          <svg viewBox="0 0 120 120" className="h-32 w-32">
+            <circle cx="60" cy="60" r="44" fill="none" stroke="rgba(148,163,184,0.16)" strokeWidth="14" />
+            {values.map((item, index) => {
+              const portion = total > 0 ? item.value / total : 0;
+              const dash = portion * circumference;
+              const offset = circumference - accumulated;
+              accumulated += dash;
+              return (
+                <circle
+                  key={`${title}-${item.label}`}
+                  cx="60"
+                  cy="60"
+                  r="44"
+                  fill="none"
+                  stroke={colors[index % colors.length]}
+                  strokeWidth="14"
+                  strokeLinecap="round"
+                  strokeDasharray={`${dash} ${circumference - dash}`}
+                  strokeDashoffset={offset}
+                  transform="rotate(-90 60 60)"
+                />
+              );
+            })}
+            <text x="60" y="56" textAnchor="middle" fontSize="12" fill="rgba(148,163,184,0.8)">
+              Total
+            </text>
+            <text x="60" y="72" textAnchor="middle" fontSize="18" fontWeight="700" fill="white">
+              {total}
+            </text>
+          </svg>
+        </div>
+
+        <div className="flex-1 space-y-3">
+          {values.map((item, index) => (
+            <div key={`${title}-legend-${item.label}`} className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span
+                  className="h-3 w-3 rounded-full"
+                  style={{ backgroundColor: colors[index % colors.length] }}
+                />
+                <span className="text-sm text-gray-200">{item.label}</span>
+              </div>
+              <span className="text-sm font-semibold text-white">{item.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const csvEscape = (value: unknown): string => {
+  const text = value === null || value === undefined ? '' : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+};
+
 const AdminPage = () => {
   const { showError, showSuccess, showInfo } = useToast();
-  const [activeSection, setActiveSection] = useState<'users' | 'payments' | 'reports' | 'features'>('users');
+  const [activeSection, setActiveSection] = useState<'overview' | 'users' | 'payments' | 'reports' | 'features'>('overview');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<EditableUser | null>(null);
@@ -89,12 +390,15 @@ const AdminPage = () => {
   const [replyingTicketId, setReplyingTicketId] = useState<string | null>(null);
   const [paymentAnalytics, setPaymentAnalytics] = useState<Awaited<ReturnType<typeof API.Payment.getAdminAnalytics>> | null>(null);
   const [paymentsLoading, setPaymentsLoading] = useState(true);
+  const [platformStats, setPlatformStats] = useState<Awaited<ReturnType<typeof API.User.getAdminPlatformStats>> | null>(null);
+  const [platformStatsLoading, setPlatformStatsLoading] = useState(true);
   const [paymentSearch, setPaymentSearch] = useState('');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<'all' | 'active' | 'pending' | 'inactive' | 'unknown'>('all');
   const [paymentTierFilter, setPaymentTierFilter] = useState<'all' | 'premium' | 'elite' | 'free'>('all');
   const [paymentCycleFilter, setPaymentCycleFilter] = useState<'all' | 'monthly' | 'quarterly'>('all');
   const [paymentSort, setPaymentSort] = useState<'latest' | 'oldest' | 'amount-high' | 'amount-low' | 'name-az'>('latest');
   const [deletingPaymentUserId, setDeletingPaymentUserId] = useState<string | null>(null);
+  const [overviewRangeDays, setOverviewRangeDays] = useState<7 | 30 | 90>(7);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
@@ -106,16 +410,18 @@ const AdminPage = () => {
 
     const loadAdminData = async () => {
       try {
-        const [settingsResponse, issuesResponse, paymentsResponse] = await Promise.all([
+        const [settingsResponse, issuesResponse, paymentsResponse, platformStatsResponse] = await Promise.all([
           API.User.getFeatureSettings(),
           API.Support.getTickets(),
           API.Payment.getAdminAnalytics(),
+          API.User.getAdminPlatformStats().catch(() => null),
         ]);
 
         if (isMounted) {
           setPassportModeEnabled(Boolean(settingsResponse.passportModeEnabled));
           setSupportTickets(Array.isArray(issuesResponse.tickets) ? issuesResponse.tickets : []);
           setPaymentAnalytics(paymentsResponse);
+          setPlatformStats(platformStatsResponse);
         }
       } catch (settingsError) {
         const message =
@@ -128,6 +434,7 @@ const AdminPage = () => {
           setFeatureLoading(false);
           setIssuesLoading(false);
           setPaymentsLoading(false);
+          setPlatformStatsLoading(false);
         }
       }
     };
@@ -151,6 +458,125 @@ const AdminPage = () => {
     const paymentRecords = paymentAnalytics?.summary.totalRecords ?? 0;
     return { total, admins, premium, completedOnboarding, tickets, paymentRecords };
   }, [data?.total, paymentAnalytics?.summary.totalRecords, supportTickets.length, users]);
+
+  const overviewStats = useMemo(() => {
+    const activeUsers = users.filter((user) => user.isActive !== false).length;
+    const inactiveUsers = users.filter((user) => user.isActive === false).length;
+    const onlineUsers = users.filter((user) => user.isOnline).length;
+    const freeUsers = users.filter((user) => user.subscriptionStatus !== 'active').length;
+    const pendingSubscriptions = users.filter((user) => user.subscriptionStatus === 'pending').length;
+    const maleUsers = users.filter((user) => String(user.gender).toUpperCase() === 'MALE').length;
+    const femaleUsers = users.filter((user) => String(user.gender).toUpperCase() === 'FEMALE').length;
+    const openTickets = supportTickets.filter((ticket) => ticket.status === 'OPEN').length;
+    const respondedTickets = supportTickets.filter((ticket) => ticket.status === 'RESPONDED').length;
+    const helpTickets = supportTickets.filter((ticket) => ticket.type === 'HELP').length;
+    const reportTickets = supportTickets.filter((ticket) => ticket.type === 'REPORT').length;
+    const monthlySubscriptions = paymentAnalytics?.summary.monthlyPlans ?? 0;
+    const quarterlySubscriptions = paymentAnalytics?.summary.quarterlyPlans ?? 0;
+
+    return {
+      activeUsers,
+      inactiveUsers,
+      onlineUsers,
+      freeUsers,
+      pendingSubscriptions,
+      maleUsers,
+      femaleUsers,
+      openTickets,
+      respondedTickets,
+      helpTickets,
+      reportTickets,
+      monthlySubscriptions,
+      quarterlySubscriptions,
+    };
+  }, [paymentAnalytics?.summary.monthlyPlans, paymentAnalytics?.summary.quarterlyPlans, supportTickets, users]);
+
+  const recentTickets = useMemo(() => supportTickets.slice(0, 5), [supportTickets]);
+  const recentPayments = useMemo(() => (paymentAnalytics?.records || []).slice(0, 5), [paymentAnalytics?.records]);
+  const userGrowthSeries = useMemo(
+    () => buildDailySeries(users.map((user) => user.createdAt), overviewRangeDays),
+    [overviewRangeDays, users]
+  );
+  const paymentTrendSeries = useMemo(
+    () => buildDailySeries((paymentAnalytics?.records || []).map((record) => record.updatedAt), overviewRangeDays),
+    [overviewRangeDays, paymentAnalytics?.records]
+  );
+  const supportVolumeSeries = useMemo(
+    () => buildDailySeries(supportTickets.map((ticket) => ticket.createdAt), overviewRangeDays),
+    [overviewRangeDays, supportTickets]
+  );
+  const activityHourlySeries = useMemo(
+    () => buildHourlySeries(users.map((user) => user.lastSeenAt), overviewRangeDays),
+    [overviewRangeDays, users]
+  );
+  const activityWeekdaySeries = useMemo(
+    () => buildWeekdayBreakdown(users.map((user) => user.lastSeenAt), overviewRangeDays),
+    [overviewRangeDays, users]
+  );
+  const peakHour = useMemo(() => getPeakPoint(activityHourlySeries), [activityHourlySeries]);
+  const peakWeekday = useMemo(
+    () => activityWeekdaySeries.reduce<{ label: string; value: number } | null>((peak, point) => {
+      if (!peak || point.value > peak.value) return point;
+      return peak;
+    }, null),
+    [activityWeekdaySeries]
+  );
+  const activePresenceSignals = useMemo(
+    () => getRecentValidDates(users.map((user) => user.lastSeenAt), overviewRangeDays).length,
+    [overviewRangeDays, users]
+  );
+  const activeUsersInRange = activePresenceSignals;
+
+  const downloadCsv = (filename: string, rows: string[][]) => {
+    const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportSupportTickets = () => {
+    const rows: string[][] = [
+      ['Type', 'Status', 'Reporter Name', 'Reporter Email', 'Subject', 'Message', 'Replies', 'Created At'],
+      ...supportTickets.map((ticket) => [
+        ticket.type,
+        ticket.status,
+        ticket.reporterName || '',
+        ticket.reporterEmail || '',
+        ticket.subject || '',
+        ticket.message || '',
+        String(ticket.replies?.length || 0),
+        ticket.createdAt || '',
+      ]),
+    ];
+    downloadCsv(`faithbliss-support-tickets-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    showSuccess('Support tickets exported.');
+  };
+
+  const exportPaymentRecords = () => {
+    const rows: string[][] = [
+      ['Name', 'Email', 'Status', 'Tier', 'Billing Cycle', 'Region', 'Display Price', 'Charge Price', 'Reference', 'Updated At'],
+      ...filteredPaymentRecords.map((record) => [
+        record.name,
+        record.email,
+        record.status,
+        record.tier,
+        record.billingCycle,
+        record.pricingRegion,
+        formatMoney(record.displayAmountMajor, record.displayCurrency),
+        formatMoney(record.chargeAmountMajor, record.chargeCurrency),
+        record.reference,
+        record.updatedAt || '',
+      ]),
+    ];
+    downloadCsv(`faithbliss-payment-records-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    showSuccess('Payment records exported.');
+  };
 
   const filteredPaymentRecords = useMemo(() => {
     const records = paymentAnalytics?.records || [];
@@ -471,6 +897,18 @@ const AdminPage = () => {
             <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:block lg:space-y-2">
               <button
                 type="button"
+                onClick={() => setActiveSection('overview')}
+                className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition ${
+                  activeSection === 'overview' ? 'bg-emerald-500/15 text-emerald-200' : 'bg-black/20 text-gray-200 hover:bg-white/10'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <Activity className="h-4 w-4" />
+                  <span className="font-medium">Overview</span>
+                </span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setActiveSection('users')}
                 className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition ${
                   activeSection === 'users' ? 'bg-cyan-500/15 text-cyan-200' : 'bg-black/20 text-gray-200 hover:bg-white/10'
@@ -524,6 +962,286 @@ const AdminPage = () => {
           </aside>
 
           <div className="space-y-6">
+            {activeSection === 'overview' ? (
+              <div className="space-y-6">
+                <div className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-200">Overview</p>
+                      <h2 className="mt-2 text-xl font-semibold text-white">Platform operations dashboard</h2>
+                      <p className="mt-2 max-w-3xl text-sm text-gray-400">
+                        A consolidated view of user growth, support load, subscription activity, feature status, and live platform movement.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-gray-300">
+                      Passport Mode: <span className={passportModeEnabled ? 'font-semibold text-emerald-200' : 'font-semibold text-gray-200'}>
+                        {featureLoading ? 'Loading...' : passportModeEnabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {[7, 30, 90].map((days) => (
+                      <button
+                        key={days}
+                        type="button"
+                        onClick={() => setOverviewRangeDays(days as 7 | 30 | 90)}
+                        className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
+                          overviewRangeDays === days
+                            ? 'bg-emerald-500/15 text-emerald-200'
+                            : 'bg-black/20 text-gray-300 hover:bg-white/10'
+                        }`}
+                      >
+                        {days}d
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Active users in range</p>
+                      <p className="mt-3 text-3xl font-semibold text-white">
+                        {platformStatsLoading ? '...' : activeUsersInRange}
+                      </p>
+                      <p className="mt-2 text-sm text-gray-400">
+                        Users with recorded presence in the last {overviewRangeDays} days.
+                      </p>
+                    </div>
+                    <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Total matches</p>
+                      <p className="mt-3 text-3xl font-semibold text-white">
+                        {platformStatsLoading ? '...' : platformStats?.totalMatches ?? 0}
+                      </p>
+                      <p className="mt-2 text-sm text-gray-400">Total mutual connections recorded across the app.</p>
+                    </div>
+                    <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Open support tickets</p>
+                      <p className="mt-3 text-3xl font-semibold text-white">{overviewStats.openTickets}</p>
+                      <p className="mt-2 text-sm text-gray-400">Tickets still waiting for admin response.</p>
+                    </div>
+                    <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Active subscriptions</p>
+                      <p className="mt-3 text-3xl font-semibold text-white">{paymentAnalytics?.summary.activeSubscriptions ?? 0}</p>
+                      <p className="mt-2 text-sm text-gray-400">Users currently holding active premium access.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-3">
+                  <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+                    <h3 className="text-lg font-semibold text-white">User health</h3>
+                    <div className="mt-4 space-y-3 text-sm text-gray-200">
+                      <div className="flex items-center justify-between"><span>Active accounts</span><span className="font-semibold text-white">{overviewStats.activeUsers}</span></div>
+                      <div className="flex items-center justify-between"><span>Inactive accounts</span><span className="font-semibold text-white">{overviewStats.inactiveUsers}</span></div>
+                      <div className="flex items-center justify-between"><span>Online right now</span><span className="font-semibold text-white">{overviewStats.onlineUsers}</span></div>
+                      <div className="flex items-center justify-between"><span>Free users</span><span className="font-semibold text-white">{overviewStats.freeUsers}</span></div>
+                      <div className="flex items-center justify-between"><span>Pending subscriptions</span><span className="font-semibold text-white">{overviewStats.pendingSubscriptions}</span></div>
+                      <div className="flex items-center justify-between"><span>Male users</span><span className="font-semibold text-white">{overviewStats.maleUsers}</span></div>
+                      <div className="flex items-center justify-between"><span>Female users</span><span className="font-semibold text-white">{overviewStats.femaleUsers}</span></div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+                    <h3 className="text-lg font-semibold text-white">Support activity</h3>
+                    <div className="mt-4 space-y-3 text-sm text-gray-200">
+                      <div className="flex items-center justify-between"><span>Open tickets</span><span className="font-semibold text-white">{overviewStats.openTickets}</span></div>
+                      <div className="flex items-center justify-between"><span>Responded tickets</span><span className="font-semibold text-white">{overviewStats.respondedTickets}</span></div>
+                      <div className="flex items-center justify-between"><span>Help requests</span><span className="font-semibold text-white">{overviewStats.helpTickets}</span></div>
+                      <div className="flex items-center justify-between"><span>Reported issues</span><span className="font-semibold text-white">{overviewStats.reportTickets}</span></div>
+                      <div className="flex items-center justify-between"><span>Support inbox total</span><span className="font-semibold text-white">{stats.tickets}</span></div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+                    <h3 className="text-lg font-semibold text-white">Subscription mix</h3>
+                    <div className="mt-4 space-y-3 text-sm text-gray-200">
+                      <div className="flex items-center justify-between"><span>Monthly plans</span><span className="font-semibold text-white">{overviewStats.monthlySubscriptions}</span></div>
+                      <div className="flex items-center justify-between"><span>3-Month plans</span><span className="font-semibold text-white">{overviewStats.quarterlySubscriptions}</span></div>
+                      <div className="flex items-center justify-between"><span>Tracked payment records</span><span className="font-semibold text-white">{stats.paymentRecords}</span></div>
+                      <div className="flex items-center justify-between"><span>Active charge volume</span><span className="font-semibold text-white">{formatMoney(paymentAnalytics?.summary.activeChargeVolumeNgn ?? 0, 'NGN')}</span></div>
+                      <div className="flex items-center justify-between"><span>Tracked charge volume</span><span className="font-semibold text-white">{formatMoney(paymentAnalytics?.summary.trackedChargeVolumeNgn ?? 0, 'NGN')}</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-lg font-semibold text-white">Recent support activity</h3>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={exportSupportTickets}
+                          className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-xs font-semibold text-gray-200 transition hover:bg-white/10"
+                        >
+                          Export CSV
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveSection('reports')}
+                          className="rounded-full border border-orange-400/25 bg-orange-500/10 px-3 py-1.5 text-xs font-semibold text-orange-200 transition hover:bg-orange-500/20"
+                        >
+                          Open inbox
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {recentTickets.length === 0 ? (
+                        <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm text-gray-400">No support activity yet.</div>
+                      ) : (
+                        recentTickets.map((ticket) => (
+                          <div key={ticket.id} className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="truncate text-sm font-semibold text-white">{ticket.subject || 'No subject provided'}</p>
+                              <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-gray-300">{ticket.status}</span>
+                            </div>
+                            <p className="mt-1 truncate text-xs text-gray-400">{ticket.reporterEmail || 'Unknown reporter'}</p>
+                            <p className="mt-2 line-clamp-2 text-sm text-gray-300">{ticket.message}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-lg font-semibold text-white">Recent payment activity</h3>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={exportPaymentRecords}
+                          className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-xs font-semibold text-gray-200 transition hover:bg-white/10"
+                        >
+                          Export CSV
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveSection('payments')}
+                          className="rounded-full border border-yellow-400/25 bg-yellow-500/10 px-3 py-1.5 text-xs font-semibold text-yellow-200 transition hover:bg-yellow-500/20"
+                        >
+                          Open payments
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {recentPayments.length === 0 ? (
+                        <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm text-gray-400">No subscription records yet.</div>
+                      ) : (
+                        recentPayments.map((record) => (
+                          <div key={`${record.userId}-${record.reference}`} className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="truncate text-sm font-semibold text-white">{record.name || record.email}</p>
+                              <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-gray-300">{record.status}</span>
+                            </div>
+                            <p className="mt-1 truncate text-xs text-gray-400">{record.email}</p>
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-300">
+                              <span>{record.tier}</span>
+                              <span>•</span>
+                              <span>{record.billingCycle === 'quarterly' ? '3-Month' : 'Monthly'}</span>
+                              <span>•</span>
+                              <span>{formatMoney(record.chargeAmountMajor, record.chargeCurrency)}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-3">
+                  <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">Peak activity window</h3>
+                        <p className="mt-1 text-sm text-gray-400">
+                          Based on recorded user presence during the last {overviewRangeDays} days.
+                        </p>
+                      </div>
+                      <div className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-200">
+                        {activePresenceSignals} signals
+                      </div>
+                    </div>
+
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                      <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Busiest hour</p>
+                        <p className="mt-2 text-2xl font-semibold text-white">
+                          {peakHour && peakHour.value > 0 ? peakHour.label : 'No activity yet'}
+                        </p>
+                        <p className="mt-1 text-sm text-gray-400">
+                          {peakHour && peakHour.value > 0
+                            ? `${peakHour.value} recorded presence update${peakHour.value === 1 ? '' : 's'}`
+                            : 'No recorded presence updates in the selected range.'}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Busiest day</p>
+                        <p className="mt-2 text-2xl font-semibold text-white">
+                          {peakWeekday && peakWeekday.value > 0 ? peakWeekday.label : 'No activity yet'}
+                        </p>
+                        <p className="mt-1 text-sm text-gray-400">
+                          {peakWeekday && peakWeekday.value > 0
+                            ? `${peakWeekday.value} recorded presence update${peakWeekday.value === 1 ? '' : 's'}`
+                            : 'No recorded presence updates in the selected range.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <LineTrendCard
+                    title="User growth"
+                    subtitle={`New user profiles created over the last ${overviewRangeDays} days.`}
+                    data={userGrowthSeries}
+                    accentClass="stroke-cyan-400"
+                  />
+                  <LineTrendCard
+                    title="Payment trend"
+                    subtitle={`Subscription payment updates tracked over the last ${overviewRangeDays} days.`}
+                    data={paymentTrendSeries}
+                    accentClass="stroke-amber-400"
+                  />
+                  <LineTrendCard
+                    title="Support volume"
+                    subtitle={`Help and report tickets created over the last ${overviewRangeDays} days.`}
+                    data={supportVolumeSeries}
+                    accentClass="stroke-fuchsia-400"
+                  />
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-3">
+                  <LineTrendCard
+                    title="Hourly activity"
+                    subtitle={`Recorded presence distribution across the last ${overviewRangeDays} days.`}
+                    data={activityHourlySeries}
+                    accentClass="stroke-emerald-400"
+                  />
+                  <DonutBreakdownCard
+                    title="Support ticket mix"
+                    subtitle="Current distribution of support requests by type."
+                    values={[
+                      { label: 'Help requests', value: overviewStats.helpTickets },
+                      { label: 'Reported issues', value: overviewStats.reportTickets },
+                    ]}
+                    colors={['#22d3ee', '#fb923c']}
+                  />
+                  <DonutBreakdownCard
+                    title="Subscription cycle mix"
+                    subtitle="Current distribution of active tracked billing cycles."
+                    values={[
+                      { label: 'Monthly', value: overviewStats.monthlySubscriptions },
+                      { label: '3-Month', value: overviewStats.quarterlySubscriptions },
+                    ]}
+                    colors={['#e879f9', '#a855f7']}
+                  />
+                  <DonutBreakdownCard
+                    title="Activity by weekday"
+                    subtitle={`Which days users appear most often over the last ${overviewRangeDays} days.`}
+                    values={activityWeekdaySeries}
+                    colors={['#22d3ee', '#38bdf8', '#818cf8', '#a78bfa', '#e879f9', '#f97316', '#facc15']}
+                  />
+                </div>
+              </div>
+            ) : null}
+
             {activeSection === 'features' ? (
               <div className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -791,9 +1509,18 @@ const AdminPage = () => {
                             <h3 className="text-lg font-semibold text-white">Recent subscription records</h3>
                             <p className="mt-1 text-sm text-gray-400">Latest tracked payment and subscription entries across all users.</p>
                           </div>
-                          <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-gray-300">
-                            {filteredPaymentRecords.length} of {paymentAnalytics.records.length} records
-                          </span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-gray-300">
+                              {filteredPaymentRecords.length} of {paymentAnalytics.records.length} records
+                            </span>
+                            <button
+                              type="button"
+                              onClick={exportPaymentRecords}
+                              className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-xs font-semibold text-gray-200 transition hover:bg-white/10"
+                            >
+                              Export CSV
+                            </button>
+                          </div>
                         </div>
 
                         <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -979,9 +1706,18 @@ const AdminPage = () => {
 
             {activeSection === 'reports' ? (
               <div className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
-                <div className="mb-5">
-                  <h2 className="text-xl font-semibold text-white">Support inbox</h2>
-                  <p className="mt-1 text-sm text-gray-400">All help and report tickets submitted by users. Review ticket type, reporter email, subject, and message content here.</p>
+                <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-white">Support inbox</h2>
+                    <p className="mt-1 text-sm text-gray-400">All help and report tickets submitted by users. Review ticket type, reporter email, subject, and message content here.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={exportSupportTickets}
+                    className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-gray-200 transition hover:bg-white/10"
+                  >
+                    Export CSV
+                  </button>
                 </div>
 
                 {issuesLoading ? (

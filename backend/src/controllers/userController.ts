@@ -26,6 +26,8 @@ interface IFirestoreUser {
   bio: string;
   denomination: string;
   isActive?: boolean;
+  isOnline?: boolean;
+  lastSeenAt?: unknown;
   likes?: string[];
   matches?: string[];
   profileFits?: string[];
@@ -67,6 +69,23 @@ const getEffectiveRole = (user: IFirestoreUser | null | undefined): string => {
 
 const isAdminUser = (user: IFirestoreUser | null | undefined): boolean =>
   getEffectiveRole(user) === 'admin';
+
+const matchesCollection = db.collection('matches');
+
+const normalizeFirestoreTimestamp = (value: unknown): string | undefined => {
+  if (!value) return undefined;
+  if (typeof value === 'string') return value;
+  if (value instanceof Date) return value.toISOString();
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'toDate' in value &&
+    typeof (value as { toDate?: () => Date }).toDate === 'function'
+  ) {
+    return (value as { toDate: () => Date }).toDate().toISOString();
+  }
+  return undefined;
+};
 
 const fetchUserProfile = async (
   firebaseUid: string,
@@ -213,6 +232,9 @@ const getAllUsers = async (req: CustomRequest, res: Response) => {
         denomination: user.denomination,
         subscriptionBillingCycle:
           typeof user.subscription?.billingCycle === 'string' ? user.subscription.billingCycle : undefined,
+        createdAt: normalizeFirestoreTimestamp((user as Record<string, unknown>).createdAt),
+        isOnline: Boolean(user.isOnline),
+        lastSeenAt: normalizeFirestoreTimestamp(user.lastSeenAt),
       })),
       total,
       totalPages,
@@ -222,6 +244,51 @@ const getAllUsers = async (req: CustomRequest, res: Response) => {
     const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
     console.error('Error fetching users:', error);
     return res.status(500).json({ message: `Failed to retrieve user list: ${errorMessage}` });
+  }
+};
+
+const getAdminPlatformStats = async (req: CustomRequest, res: Response) => {
+  const firebaseUid = req.userId;
+  const currentUser = await requireAdmin(firebaseUid, res);
+  if (!currentUser) return;
+
+  try {
+    const [usersSnapshot, matchesSnapshot] = await Promise.all([
+      usersCollection.get(),
+      matchesCollection.get(),
+    ]);
+
+    const now = Date.now();
+    const dayAgo = now - 24 * 60 * 60 * 1000;
+
+    let activeToday = 0;
+    let completedOnboarding = 0;
+
+    usersSnapshot.forEach((doc) => {
+      const user = doc.data() as IFirestoreUser;
+      if (user.onboardingCompleted) {
+        completedOnboarding += 1;
+      }
+
+      const lastSeenAt = normalizeFirestoreTimestamp(user.lastSeenAt);
+      if (!lastSeenAt) return;
+
+      const seenAt = new Date(lastSeenAt).getTime();
+      if (!Number.isNaN(seenAt) && seenAt >= dayAgo) {
+        activeToday += 1;
+      }
+    });
+
+    return res.status(200).json({
+      totalUsers: usersSnapshot.size,
+      completedOnboarding,
+      activeToday,
+      totalMatches: matchesSnapshot.size,
+    });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error fetching admin platform stats:', error);
+    return res.status(500).json({ message: `Failed to retrieve platform stats: ${errorMessage}` });
   }
 };
 
@@ -884,6 +951,7 @@ export {
   getMe,
   getUserById,
   getAllUsers,
+  getAdminPlatformStats,
   getOnboardingDebug,
   updateUserProfile,
   updateUserSettings,

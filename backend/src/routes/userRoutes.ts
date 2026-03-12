@@ -3,6 +3,7 @@ import express from 'express';
 import {
   getMe,
   getAllUsers,
+  getAdminPlatformStats,
   getUserById,
   getOnboardingDebug,
   updateUserProfile,
@@ -32,6 +33,7 @@ router.put('/me', protect, updateUserProfile);
 router.patch('/me/settings', protect, updateUserSettings);
 router.patch('/me/passport', protect, updatePassportSettings);
 router.get('/feature-settings', protect, getFeatureSettings);
+router.get('/admin/platform-stats', protect, getAdminPlatformStats);
 router.patch('/feature-settings', protect, updateFeatureSettings);
 router.patch('/:id/role', protect, updateUserRole);
 router.patch('/:id', protect, updateUserByAdmin);

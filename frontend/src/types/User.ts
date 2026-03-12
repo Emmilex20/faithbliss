@@ -82,6 +82,8 @@ export interface User {
   profilePhoto6?: string;
   profilePhotoCount?: number;
   isActive?: boolean;
+  isOnline?: boolean;
+  lastSeenAt?: string;
 
   subscriptionStatus?: 'active' | 'pending' | 'inactive' | string;
   subscriptionTier?: 'premium' | 'elite' | 'free' | string;
@@ -106,6 +108,7 @@ export interface User {
     updatedAt?: string;
   };
   settings?: Record<string, any>;
+  createdAt?: string;
 
 }
 
