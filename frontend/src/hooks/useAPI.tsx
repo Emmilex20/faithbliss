@@ -626,7 +626,7 @@ export function useConversationMessages(
 // Hook for notifications (No change needed other than imports)
 export type NotificationItem = {
   id: string;
-  type?: 'NEW_MESSAGE' | 'PROFILE_LIKED' | 'NEW_MATCH' | string;
+  type?: 'NEW_MESSAGE' | 'PROFILE_LIKED' | 'NEW_MATCH' | 'REPORT_SUBMITTED' | 'SUPPORT_REPLY' | string;
   message?: string;
   data?: Record<string, any>;
   isRead?: boolean;
@@ -662,21 +662,31 @@ export function useNotifications() {
   useEffect(() => {
     if (!isAuthenticated || !webSocketService) return;
     const handleNotification = (payload: NotificationPayload) => {
+      const resolvedId =
+        typeof payload.id === 'string' && payload.id.trim()
+          ? payload.id
+          : `ws-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       const newItem: NotificationItem = {
-        id: `ws-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        id: resolvedId,
         type: payload.type,
         message: payload.message,
         data: {
-          senderId: payload.senderId,
-          senderName: payload.senderName,
-          matchId: payload.matchId,
-          otherUserId: payload.otherUser?.id,
-          otherUserName: payload.otherUser?.name,
+          ...(payload.data || {}),
+          ...(payload.senderId ? { senderId: payload.senderId } : {}),
+          ...(payload.senderName ? { senderName: payload.senderName } : {}),
+          ...(payload.matchId ? { matchId: payload.matchId } : {}),
+          ...(payload.otherUser?.id ? { otherUserId: payload.otherUser.id } : {}),
+          ...(payload.otherUser?.name ? { otherUserName: payload.otherUser.name } : {}),
         },
         isRead: false,
-        createdAt: new Date().toISOString(),
+        createdAt: payload.createdAt || new Date().toISOString(),
       };
-      setNotifications(prev => [newItem, ...prev]);
+      setNotifications(prev => {
+        if (prev.some((item) => item.id === newItem.id)) {
+          return prev;
+        }
+        return [newItem, ...prev];
+      });
     };
     webSocketService.onNotification(handleNotification);
     return () => {

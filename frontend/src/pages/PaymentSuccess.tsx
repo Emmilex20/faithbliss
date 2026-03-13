@@ -17,6 +17,8 @@ const PaymentSuccessContent = () => {
   const navigate = useNavigate();
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [successMessage, setSuccessMessage] = useState('Your purchase is ready.');
+  const [purchaseType, setPurchaseType] = useState<'subscription' | 'profile_booster'>('subscription');
 
   const layoutName = user?.name || 'User';
   const layoutImage = user?.profilePhoto1 || undefined;
@@ -31,9 +33,11 @@ const PaymentSuccessContent = () => {
         return;
       }
       try {
-        await API.Payment.verify(reference);
+        const response = await API.Payment.verify(reference);
         await refetchUser();
-        showSuccess('Subscription activated successfully.');
+        setSuccessMessage(response.message || 'Your purchase is ready.');
+        setPurchaseType(response.purchaseType || 'subscription');
+        showSuccess(response.message || 'Payment completed successfully.');
       } catch (error: any) {
         showError(error?.message || 'Payment verification failed.');
       } finally {
@@ -54,7 +58,11 @@ const PaymentSuccessContent = () => {
           <div>
             <h2 className="text-2xl font-semibold text-white">Payment success</h2>
             <p className="text-sm text-gray-300">
-              {loading ? 'Confirming your subscription...' : 'Your subscription is ready.'}
+              {loading
+                ? 'Confirming your purchase...'
+                : purchaseType === 'profile_booster'
+                ? successMessage
+                : successMessage}
             </p>
           </div>
         </div>

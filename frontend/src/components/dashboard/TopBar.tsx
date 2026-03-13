@@ -6,6 +6,7 @@ import { Bell, Filter, ArrowLeft, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useNotificationUnreadCount } from '@/hooks/useAPI';
 import { useRequireAuth } from '@/hooks/useAuth';
+import ProfileBoosterIcon from '@/components/icons/ProfileBoosterIcon';
 
 interface TopBarProps {
   userName: string;
@@ -43,6 +44,13 @@ export const TopBar = ({
   const { data: unreadData } = useNotificationUnreadCount();
   const unreadCount = unreadData?.count || 0;
   const { logout } = useRequireAuth();
+  const isPremiumUser = typeof user?.subscriptionStatus === 'string'
+    && user.subscriptionStatus.toLowerCase() === 'active'
+    && typeof user?.subscriptionTier === 'string'
+    && ['premium', 'elite'].includes(user.subscriptionTier.toLowerCase());
+  const profileBoosterCredits = typeof user?.profileBoosterCredits === 'number' ? user.profileBoosterCredits : 0;
+  const profileBoosterActive = typeof user?.profileBoosterActiveUntil === 'string'
+    && Date.parse(user.profileBoosterActiveUntil) > Date.now();
 
   const [notificationsAvailable, setNotificationsAvailable] = useState(false);
   const [notificationsPermission, setNotificationsPermission] = useState<'default' | 'granted' | 'denied'>('default');
@@ -196,6 +204,20 @@ export const TopBar = ({
           ) : <div />}
 
           <div className="relative flex items-center gap-2 justify-end">
+            {isPremiumUser && (
+              <Link
+                to="/premium"
+                className="hidden sm:inline-flex items-center gap-2 rounded-full border border-fuchsia-300/20 bg-[linear-gradient(135deg,rgba(236,72,153,0.14),rgba(124,58,237,0.12))] px-3 py-2 text-xs font-semibold text-white transition hover:border-fuchsia-200/30 hover:bg-[linear-gradient(135deg,rgba(236,72,153,0.18),rgba(124,58,237,0.16))]"
+              >
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-black/20">
+                  <ProfileBoosterIcon className="h-4 w-4" glowId="topbar-booster" />
+                </div>
+                <span className={profileBoosterActive ? 'animate-[pulse_2.4s_ease-in-out_infinite]' : ''}>
+                  {profileBoosterActive ? 'Boost Live' : `${profileBoosterCredits} Boost${profileBoosterCredits === 1 ? '' : 's'}`}
+                </span>
+              </Link>
+            )}
+
             {installPromptEvent && (
               <button
                 type="button"
@@ -228,6 +250,27 @@ export const TopBar = ({
                 )}
               </button>
             </Link>
+
+            {isPremiumUser && (
+              <Link to="/premium" className="sm:hidden">
+                <button
+                  type="button"
+                  className="relative inline-flex p-2 rounded-2xl text-fuchsia-100 transition-all hover:scale-105 hover:bg-white/10"
+                  aria-label={profileBoosterActive ? 'Profile boost active' : `You have ${profileBoosterCredits} booster credits`}
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[linear-gradient(135deg,rgba(236,72,153,0.28),rgba(124,58,237,0.22))] shadow-[0_10px_18px_rgba(168,85,247,0.18)]">
+                    <ProfileBoosterIcon className="h-4 w-4" glowId="topbar-booster-mobile" />
+                  </div>
+                  <span className={`absolute -right-1 -top-1 min-w-[1.15rem] rounded-full px-1 py-[2px] text-[10px] font-bold leading-none ${
+                    profileBoosterActive
+                      ? 'animate-[pulse_2.2s_ease-in-out_infinite] bg-emerald-500 text-white shadow-[0_0_0_4px_rgba(16,185,129,0.16)]'
+                      : 'bg-fuchsia-500 text-white'
+                  }`}>
+                    {profileBoosterActive ? '!' : profileBoosterCredits}
+                  </span>
+                </button>
+              </Link>
+            )}
 
             {showFilterButton && onToggleFilters && (
               <>

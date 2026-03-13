@@ -88,6 +88,10 @@ export interface User {
   subscriptionStatus?: 'active' | 'pending' | 'inactive' | string;
   subscriptionTier?: 'premium' | 'elite' | 'free' | string;
   subscriptionCurrency?: 'NGN' | 'USD' | string;
+  profileBoosterCredits?: number;
+  profileBoosterActiveUntil?: string | null;
+  profileBoosterLastGrantedReference?: string | null;
+  profileBoosterLastUsedAt?: string | null;
   subscription?: {
     status?: string;
     tier?: string;

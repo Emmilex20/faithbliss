@@ -52,6 +52,10 @@ export const markNotificationRead = async (req: Request, res: Response) => {
   const ref = notificationsCollection.doc(id);
   const doc = await ref.get();
   if (!doc.exists) return res.status(404).json({ message: 'Notification not found.' });
+  const data = doc.data() as { userId?: string } | undefined;
+  if (data?.userId !== userId) {
+    return res.status(403).json({ message: 'You cannot modify this notification.' });
+  }
 
   await ref.update({
     isRead: true,

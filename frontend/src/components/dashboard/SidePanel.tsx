@@ -22,6 +22,7 @@ import {
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNotificationUnreadCount } from '@/hooks/useAPI';
 import { useSubscriptionDisplay } from '@/hooks/useSubscriptionDisplay';
+import ProfileBoosterIcon from '@/components/icons/ProfileBoosterIcon';
 
 interface SidePanelProps {
   userName: string;
@@ -38,6 +39,11 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
   const faithJourney = user?.faithJourney || 'Passionate Believer';
   const subscriptionDisplay = useSubscriptionDisplay(user);
   const isAdminUser = String(user?.role || 'user').toLowerCase() === 'admin';
+  const profileBoosterCredits = typeof user?.profileBoosterCredits === 'number' ? user.profileBoosterCredits : 0;
+  const profileBoosterActiveUntil =
+    typeof user?.profileBoosterActiveUntil === 'string' && Date.parse(user.profileBoosterActiveUntil) > Date.now()
+      ? user.profileBoosterActiveUntil
+      : null;
 
   const handleLogout = async () => {
     await logout();
@@ -100,19 +106,52 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
           </div>
 
           {subscriptionDisplay.isActivePaid ? (
-            <div className="mt-3 flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.22em] text-gray-400">Renewal countdown</p>
-                <p className="mt-1 text-sm font-semibold text-white">
-                  {subscriptionDisplay.countdownLabel || 'Monthly renewal active'}
-                </p>
-              </div>
-              {subscriptionDisplay.renewalLabel ? (
-                <div className="flex items-center gap-1.5 text-xs text-yellow-100">
-                  <Clock3 className="h-3.5 w-3.5 text-yellow-300" />
-                  <span>{subscriptionDisplay.renewalLabel}</span>
+            <div className="mt-3 space-y-3">
+              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-gray-400">Renewal countdown</p>
+                  <p className="mt-1 text-sm font-semibold text-white">
+                    {subscriptionDisplay.countdownLabel || 'Monthly renewal active'}
+                  </p>
                 </div>
-              ) : null}
+                {subscriptionDisplay.renewalLabel ? (
+                  <div className="flex items-center gap-1.5 text-xs text-yellow-100">
+                    <Clock3 className="h-3.5 w-3.5 text-yellow-300" />
+                    <span>{subscriptionDisplay.renewalLabel}</span>
+                  </div>
+                ) : null}
+              </div>
+
+              <Link
+                to="/premium"
+                onClick={onClose}
+                className="flex items-center justify-between gap-3 rounded-2xl border border-fuchsia-300/15 bg-[linear-gradient(135deg,rgba(236,72,153,0.14),rgba(124,58,237,0.12))] px-3 py-3 transition hover:border-fuchsia-200/25 hover:bg-[linear-gradient(135deg,rgba(236,72,153,0.18),rgba(124,58,237,0.16))]"
+              >
+                <div className="flex min-w-0 items-center gap-3.5">
+                  <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-visible rounded-[1.2rem] border border-fuchsia-200/20 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.24),rgba(255,255,255,0.08)_34%,rgba(15,23,42,0.88)_100%)] shadow-[0_16px_30px_rgba(76,29,149,0.32)] ring-1 ring-fuchsia-300/10 sm:h-12 sm:w-12">
+                    <div className="absolute inset-1 rounded-[1rem] bg-[linear-gradient(145deg,rgba(168,85,247,0.22),rgba(236,72,153,0.16),rgba(2,6,23,0.06))]" />
+                    <ProfileBoosterIcon
+                      className="relative z-10 h-8 w-8 drop-shadow-[0_10px_22px_rgba(236,72,153,0.3)] sm:h-7 sm:w-7"
+                      glowId="sidepanel-booster"
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-fuchsia-100/75">Profile booster</p>
+                    <p className="mt-1 text-sm font-semibold leading-tight text-white">
+                      {profileBoosterActiveUntil
+                        ? '1-hour boost active'
+                        : `${profileBoosterCredits} credit${profileBoosterCredits === 1 ? '' : 's'} available`}
+                    </p>
+                  </div>
+                </div>
+                <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
+                  profileBoosterActiveUntil
+                    ? 'animate-[pulse_2.4s_ease-in-out_infinite] bg-emerald-500/15 text-emerald-200 shadow-[0_0_0_4px_rgba(16,185,129,0.08)]'
+                    : 'bg-fuchsia-500/15 text-fuchsia-100'
+                }`}>
+                  {profileBoosterActiveUntil ? 'Live' : 'Boost'}
+                </span>
+              </Link>
             </div>
           ) : (
             <div className="mt-3 space-y-2">

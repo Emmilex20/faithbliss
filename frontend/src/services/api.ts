@@ -329,6 +329,23 @@ export interface LocalizedPaymentInitResponse {
   countryCode: string | null;
 }
 
+export interface ProfileBoosterPaymentInitResponse {
+  authorizationUrl: string;
+  accessCode: string;
+  reference: string;
+  displayCurrency: 'USD';
+  displayAmountMajor: number;
+  chargeCurrency: 'NGN';
+  chargeAmountMajor: number;
+  chargeAmountSubunits: number;
+}
+
+export interface VerifyPaymentResponse {
+  message: string;
+  purchaseType: 'subscription' | 'profile_booster';
+  data: Record<string, unknown>;
+}
+
 export interface LocalizedPricingQuote {
   tier: 'premium';
   billingCycle: 'monthly' | 'quarterly';
@@ -417,11 +434,18 @@ export interface AdminPlatformStatsResponse {
   completedOnboarding: number;
   activeToday: number;
   totalMatches: number;
+  activeBoosts: number;
 }
 
 export interface UpdatePassportModeResponse {
   message: string;
   passportCountry: string | null;
+}
+
+export interface ActivateProfileBoosterResponse {
+  message: string;
+  activeUntil: string;
+  remainingCredits: number;
 }
 
 export interface SupportTicket {
@@ -448,9 +472,10 @@ export interface AdminPaymentRecord {
   userId: string;
   name: string;
   email: string;
+  productType: 'subscription' | 'profile_booster';
   status: string;
   tier: string;
-  billingCycle: 'monthly' | 'quarterly';
+  billingCycle: 'monthly' | 'quarterly' | 'one_time';
   pricingRegion: string;
   displayCurrency: string;
   displayAmountMajor: number;
@@ -749,6 +774,12 @@ export const UserAPI = {
     });
   },
 
+  activateProfileBooster: async (): Promise<ActivateProfileBoosterResponse> => {
+    return apiRequest('/api/users/me/profile-booster/activate', {
+      method: 'POST',
+    });
+  },
+
   getFeatureSettings: async (): Promise<FeatureSettingsResponse> => {
     return apiRequest('/api/users/feature-settings');
   },
@@ -998,8 +1029,15 @@ export const PaymentAPI = {
   getAdminAnalytics: async (): Promise<AdminPaymentAnalyticsResponse> => {
     return apiRequest('/api/payments/admin/analytics');
   },
-  deleteAdminRecord: async (userId: string): Promise<{ message: string; userId: string; email: string }> => {
-    return apiRequest(`/api/payments/admin/records/${userId}`, {
+  deleteAdminRecord: async (
+    userId: string,
+    options?: { productType?: 'subscription' | 'profile_booster'; reference?: string }
+  ): Promise<{ message: string; userId: string; email: string }> => {
+    const query = new URLSearchParams();
+    if (options?.productType) query.set('productType', options.productType);
+    if (options?.reference) query.set('reference', options.reference);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return apiRequest(`/api/payments/admin/records/${userId}${suffix}`, {
       method: 'DELETE',
     });
   },
@@ -1015,6 +1053,11 @@ export const PaymentAPI = {
       body: JSON.stringify(payload),
     });
   },
+  buyProfileBooster: async (): Promise<ProfileBoosterPaymentInitResponse> => {
+    return apiRequest('/api/payments/profile-booster/pay', {
+      method: 'POST',
+    });
+  },
   initialize: async (payload: { tier: 'premium' | 'elite'; currency: 'NGN' | 'USD' }): Promise<{
     authorizationUrl: string;
     accessCode: string;
@@ -1027,7 +1070,7 @@ export const PaymentAPI = {
       body: JSON.stringify(payload),
     });
   },
-  verify: async (reference: string) => {
+  verify: async (reference: string): Promise<VerifyPaymentResponse> => {
     return apiRequest('/api/payments/verify', {
       method: 'POST',
       body: JSON.stringify({ reference }),

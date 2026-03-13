@@ -7,6 +7,10 @@ import {
   normalizeCountryCode,
   setPassportFeatureSettings,
 } from '../utils/passportMode';
+import {
+  activateProfileBoosterForUser,
+  ProfileBoosterError,
+} from '../utils/profileBooster';
 
 interface IFirestoreUser {
   name: string;
@@ -40,6 +44,10 @@ interface IFirestoreUser {
     billingCycle?: string;
     currency?: string;
   };
+  profileBoosterCredits?: number;
+  profileBoosterActiveUntil?: unknown;
+  profileBoosterLastGrantedReference?: string;
+  profileBoosterLastUsedAt?: unknown;
   countryCode?: string;
   passportCountry?: string | null;
 }
@@ -263,6 +271,7 @@ const getAdminPlatformStats = async (req: CustomRequest, res: Response) => {
 
     let activeToday = 0;
     let completedOnboarding = 0;
+    let activeBoosts = 0;
 
     usersSnapshot.forEach((doc) => {
       const user = doc.data() as IFirestoreUser;
@@ -277,6 +286,14 @@ const getAdminPlatformStats = async (req: CustomRequest, res: Response) => {
       if (!Number.isNaN(seenAt) && seenAt >= dayAgo) {
         activeToday += 1;
       }
+
+      const boosterActiveUntil = normalizeFirestoreTimestamp(user.profileBoosterActiveUntil);
+      if (boosterActiveUntil) {
+        const activeUntil = new Date(boosterActiveUntil).getTime();
+        if (!Number.isNaN(activeUntil) && activeUntil > now) {
+          activeBoosts += 1;
+        }
+      }
     });
 
     return res.status(200).json({
@@ -284,6 +301,7 @@ const getAdminPlatformStats = async (req: CustomRequest, res: Response) => {
       completedOnboarding,
       activeToday,
       totalMatches: matchesSnapshot.size,
+      activeBoosts,
     });
   } catch (error) {
     const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
@@ -609,6 +627,30 @@ const updateFeatureSettings = async (req: CustomRequest, res: Response) => {
   } catch (error) {
     const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
     console.error('Error updating feature settings:', error);
+    return res.status(500).json({ message: errorMessage });
+  }
+};
+
+const activateProfileBooster = async (req: CustomRequest, res: Response) => {
+  try {
+    const uid = req.userId;
+    if (!uid) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const result = await activateProfileBoosterForUser(uid);
+
+    return res.status(200).json({
+      message: 'Profile boost activated for 1 hour.',
+      ...result,
+    });
+  } catch (error) {
+    if (error instanceof ProfileBoosterError) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
+
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error activating profile booster:', error);
     return res.status(500).json({ message: errorMessage });
   }
 };
@@ -956,6 +998,7 @@ export {
   updateUserProfile,
   updateUserSettings,
   updatePassportSettings,
+  activateProfileBooster,
   getFeatureSettings,
   updateFeatureSettings,
   updateUserRole,

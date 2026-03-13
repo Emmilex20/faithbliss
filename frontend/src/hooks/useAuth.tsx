@@ -22,6 +22,9 @@ import {
     signInWithPopup,
     signInWithRedirect,
     getRedirectResult,
+    sendPasswordResetEmail,
+    verifyPasswordResetCode,
+    confirmPasswordReset,
 } from "firebase/auth";
 import type { User as FirebaseAuthUser } from "firebase/auth";
 //  NEW FIREBASE IMPORTS FOR FIRESTORE
@@ -212,6 +215,19 @@ const isStandaloneDisplayMode = (): boolean => {
 
 const shouldPreferGoogleRedirect = (): boolean => {
     return isIosDevice() || isStandaloneDisplayMode();
+};
+
+const getAppBaseUrl = (): string => {
+    if (typeof window !== "undefined" && window.location.origin) {
+        return window.location.origin;
+    }
+
+    const configuredBaseUrl = String(import.meta.env.VITE_APP_URL || "").trim();
+    if (configuredBaseUrl) {
+        return configuredBaseUrl.replace(/\/+$/, "");
+    }
+
+    return "http://localhost:5173";
 };
 
 const sanitizeText = (value: unknown, maxLen: number): string | undefined => {
@@ -491,6 +507,14 @@ const fetchUserDataFromFirestore = async (fbUser: FirebaseAuthUser): Promise<Use
         subscriptionStatus: backendData.subscriptionStatus || normalizedSubscription?.status,
         subscriptionTier: backendData.subscriptionTier || normalizedSubscription?.tier,
         subscriptionCurrency: backendData.subscriptionCurrency || normalizedSubscription?.currency,
+        profileBoosterCredits:
+            typeof backendData.profileBoosterCredits === 'number' ? backendData.profileBoosterCredits : 0,
+        profileBoosterActiveUntil:
+            typeof backendData.profileBoosterActiveUntil === 'string' ? backendData.profileBoosterActiveUntil : null,
+        profileBoosterLastGrantedReference:
+            typeof backendData.profileBoosterLastGrantedReference === 'string' ? backendData.profileBoosterLastGrantedReference : null,
+        profileBoosterLastUsedAt:
+            typeof backendData.profileBoosterLastUsedAt === 'string' ? backendData.profileBoosterLastUsedAt : null,
         subscription: normalizedSubscription,
         settings: backendData.settings,
     };
@@ -1046,6 +1070,94 @@ export function useAuth() {
         [showSuccess, showError, refetchUser]
     );
 
+    const requestPasswordReset = useCallback(
+        async (email: string) => {
+            const normalizedEmail = typeof email === "string" ? email.trim() : "";
+            if (!normalizedEmail) {
+                throw new Error("Please enter your email address.");
+            }
+
+            const actionCodeSettings = {
+                url: `${getAppBaseUrl()}/reset-password`,
+                handleCodeInApp: true,
+            };
+
+            try {
+                await sendPasswordResetEmail(auth, normalizedEmail, actionCodeSettings);
+                showSuccess(
+                    "Password reset link sent. Check your email to continue.",
+                    "Reset Link Sent"
+                );
+            } catch (error: any) {
+                const code = error?.code;
+                if (code === "auth/user-not-found") {
+                    throw new Error("No account was found with that email address.");
+                }
+                if (code === "auth/invalid-email") {
+                    throw new Error("Please enter a valid email address.");
+                }
+                if (isFirebaseNetworkError(error)) {
+                    throw new Error("Network error while sending reset email. Please try again.");
+                }
+                throw new Error(getAuthErrorMessage(error, "Failed to send password reset email."));
+            }
+        },
+        [showSuccess]
+    );
+
+    const validatePasswordResetCode = useCallback(async (oobCode: string) => {
+        const normalizedCode = typeof oobCode === "string" ? oobCode.trim() : "";
+        if (!normalizedCode) {
+            throw new Error("This password reset link is invalid or incomplete.");
+        }
+
+        try {
+            return await verifyPasswordResetCode(auth, normalizedCode);
+        } catch (error: any) {
+            const code = error?.code;
+            if (code === "auth/expired-action-code" || code === "auth/invalid-action-code") {
+                throw new Error("This password reset link has expired or is no longer valid.");
+            }
+            if (isFirebaseNetworkError(error)) {
+                throw new Error("Network error while validating reset link. Please try again.");
+            }
+            throw new Error(getAuthErrorMessage(error, "Unable to validate password reset link."));
+        }
+    }, []);
+
+    const resetPassword = useCallback(
+        async (oobCode: string, newPassword: string) => {
+            const normalizedCode = typeof oobCode === "string" ? oobCode.trim() : "";
+            const normalizedPassword = typeof newPassword === "string" ? newPassword.trim() : "";
+
+            if (!normalizedCode) {
+                throw new Error("This password reset link is invalid or incomplete.");
+            }
+
+            if (normalizedPassword.length < 6) {
+                throw new Error("Password must be at least 6 characters long.");
+            }
+
+            try {
+                await confirmPasswordReset(auth, normalizedCode, normalizedPassword);
+                showSuccess("Your password has been updated. You can sign in now.", "Password Reset");
+            } catch (error: any) {
+                const code = error?.code;
+                if (code === "auth/expired-action-code" || code === "auth/invalid-action-code") {
+                    throw new Error("This password reset link has expired or is no longer valid.");
+                }
+                if (code === "auth/weak-password") {
+                    throw new Error("Choose a stronger password before continuing.");
+                }
+                if (isFirebaseNetworkError(error)) {
+                    throw new Error("Network error while resetting password. Please try again.");
+                }
+                throw new Error(getAuthErrorMessage(error, "Unable to reset password right now."));
+            }
+        },
+        [showSuccess]
+    );
+
 
 // -----------------------------------------------------------
 //  Navigation and Return (FIXED NAVIGATION LOGIC)
@@ -1164,6 +1276,14 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
             subscriptionStatus: data.subscriptionStatus || normalizedSubscription?.status,
             subscriptionTier: data.subscriptionTier || normalizedSubscription?.tier,
             subscriptionCurrency: data.subscriptionCurrency || normalizedSubscription?.currency,
+            profileBoosterCredits:
+                typeof data.profileBoosterCredits === 'number' ? data.profileBoosterCredits : 0,
+            profileBoosterActiveUntil:
+                typeof data.profileBoosterActiveUntil === 'string' ? data.profileBoosterActiveUntil : null,
+            profileBoosterLastGrantedReference:
+                typeof data.profileBoosterLastGrantedReference === 'string' ? data.profileBoosterLastGrantedReference : null,
+            profileBoosterLastUsedAt:
+                typeof data.profileBoosterLastUsedAt === 'string' ? data.profileBoosterLastUsedAt : null,
             subscription: normalizedSubscription,
             settings: data.settings,
         };
@@ -1191,7 +1311,10 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
         refetchUser,
         completeOnboarding,
         getUserProfileById,
-        googleSignIn
+        googleSignIn,
+        requestPasswordReset,
+        validatePasswordResetCode,
+        resetPassword,
     };
 }
 

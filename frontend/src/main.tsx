@@ -8,6 +8,7 @@ import Home from './pages/Home.tsx';
 import './index.css';
 import Login from './pages/Login.tsx';
 import SignUp from './pages/SignUp.tsx';
+import ResetPassword from './pages/ResetPassword.tsx';
 import Dashboard from './pages/Dashboard.tsx';
 // 💡 CORRECTION: Import the ProfilePage component directly, as ProtectedRoute wrapper is removed inside.
 import ProfilePage from './pages/UserProfileView.tsx';
@@ -85,6 +86,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <Route element={<App />}>
               <Route path="about" element={<About />} />
               <Route path="privacy" element={<Privacy />} />
+              <Route path="reset-password" element={<ResetPassword />} />
             </Route>
 
             {/* Route 2: Public Routes (Login/Signup) */}

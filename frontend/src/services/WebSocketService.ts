@@ -7,8 +7,11 @@ export interface UnreadCountPayload {
 }
 
 export interface NotificationPayload {
+  id?: string;
   type: string;
   message: string;
+  data?: Record<string, any>;
+  createdAt?: string;
   matchId?: string;
   otherUser?: { id: string; name: string };
   senderId?: string;

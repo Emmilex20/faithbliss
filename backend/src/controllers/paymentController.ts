@@ -6,11 +6,16 @@ import * as admin from 'firebase-admin';
 import { usersCollection } from '../config/firebase-admin';
 import { getPlanDetails, initializeTransaction, verifyTransaction } from '../services/paystackService';
 import { extractClientIp } from '../services/geoLocationService';
+import { convertUsdToCurrencySubunits } from '../services/exchangeRateService';
 import {
   getRegionalPricingQuote,
   type BillingCycle,
   type PricingRegion,
 } from '../services/regionalPricingService';
+import {
+  grantProfileBoosterForPayment,
+  PROFILE_BOOST_PURCHASE_CREDITS,
+} from '../utils/profileBooster';
 
 type PlanTier = 'premium' | 'elite';
 type Currency = 'NGN' | 'USD';
@@ -41,6 +46,24 @@ type StoredSubscription = {
   nextPaymentDate?: string;
 };
 
+type StoredBoosterPurchase = {
+  productType?: 'profile_booster';
+  status?: string;
+  tier?: string;
+  billingCycle?: 'one_time';
+  pricingRegion?: PricingRegion | string;
+  displayCurrency?: string;
+  displayAmountMajor?: number;
+  chargeCurrency?: string;
+  chargeAmountMajor?: number;
+  chargeAmountSubunits?: number;
+  exchangeRate?: number;
+  reference?: string;
+  customerCode?: string;
+  authorizationCode?: string;
+  updatedAt?: string | null;
+};
+
 type UserPricingContext = {
   countryCode?: string;
   location?: string;
@@ -50,9 +73,10 @@ type PaymentAnalyticsRecord = {
   userId: string;
   name: string;
   email: string;
+  productType: PaymentProductType;
   status: string;
   tier: string;
-  billingCycle: BillingCycle | 'monthly';
+  billingCycle: BillingCycle | 'monthly' | 'one_time';
   pricingRegion: string;
   displayCurrency: string;
   displayAmountMajor: number;
@@ -67,12 +91,15 @@ type PaymentAnalyticsRecord = {
   updatedAt: string | null;
 };
 
+type PaymentProductType = 'subscription' | 'profile_booster';
+
 const PRIMARY_ADMIN_EMAIL = 'aginaemmanuel6@gmail.com';
 
 const PLAN_METADATA: Record<PlanTier, { name: string }> = {
   premium: { name: 'Premium Plan' },
   elite: { name: 'Pro Plan' },
 };
+const PROFILE_BOOSTER_PRICE_USD = 1.99;
 
 const isAdminFromUserDoc = (userData: Record<string, any> | undefined): boolean => {
   const email = typeof userData?.email === 'string' ? userData.email.trim().toLowerCase() : '';
@@ -101,6 +128,17 @@ const requireAdminAccess = async (userId: string | undefined, res: Response) => 
   }
 
   return userData;
+};
+
+const isActivePremiumUser = (userData: Record<string, any> | undefined): boolean => {
+  const status = typeof userData?.subscriptionStatus === 'string'
+    ? userData.subscriptionStatus.trim().toLowerCase()
+    : '';
+  const tier = typeof userData?.subscriptionTier === 'string'
+    ? userData.subscriptionTier.trim().toLowerCase()
+    : '';
+
+  return status === 'active' && (tier === 'premium' || tier === 'elite');
 };
 
 const normalizeTimestamp = (value: unknown): string | null => {
@@ -272,6 +310,111 @@ const getStoredSubscription = async (userId: string): Promise<StoredSubscription
   }
 
   return subscription as StoredSubscription;
+};
+
+const getStoredBoosterPurchases = (userData: Record<string, any> | undefined): StoredBoosterPurchase[] => {
+  const purchases = userData?.profileBoosterPurchases;
+  if (!Array.isArray(purchases)) return [];
+
+  return purchases
+    .filter((purchase): purchase is Record<string, any> => Boolean(purchase) && typeof purchase === 'object')
+    .map((purchase) => ({
+      productType: 'profile_booster',
+      status: typeof purchase.status === 'string' ? purchase.status : 'paid',
+      tier: typeof purchase.tier === 'string' ? purchase.tier : 'booster',
+      billingCycle: 'one_time',
+      pricingRegion: typeof purchase.pricingRegion === 'string' ? purchase.pricingRegion : 'global',
+      displayCurrency: typeof purchase.displayCurrency === 'string' ? purchase.displayCurrency : 'USD',
+      displayAmountMajor:
+        typeof purchase.displayAmountMajor === 'number' ? purchase.displayAmountMajor : PROFILE_BOOSTER_PRICE_USD,
+      chargeCurrency: typeof purchase.chargeCurrency === 'string' ? purchase.chargeCurrency : 'NGN',
+      chargeAmountMajor: typeof purchase.chargeAmountMajor === 'number' ? purchase.chargeAmountMajor : 0,
+      chargeAmountSubunits: typeof purchase.chargeAmountSubunits === 'number' ? purchase.chargeAmountSubunits : 0,
+      exchangeRate: typeof purchase.exchangeRate === 'number' ? purchase.exchangeRate : undefined,
+      reference: typeof purchase.reference === 'string' ? purchase.reference : '',
+      customerCode: typeof purchase.customerCode === 'string' ? purchase.customerCode : '',
+      authorizationCode: typeof purchase.authorizationCode === 'string' ? purchase.authorizationCode : '',
+      updatedAt: normalizeTimestamp(purchase.updatedAt) || null,
+    }));
+};
+
+const getLegacyBoosterPurchase = (
+  userData: Record<string, any> | undefined,
+  subscription: StoredSubscription | null | undefined
+): StoredBoosterPurchase | null => {
+  const legacyReference =
+    typeof userData?.profileBoosterLastGrantedReference === 'string'
+      ? userData.profileBoosterLastGrantedReference.trim()
+      : '';
+
+  if (!legacyReference) return null;
+
+  return {
+    productType: 'profile_booster',
+    status: 'granted',
+    tier: 'booster',
+    billingCycle: 'one_time',
+    pricingRegion:
+      typeof subscription?.pricingRegion === 'string' ? subscription.pricingRegion : 'unknown',
+    displayCurrency: 'USD',
+    displayAmountMajor: 0,
+    chargeCurrency:
+      typeof subscription?.currency === 'string' ? subscription.currency : 'NGN',
+    chargeAmountMajor: 0,
+    chargeAmountSubunits: 0,
+    reference: legacyReference,
+    customerCode:
+      typeof subscription?.customerCode === 'string' ? subscription.customerCode : '',
+    authorizationCode:
+      typeof subscription?.authorizationCode === 'string' ? subscription.authorizationCode : '',
+    updatedAt: normalizeTimestamp(userData?.updatedAt),
+  };
+};
+
+const upsertProfileBoosterPurchase = async (
+  userId: string,
+  purchase: StoredBoosterPurchase
+) => {
+  const userRef = usersCollection.doc(userId);
+  const userSnapshot = await userRef.get();
+  const userData = userSnapshot.data() as Record<string, any> | undefined;
+  const existingPurchases = getStoredBoosterPurchases(userData);
+  const reference = typeof purchase.reference === 'string' ? purchase.reference : '';
+
+  const normalizedPurchase: StoredBoosterPurchase = removeUndefinedValues({
+    productType: 'profile_booster',
+    status: purchase.status || 'paid',
+    tier: purchase.tier || 'booster',
+    billingCycle: 'one_time',
+    pricingRegion: purchase.pricingRegion || 'global',
+    displayCurrency: purchase.displayCurrency || 'USD',
+    displayAmountMajor:
+      typeof purchase.displayAmountMajor === 'number' ? purchase.displayAmountMajor : PROFILE_BOOSTER_PRICE_USD,
+    chargeCurrency: purchase.chargeCurrency || 'NGN',
+    chargeAmountMajor: typeof purchase.chargeAmountMajor === 'number' ? purchase.chargeAmountMajor : 0,
+    chargeAmountSubunits: typeof purchase.chargeAmountSubunits === 'number' ? purchase.chargeAmountSubunits : 0,
+    exchangeRate: purchase.exchangeRate,
+    reference,
+    customerCode: purchase.customerCode || '',
+    authorizationCode: purchase.authorizationCode || '',
+    updatedAt: new Date().toISOString(),
+  });
+
+  const nextPurchases =
+    reference
+      ? [
+          ...existingPurchases.filter((entry) => entry.reference !== reference),
+          normalizedPurchase,
+        ]
+      : [...existingPurchases, normalizedPurchase];
+
+  await userRef.set(
+    {
+      profileBoosterPurchases: nextPurchases,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
 };
 
 const getUserPricingContext = async (userId: string): Promise<UserPricingContext | null> => {
@@ -500,6 +643,64 @@ export const getLocalizedPricingQuote = async (req: Request, res: Response) => {
   }
 };
 
+export const initializeProfileBoosterPurchase = async (req: Request, res: Response) => {
+  try {
+    const userId = req.userId;
+    const email = req.user?.email || req.body?.email;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized: Firebase UID missing.' });
+    }
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required for payment.' });
+    }
+
+    const userSnapshot = await usersCollection.doc(userId).get();
+    if (!userSnapshot.exists) {
+      return res.status(404).json({ message: 'User profile not found.' });
+    }
+
+    const userData = userSnapshot.data() as Record<string, any> | undefined;
+    if (!isActivePremiumUser(userData)) {
+      return res.status(403).json({ message: 'An active premium subscription is required to buy additional boosters.' });
+    }
+
+    const callbackBaseUrl = process.env.CLIENT_URL?.trim();
+    const callbackUrl = callbackBaseUrl ? `${callbackBaseUrl.replace(/\/+$/, '')}/payment-success` : undefined;
+    const ngnCharge = await convertUsdToCurrencySubunits(PROFILE_BOOSTER_PRICE_USD, 'NGN');
+
+    const response = await initializeTransaction({
+      email,
+      amount: ngnCharge.amount,
+      currency: 'NGN',
+      callback_url: callbackUrl,
+      metadata: {
+        userId,
+        productType: 'profile_booster' satisfies PaymentProductType,
+        displayCurrency: 'USD',
+        displayAmountMajor: PROFILE_BOOSTER_PRICE_USD,
+        chargeCurrency: 'NGN',
+        chargeAmountMajor: ngnCharge.convertedMajorAmount,
+        chargeAmountSubunits: ngnCharge.amount,
+        exchangeRate: ngnCharge.exchangeRate,
+      },
+    });
+
+    return res.status(200).json({
+      authorizationUrl: response.data.authorization_url,
+      accessCode: response.data.access_code,
+      reference: response.data.reference,
+      displayCurrency: 'USD',
+      displayAmountMajor: PROFILE_BOOSTER_PRICE_USD,
+      chargeCurrency: 'NGN',
+      chargeAmountMajor: ngnCharge.convertedMajorAmount,
+      chargeAmountSubunits: ngnCharge.amount,
+    });
+  } catch (error: any) {
+    return res.status(400).json({ message: error?.message || 'Booster payment initialization failed.' });
+  }
+};
+
 export const listSubscriptionPlans = async (_req: Request, res: Response) => {
   try {
     const plans = await listConfiguredPlans();
@@ -549,6 +750,7 @@ export const getAdminPaymentAnalytics = async (req: Request, res: Response) => {
         userId: doc.id,
         name: typeof user.name === 'string' ? user.name : 'Unknown user',
         email: typeof user.email === 'string' ? user.email : '',
+        productType: 'subscription',
         status: status || 'unknown',
         tier: tier || 'free',
         billingCycle: subscription.billingCycle === 'quarterly' ? 'quarterly' : 'monthly',
@@ -569,6 +771,39 @@ export const getAdminPaymentAnalytics = async (req: Request, res: Response) => {
         nextPaymentDate: typeof subscription.nextPaymentDate === 'string' ? subscription.nextPaymentDate : null,
         updatedAt: normalizeTimestamp(subscription.updatedAt) || normalizeTimestamp(user.updatedAt),
       });
+
+      const boosterPurchases = getStoredBoosterPurchases(user);
+      const legacyBoosterPurchase = getLegacyBoosterPurchase(user, subscription);
+      const allBoosterPurchases = legacyBoosterPurchase &&
+        !boosterPurchases.some((purchase) => purchase.reference === legacyBoosterPurchase.reference)
+        ? [...boosterPurchases, legacyBoosterPurchase]
+        : boosterPurchases;
+      allBoosterPurchases.forEach((purchase) => {
+        records.push({
+          userId: doc.id,
+          name: typeof user.name === 'string' ? user.name : 'Unknown user',
+          email: typeof user.email === 'string' ? user.email : '',
+          productType: 'profile_booster',
+          status: purchase.status || 'paid',
+          tier: purchase.tier || 'booster',
+          billingCycle: 'one_time',
+          pricingRegion: typeof purchase.pricingRegion === 'string' ? purchase.pricingRegion : 'global',
+          displayCurrency: typeof purchase.displayCurrency === 'string' ? purchase.displayCurrency : 'USD',
+          displayAmountMajor:
+            typeof purchase.displayAmountMajor === 'number' ? purchase.displayAmountMajor : PROFILE_BOOSTER_PRICE_USD,
+          chargeCurrency: typeof purchase.chargeCurrency === 'string' ? purchase.chargeCurrency : 'NGN',
+          chargeAmountMajor: typeof purchase.chargeAmountMajor === 'number' ? purchase.chargeAmountMajor : 0,
+          chargeAmountSubunits:
+            typeof purchase.chargeAmountSubunits === 'number' ? purchase.chargeAmountSubunits : 0,
+          reference: typeof purchase.reference === 'string' ? purchase.reference : '',
+          planCode: null,
+          customerCode: typeof purchase.customerCode === 'string' ? purchase.customerCode : '',
+          authorizationCode:
+            typeof purchase.authorizationCode === 'string' ? purchase.authorizationCode : '',
+          nextPaymentDate: null,
+          updatedAt: purchase.updatedAt || normalizeTimestamp(user.updatedAt),
+        });
+      });
     });
 
     records.sort((left, right) => {
@@ -583,8 +818,10 @@ export const getAdminPaymentAnalytics = async (req: Request, res: Response) => {
         if (record.status === 'active') acc.activeSubscriptions += 1;
         if (record.status === 'pending') acc.pendingSubscriptions += 1;
         if (record.status === 'inactive') acc.inactiveSubscriptions += 1;
-        if (record.billingCycle === 'monthly') acc.monthlyPlans += 1;
-        if (record.billingCycle === 'quarterly') acc.quarterlyPlans += 1;
+        if (record.productType === 'subscription') {
+          if (record.billingCycle === 'monthly') acc.monthlyPlans += 1;
+          if (record.billingCycle === 'quarterly') acc.quarterlyPlans += 1;
+        }
         if (record.status === 'active') {
           acc.activeChargeVolumeNgn += record.chargeCurrency === 'NGN' ? record.chargeAmountMajor : 0;
         }
@@ -642,6 +879,10 @@ export const deleteAdminPaymentRecord = async (req: Request, res: Response) => {
     if (!adminUser) return;
 
     const targetUserId = typeof req.params.userId === 'string' ? req.params.userId.trim() : '';
+    const requestedProductType = typeof req.query.productType === 'string'
+      ? req.query.productType.trim().toLowerCase()
+      : 'subscription';
+    const targetReference = typeof req.query.reference === 'string' ? req.query.reference.trim() : '';
     if (!targetUserId) {
       return res.status(400).json({ message: 'Target user ID is required.' });
     }
@@ -653,6 +894,31 @@ export const deleteAdminPaymentRecord = async (req: Request, res: Response) => {
     }
 
     const targetUser = targetSnap.data() as Record<string, any> | undefined;
+    if (requestedProductType === 'profile_booster') {
+      const boosterPurchases = getStoredBoosterPurchases(targetUser);
+      const nextPurchases = targetReference
+        ? boosterPurchases.filter((purchase) => purchase.reference !== targetReference)
+        : boosterPurchases.slice(0, -1);
+
+      if (nextPurchases.length === boosterPurchases.length) {
+        return res.status(404).json({ message: 'No booster payment record exists for this user.' });
+      }
+
+      await targetRef.set(
+        {
+          profileBoosterPurchases: nextPurchases,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      return res.status(200).json({
+        message: 'Booster payment record deleted successfully.',
+        userId: targetUserId,
+        email: typeof targetUser?.email === 'string' ? targetUser.email : '',
+      });
+    }
+
     const hadSubscriptionRecord = Boolean(
       targetUser?.subscription ||
       targetUser?.subscriptionStatus ||
@@ -706,6 +972,57 @@ export const verifySubscription = async (req: Request, res: Response) => {
     }
 
     const metadata = data.metadata || {};
+    const productType = typeof metadata.productType === 'string'
+      ? metadata.productType.trim().toLowerCase()
+      : 'subscription';
+
+    if (productType === 'profile_booster') {
+      const boosterGrant = await grantProfileBoosterForPayment(
+        userId,
+        data.reference,
+        PROFILE_BOOST_PURCHASE_CREDITS
+      );
+      await upsertProfileBoosterPurchase(userId, {
+        productType: 'profile_booster',
+        status: 'paid',
+        tier: 'booster',
+        billingCycle: 'one_time',
+        pricingRegion:
+          typeof metadata.pricingRegion === 'string' ? metadata.pricingRegion : 'global',
+        displayCurrency:
+          typeof metadata.displayCurrency === 'string' ? metadata.displayCurrency : 'USD',
+        displayAmountMajor:
+          typeof metadata.displayAmountMajor === 'number'
+            ? metadata.displayAmountMajor
+            : PROFILE_BOOSTER_PRICE_USD,
+        chargeCurrency:
+          typeof metadata.chargeCurrency === 'string' ? metadata.chargeCurrency : data.currency || 'NGN',
+        chargeAmountMajor:
+          typeof metadata.chargeAmountMajor === 'number'
+            ? metadata.chargeAmountMajor
+            : typeof data.amount === 'number'
+              ? data.amount / 100
+              : 0,
+        chargeAmountSubunits:
+          typeof metadata.chargeAmountSubunits === 'number'
+            ? metadata.chargeAmountSubunits
+            : typeof data.amount === 'number'
+              ? data.amount
+              : 0,
+        exchangeRate: typeof metadata.exchangeRate === 'number' ? metadata.exchangeRate : undefined,
+        reference: data.reference,
+        customerCode: data.customer?.customer_code,
+        authorizationCode: data.authorization?.authorization_code,
+      });
+      return res.status(200).json({
+        message: boosterGrant.granted
+          ? `Profile booster bundle purchased successfully. ${PROFILE_BOOST_PURCHASE_CREDITS} credits added.`
+          : 'Profile booster payment already processed.',
+        purchaseType: 'profile_booster',
+        data,
+      });
+    }
+
     const rawPlanCode = data.plan?.plan_code || data.plan;
     const tier =
       (typeof metadata.tier === 'string' && metadata.tier.trim().toLowerCase()) ||
@@ -763,8 +1080,9 @@ export const verifySubscription = async (req: Request, res: Response) => {
       authorizationCode: data.authorization?.authorization_code,
       nextPaymentDate,
     });
+    await grantProfileBoosterForPayment(userId, data.reference);
 
-    return res.status(200).json({ message: 'Subscription verified', data });
+    return res.status(200).json({ message: 'Subscription verified', purchaseType: 'subscription', data });
   } catch (error: any) {
     console.error('Paystack verify error:', error);
     return res.status(500).json({ message: error.message || 'Payment verification failed.' });
@@ -811,6 +1129,51 @@ export const handlePaystackWebhook = async (req: Request, res: Response) => {
     }
 
     if (['charge.success', 'subscription.create', 'invoice.payment_succeeded'].includes(event.event)) {
+      const productType = typeof metadata.productType === 'string'
+        ? metadata.productType.trim().toLowerCase()
+        : 'subscription';
+
+      if (productType === 'profile_booster') {
+        await grantProfileBoosterForPayment(
+          userId,
+          data.reference,
+          PROFILE_BOOST_PURCHASE_CREDITS
+        );
+        await upsertProfileBoosterPurchase(userId, {
+          productType: 'profile_booster',
+          status: 'paid',
+          tier: 'booster',
+          billingCycle: 'one_time',
+          pricingRegion:
+            typeof metadata.pricingRegion === 'string' ? metadata.pricingRegion : 'global',
+          displayCurrency:
+            typeof metadata.displayCurrency === 'string' ? metadata.displayCurrency : 'USD',
+          displayAmountMajor:
+            typeof metadata.displayAmountMajor === 'number'
+              ? metadata.displayAmountMajor
+              : PROFILE_BOOSTER_PRICE_USD,
+          chargeCurrency:
+            typeof metadata.chargeCurrency === 'string' ? metadata.chargeCurrency : data.currency || 'NGN',
+          chargeAmountMajor:
+            typeof metadata.chargeAmountMajor === 'number'
+              ? metadata.chargeAmountMajor
+              : typeof data.amount === 'number'
+                ? data.amount / 100
+                : 0,
+          chargeAmountSubunits:
+            typeof metadata.chargeAmountSubunits === 'number'
+              ? metadata.chargeAmountSubunits
+              : typeof data.amount === 'number'
+                ? data.amount
+                : 0,
+          exchangeRate: typeof metadata.exchangeRate === 'number' ? metadata.exchangeRate : undefined,
+          reference: data.reference,
+          customerCode: data.customer?.customer_code,
+          authorizationCode: data.authorization?.authorization_code,
+        });
+        return res.status(200).json({ received: true });
+      }
+
       const existingSubscription = await getStoredSubscription(userId);
       const rawPlanCode = data.plan?.plan_code || data.plan;
       const tier =
@@ -870,6 +1233,7 @@ export const handlePaystackWebhook = async (req: Request, res: Response) => {
         authorizationCode: data.authorization?.authorization_code,
         nextPaymentDate,
       });
+      await grantProfileBoosterForPayment(userId, data.reference);
     }
 
     return res.status(200).json({ received: true });

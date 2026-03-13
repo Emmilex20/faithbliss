@@ -7,6 +7,7 @@ import {
   getAdminPaymentAnalytics,
   handlePaystackWebhook,
   getLocalizedPricingQuote,
+  initializeProfileBoosterPurchase,
   initializeLocalizedSubscription,
   initializeSubscription,
   listSubscriptionPlans,
@@ -24,6 +25,7 @@ router.delete('/admin/records/:userId', protect, deleteAdminPaymentRecord);
 router.get('/quote', protect, getLocalizedPricingQuote);
 router.get('/plans', protect, listSubscriptionPlans);
 router.post('/pay', protect, initializeLocalizedSubscription);
+router.post('/profile-booster/pay', protect, initializeProfileBoosterPurchase);
 router.post('/initialize', protect, initializeSubscription);
 router.post('/verify', protect, verifySubscription);
 

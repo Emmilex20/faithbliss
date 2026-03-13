@@ -8,6 +8,7 @@ import { Readable } from 'stream';
 import { createNotification } from '../services/notificationService';
 import { cloudinaryUploader } from '../config/cloudinaryConfig';
 import { canViewerSeeCandidate, getPassportFeatureSettings } from '../utils/passportMode';
+import { isProfileBoosterActive } from '../utils/profileBooster';
 
 // --- FIRESTORE DATA STRUCTURES ---
 
@@ -43,6 +44,7 @@ interface IUserProfile extends DocumentData {
   subscriptionTier?: string;
   countryCode?: string;
   passportCountry?: string | null;
+  profileBoosterActiveUntil?: unknown;
 }
 
 interface IMatch extends DocumentData {
@@ -585,6 +587,10 @@ const getPotentialMatches = async (req: Request, res: Response) => {
     });
 
     matchesWithDistance.sort((a, b) => {
+      const aBoostRank = isProfileBoosterActive(a) ? 0 : 1;
+      const bBoostRank = isProfileBoosterActive(b) ? 0 : 1;
+      if (aBoostRank !== bBoostRank) return aBoostRank - bBoostRank;
+
       const aDistance = typeof a.distance === 'number' ? a.distance : Number.POSITIVE_INFINITY;
       const bDistance = typeof b.distance === 'number' ? b.distance : Number.POSITIVE_INFINITY;
       if (aDistance !== bDistance) return aDistance - bDistance;

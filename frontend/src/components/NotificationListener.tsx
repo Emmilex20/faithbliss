@@ -8,7 +8,7 @@ import { API } from '@/services/api';
 
 type NotificationPayload = {
   id?: string;
-  type: 'NEW_MESSAGE' | 'PROFILE_LIKED' | 'NEW_MATCH' | 'STORY_POSTED' | string;
+  type: 'NEW_MESSAGE' | 'PROFILE_LIKED' | 'NEW_MATCH' | 'STORY_POSTED' | 'REPORT_SUBMITTED' | 'SUPPORT_REPLY' | string;
   message: string;
   data?: Record<string, any>;
   createdAt?: string;
@@ -169,6 +169,10 @@ export const NotificationListener = () => {
         showInfo(payload.message || 'You received a new like', 'New Like');
       } else if (payload.type === 'NEW_MESSAGE') {
         showInfo(payload.message || 'You received a new message', 'Message');
+      } else if (payload.type === 'SUPPORT_REPLY') {
+        showInfo(payload.message || 'FaithBliss support replied to you', 'Support Reply');
+      } else if (payload.type === 'REPORT_SUBMITTED') {
+        showInfo(payload.message || 'A new issue report was submitted', 'Reported Issue');
       } else if (payload.type === 'STORY_POSTED') {
         showInfo(payload.message || 'A mutual user posted a new story', 'New Story');
       } else {

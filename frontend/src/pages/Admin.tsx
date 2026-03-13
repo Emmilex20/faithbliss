@@ -393,9 +393,10 @@ const AdminPage = () => {
   const [platformStats, setPlatformStats] = useState<Awaited<ReturnType<typeof API.User.getAdminPlatformStats>> | null>(null);
   const [platformStatsLoading, setPlatformStatsLoading] = useState(true);
   const [paymentSearch, setPaymentSearch] = useState('');
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState<'all' | 'active' | 'pending' | 'inactive' | 'unknown'>('all');
-  const [paymentTierFilter, setPaymentTierFilter] = useState<'all' | 'premium' | 'elite' | 'free'>('all');
-  const [paymentCycleFilter, setPaymentCycleFilter] = useState<'all' | 'monthly' | 'quarterly'>('all');
+  const [paymentProductFilter, setPaymentProductFilter] = useState<'all' | 'subscription' | 'profile_booster'>('all');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<'all' | 'active' | 'paid' | 'pending' | 'inactive' | 'unknown'>('all');
+  const [paymentTierFilter, setPaymentTierFilter] = useState<'all' | 'premium' | 'elite' | 'free' | 'booster'>('all');
+  const [paymentCycleFilter, setPaymentCycleFilter] = useState<'all' | 'monthly' | 'quarterly' | 'one_time'>('all');
   const [paymentSort, setPaymentSort] = useState<'latest' | 'oldest' | 'amount-high' | 'amount-low' | 'name-az'>('latest');
   const [deletingPaymentUserId, setDeletingPaymentUserId] = useState<string | null>(null);
   const [overviewRangeDays, setOverviewRangeDays] = useState<7 | 30 | 90>(7);
@@ -560,13 +561,14 @@ const AdminPage = () => {
 
   const exportPaymentRecords = () => {
     const rows: string[][] = [
-      ['Name', 'Email', 'Status', 'Tier', 'Billing Cycle', 'Region', 'Display Price', 'Charge Price', 'Reference', 'Updated At'],
+      ['Name', 'Email', 'Product Type', 'Status', 'Plan', 'Billing Cycle', 'Region', 'Display Price', 'Charge Price', 'Reference', 'Updated At'],
       ...filteredPaymentRecords.map((record) => [
         record.name,
         record.email,
+        getPaymentProductLabel(record),
         record.status,
         record.tier,
-        record.billingCycle,
+        getPaymentCycleLabel(record),
         record.pricingRegion,
         formatMoney(record.displayAmountMajor, record.displayCurrency),
         formatMoney(record.chargeAmountMajor, record.chargeCurrency),
@@ -583,6 +585,7 @@ const AdminPage = () => {
     const normalizedSearch = paymentSearch.trim().toLowerCase();
 
     const filtered = records.filter((record) => {
+      if (paymentProductFilter !== 'all' && record.productType !== paymentProductFilter) return false;
       if (paymentStatusFilter !== 'all' && record.status !== paymentStatusFilter) return false;
       if (paymentTierFilter !== 'all' && record.tier !== paymentTierFilter) return false;
       if (paymentCycleFilter !== 'all' && record.billingCycle !== paymentCycleFilter) return false;
@@ -593,6 +596,7 @@ const AdminPage = () => {
         record.name,
         record.email,
         record.reference,
+        record.productType,
         record.tier,
         record.status,
         record.pricingRegion,
@@ -624,6 +628,7 @@ const AdminPage = () => {
     return sorted;
   }, [
     paymentAnalytics?.records,
+    paymentProductFilter,
     paymentCycleFilter,
     paymentSearch,
     paymentSort,
@@ -754,13 +759,19 @@ const AdminPage = () => {
     setPaymentAnalytics(paymentsResponse);
   };
 
-  const handleDeletePaymentRecord = async (userId: string, userLabel: string) => {
-    const confirmed = window.confirm(`Delete the stored payment record for ${userLabel}? This clears the current subscription/payment data from admin records.`);
+  const handleDeletePaymentRecord = async (record: NonNullable<typeof paymentAnalytics>['records'][number]) => {
+    const userLabel = record.name || record.email;
+    const confirmed = window.confirm(
+      `Delete the stored ${getPaymentProductLabel(record).toLowerCase()} record for ${userLabel}?`
+    );
     if (!confirmed) return;
 
     try {
-      setDeletingPaymentUserId(userId);
-      const response = await API.Payment.deleteAdminRecord(userId);
+      setDeletingPaymentUserId(`${record.userId}:${record.reference || record.productType}`);
+      const response = await API.Payment.deleteAdminRecord(record.userId, {
+        productType: record.productType,
+        reference: record.reference || undefined,
+      });
       await reloadPaymentAnalytics();
       await refetch();
       showSuccess(response.message || 'Payment record deleted successfully.');
@@ -792,6 +803,16 @@ const AdminPage = () => {
     } catch {
       return `${currency} ${amount.toLocaleString()}`;
     }
+  };
+
+  const getPaymentProductLabel = (record: NonNullable<typeof paymentAnalytics>['records'][number]) =>
+    record.productType === 'profile_booster' ? 'Booster Purchase' : 'Subscription';
+
+  const getPaymentCycleLabel = (record: NonNullable<typeof paymentAnalytics>['records'][number]) => {
+    if (record.productType === 'profile_booster' || record.billingCycle === 'one_time') {
+      return 'One-time';
+    }
+    return record.billingCycle === 'quarterly' ? '3-Month' : 'Monthly';
   };
 
   const handleReplyDraftChange = (ticketId: string, value: string) => {
@@ -997,7 +1018,7 @@ const AdminPage = () => {
                     ))}
                   </div>
 
-                  <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                     <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Active users in range</p>
                       <p className="mt-3 text-3xl font-semibold text-white">
@@ -1013,6 +1034,13 @@ const AdminPage = () => {
                         {platformStatsLoading ? '...' : platformStats?.totalMatches ?? 0}
                       </p>
                       <p className="mt-2 text-sm text-gray-400">Total mutual connections recorded across the app.</p>
+                    </div>
+                    <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Active boosts</p>
+                      <p className="mt-3 text-3xl font-semibold text-white">
+                        {platformStatsLoading ? '...' : platformStats?.activeBoosts ?? 0}
+                      </p>
+                      <p className="mt-2 text-sm text-gray-400">Profiles currently being prioritised by a live booster.</p>
                     </div>
                     <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Open support tickets</p>
@@ -1036,6 +1064,7 @@ const AdminPage = () => {
                       <div className="flex items-center justify-between"><span>Online right now</span><span className="font-semibold text-white">{overviewStats.onlineUsers}</span></div>
                       <div className="flex items-center justify-between"><span>Free users</span><span className="font-semibold text-white">{overviewStats.freeUsers}</span></div>
                       <div className="flex items-center justify-between"><span>Pending subscriptions</span><span className="font-semibold text-white">{overviewStats.pendingSubscriptions}</span></div>
+                      <div className="flex items-center justify-between"><span>Active boosts</span><span className="font-semibold text-white">{platformStats?.activeBoosts ?? 0}</span></div>
                       <div className="flex items-center justify-between"><span>Male users</span><span className="font-semibold text-white">{overviewStats.maleUsers}</span></div>
                       <div className="flex items-center justify-between"><span>Female users</span><span className="font-semibold text-white">{overviewStats.femaleUsers}</span></div>
                     </div>
@@ -1135,9 +1164,9 @@ const AdminPage = () => {
                             </div>
                             <p className="mt-1 truncate text-xs text-gray-400">{record.email}</p>
                             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-300">
-                              <span>{record.tier}</span>
+                              <span>{getPaymentProductLabel(record)}</span>
                               <span>•</span>
-                              <span>{record.billingCycle === 'quarterly' ? '3-Month' : 'Monthly'}</span>
+                              <span>{getPaymentCycleLabel(record)}</span>
                               <span>•</span>
                               <span>{formatMoney(record.chargeAmountMajor, record.chargeCurrency)}</span>
                             </div>
@@ -1506,8 +1535,8 @@ const AdminPage = () => {
                       <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-4 sm:p-5">
                         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div>
-                            <h3 className="text-lg font-semibold text-white">Recent subscription records</h3>
-                            <p className="mt-1 text-sm text-gray-400">Latest tracked payment and subscription entries across all users.</p>
+                            <h3 className="text-lg font-semibold text-white">Recent payment records</h3>
+                            <p className="mt-1 text-sm text-gray-400">Latest subscription and booster purchases tracked across all users.</p>
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-gray-300">
@@ -1534,12 +1563,22 @@ const AdminPage = () => {
                             />
                           </label>
                           <select
+                            value={paymentProductFilter}
+                            onChange={(event) => setPaymentProductFilter(event.target.value as typeof paymentProductFilter)}
+                            className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none"
+                          >
+                            <option value="all">All products</option>
+                            <option value="subscription">Subscriptions</option>
+                            <option value="profile_booster">Booster purchases</option>
+                          </select>
+                          <select
                             value={paymentStatusFilter}
                             onChange={(event) => setPaymentStatusFilter(event.target.value as typeof paymentStatusFilter)}
                             className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none"
                           >
                             <option value="all">All statuses</option>
                             <option value="active">Active</option>
+                            <option value="paid">Paid</option>
                             <option value="pending">Pending</option>
                             <option value="inactive">Inactive</option>
                             <option value="unknown">Unknown</option>
@@ -1553,6 +1592,7 @@ const AdminPage = () => {
                             <option value="premium">Premium</option>
                             <option value="elite">Pro</option>
                             <option value="free">Free</option>
+                            <option value="booster">Booster</option>
                           </select>
                           <select
                             value={paymentCycleFilter}
@@ -1562,6 +1602,7 @@ const AdminPage = () => {
                             <option value="all">All cycles</option>
                             <option value="monthly">Monthly</option>
                             <option value="quarterly">3-Month</option>
+                            <option value="one_time">One-time</option>
                           </select>
                           <select
                             value={paymentSort}
@@ -1607,7 +1648,7 @@ const AdminPage = () => {
                                   <div className="mt-4 grid grid-cols-2 gap-3">
                                     <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-3">
                                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Plan</p>
-                                      <p className="mt-1 text-sm text-white capitalize">{record.tier} • {record.billingCycle}</p>
+                                      <p className="mt-1 text-sm text-white capitalize">{getPaymentProductLabel(record)} • {getPaymentCycleLabel(record)}</p>
                                     </div>
                                     <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-3">
                                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Charge</p>
@@ -1629,12 +1670,12 @@ const AdminPage = () => {
                                   </div>
                                   <button
                                     type="button"
-                                    onClick={() => void handleDeletePaymentRecord(record.userId, record.name || record.email)}
-                                    disabled={deletingPaymentUserId === record.userId}
+                                    onClick={() => void handleDeletePaymentRecord(record)}
+                                    disabled={deletingPaymentUserId === `${record.userId}:${record.reference || record.productType}`}
                                     className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                                   >
                                     <Trash2 className="h-4 w-4" />
-                                    {deletingPaymentUserId === record.userId ? 'Deleting...' : 'Delete payment record'}
+                                    {deletingPaymentUserId === `${record.userId}:${record.reference || record.productType}` ? 'Deleting...' : 'Delete payment record'}
                                   </button>
                                 </div>
                               ))}
@@ -1661,7 +1702,7 @@ const AdminPage = () => {
                                         <p className="truncate font-semibold text-white">{record.name}</p>
                                         <p className="truncate text-xs text-gray-400">{record.email}</p>
                                       </div>
-                                      <div className="text-sm capitalize text-white">{record.tier} • {record.billingCycle}</div>
+                                      <div className="text-sm capitalize text-white">{getPaymentProductLabel(record)} • {getPaymentCycleLabel(record)}</div>
                                       <div>
                                         <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
                                           record.status === 'active'
@@ -1682,12 +1723,12 @@ const AdminPage = () => {
                                       <div className="flex justify-end">
                                         <button
                                           type="button"
-                                          onClick={() => void handleDeletePaymentRecord(record.userId, record.name || record.email)}
-                                          disabled={deletingPaymentUserId === record.userId}
+                                          onClick={() => void handleDeletePaymentRecord(record)}
+                                          disabled={deletingPaymentUserId === `${record.userId}:${record.reference || record.productType}`}
                                           className="inline-flex items-center gap-2 rounded-full border border-red-400/25 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                                         >
                                           <Trash2 className="h-3.5 w-3.5" />
-                                          {deletingPaymentUserId === record.userId ? 'Deleting...' : 'Delete'}
+                                          {deletingPaymentUserId === `${record.userId}:${record.reference || record.productType}` ? 'Deleting...' : 'Delete'}
                                         </button>
                                       </div>
                                     </div>

@@ -9,6 +9,7 @@ import {
   updateUserProfile,
   updateUserSettings,
   updatePassportSettings,
+  activateProfileBooster,
   getFeatureSettings,
   updateFeatureSettings,
   updateUserRole,
@@ -32,6 +33,7 @@ router.put('/me', protect, updateUserProfile);
 // Update settings
 router.patch('/me/settings', protect, updateUserSettings);
 router.patch('/me/passport', protect, updatePassportSettings);
+router.post('/me/profile-booster/activate', protect, activateProfileBooster);
 router.get('/feature-settings', protect, getFeatureSettings);
 router.get('/admin/platform-stats', protect, getAdminPlatformStats);
 router.patch('/feature-settings', protect, updateFeatureSettings);

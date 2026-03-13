@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { TopBar } from '@/components/dashboard/TopBar';
 import { SidePanel } from '@/components/dashboard/SidePanel';
+import ProfileBoosterIcon from '@/components/icons/ProfileBoosterIcon';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { API, type LocalizedPricingQuoteResponse } from '@/services/api';
@@ -123,6 +124,23 @@ const getPricingNote = (region: 'nigeria' | 'africa' | 'global', displayCurrency
   return 'Shown in USD. Paystack charges in NGN at checkout.';
 };
 
+const formatProfileBoosterCountdown = (activeUntil: string | null | undefined) => {
+  if (!activeUntil) return null;
+
+  const timeLeftMs = Date.parse(activeUntil) - Date.now();
+  if (Number.isNaN(timeLeftMs) || timeLeftMs <= 0) return null;
+
+  const totalMinutes = Math.ceil(timeLeftMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m remaining`;
+  }
+
+  return `${minutes}m remaining`;
+};
+
 const PremiumContent = () => {
   const { user, refetchUser } = useAuthContext();
   const { showError, showSuccess } = useToast();
@@ -131,6 +149,8 @@ const PremiumContent = () => {
   const [loadingPlanKey, setLoadingPlanKey] = useState<'premium:monthly' | 'premium:quarterly' | null>(null);
   const [pricingQuote, setPricingQuote] = useState<LocalizedPricingQuoteResponse | null>(null);
   const [pricingLoading, setPricingLoading] = useState(true);
+  const [isActivatingBooster, setIsActivatingBooster] = useState(false);
+  const [isBuyingBooster, setIsBuyingBooster] = useState(false);
 
   const layoutName = user?.name || 'User';
   const layoutImage = user?.profilePhoto1 || undefined;
@@ -142,6 +162,12 @@ const PremiumContent = () => {
   const activeBillingCycle = user?.subscription?.billingCycle === 'quarterly' ? 'quarterly' : 'monthly';
   const normalizedActiveTier: DisplayPlan['tier'] = isPremium ? 'premium' : 'free';
   const subscriptionDisplay = useSubscriptionDisplay(user);
+  const profileBoosterCredits = typeof user?.profileBoosterCredits === 'number' ? user.profileBoosterCredits : 0;
+  const profileBoosterActiveUntil =
+    typeof user?.profileBoosterActiveUntil === 'string' && Date.parse(user.profileBoosterActiveUntil) > Date.now()
+      ? user.profileBoosterActiveUntil
+      : null;
+  const profileBoosterCountdown = formatProfileBoosterCountdown(profileBoosterActiveUntil);
 
   useEffect(() => {
     if (!user?.id) {
@@ -274,6 +300,56 @@ const PremiumContent = () => {
     }
   };
 
+  const handleActivateBooster = async () => {
+    if (!subscriptionDisplay.isActivePaid) {
+      showError('An active premium subscription is required to use profile boosters.');
+      return;
+    }
+
+    if (profileBoosterActiveUntil) {
+      showSuccess('Your profile boost is already live.');
+      return;
+    }
+
+    if (profileBoosterCredits < 1) {
+      showError('No booster credits available yet. Your next premium payment will add one.');
+      return;
+    }
+
+    try {
+      setIsActivatingBooster(true);
+      const response = await API.User.activateProfileBooster();
+      await refetchUser();
+      showSuccess(
+        `Your profile is now boosted for 1 hour. ${response.remainingCredits} credit${response.remainingCredits === 1 ? '' : 's'} left.`,
+        'Booster Activated'
+      );
+    } catch (error: unknown) {
+      showError(getErrorMessage(error, 'Unable to activate your booster right now.'));
+    } finally {
+      setIsActivatingBooster(false);
+    }
+  };
+
+  const handleBuyBooster = async () => {
+    if (!subscriptionDisplay.isActivePaid) {
+      showError('Only active premium users can buy extra booster credits.');
+      return;
+    }
+
+    try {
+      setIsBuyingBooster(true);
+      const response = await API.Payment.buyProfileBooster();
+      if (!response.authorizationUrl) {
+        throw new Error('Booster checkout URL is unavailable.');
+      }
+      window.location.assign(response.authorizationUrl);
+    } catch (error: unknown) {
+      setIsBuyingBooster(false);
+      showError(getErrorMessage(error, 'Unable to start booster checkout.'));
+    }
+  };
+
   const mainContent = (
     <div className="flex-1">
       <div className="relative overflow-hidden">
@@ -388,6 +464,60 @@ const PremiumContent = () => {
                     </div>
                   </div>
                 ) : null}
+
+                <div className="mt-4 rounded-[1.75rem] border border-fuchsia-400/20 bg-[linear-gradient(135deg,rgba(236,72,153,0.16),rgba(124,58,237,0.16))] p-4 shadow-[0_18px_40px_rgba(168,85,247,0.14)] sm:p-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3 sm:gap-4">
+                      <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.4rem] border border-fuchsia-200/20 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.24),rgba(255,255,255,0.08)_32%,rgba(15,23,42,0.82)_100%)] shadow-[0_18px_36px_rgba(76,29,149,0.34)] ring-1 ring-fuchsia-300/10 sm:h-[4.5rem] sm:w-[4.5rem]">
+                        <div className="absolute inset-1 rounded-[1.1rem] bg-[linear-gradient(145deg,rgba(168,85,247,0.18),rgba(236,72,153,0.12),rgba(2,6,23,0.06))]" />
+                        <ProfileBoosterIcon className="relative z-10 h-9 w-9 drop-shadow-[0_10px_18px_rgba(236,72,153,0.28)] sm:h-10 sm:w-10" glowId="premium-page-booster" />
+                      </div>
+                      <div className="min-w-0 pt-0.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-fuchsia-100/80">
+                          Profile Booster
+                        </p>
+                        <h4 className="mt-1 text-lg font-semibold text-white sm:text-xl">
+                          {profileBoosterActiveUntil ? 'Boost Live' : `${profileBoosterCredits} booster credit${profileBoosterCredits === 1 ? '' : 's'}`}
+                        </h4>
+                        <p className="mt-1 max-w-md text-sm leading-6 text-fuchsia-50/80">
+                          {profileBoosterActiveUntil
+                            ? `Your profile is prioritised in discovery feeds for the next ${profileBoosterCountdown || 'hour'}.`
+                            : 'Each successful premium payment adds one 1-hour profile boost.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2.5 sm:min-w-[13.5rem] sm:items-end">
+                      {profileBoosterActiveUntil ? (
+                        <span className="inline-flex w-fit animate-[pulse_2.4s_ease-in-out_infinite] items-center rounded-full border border-emerald-400/25 bg-emerald-500/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100 shadow-[0_0_0_4px_rgba(16,185,129,0.08)]">
+                          {profileBoosterCountdown || 'Boost active'}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleActivateBooster}
+                          disabled={!subscriptionDisplay.isActivePaid || profileBoosterCredits < 1 || isActivatingBooster}
+                          className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-gradient-to-r from-fuchsia-500 via-pink-500 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(217,70,239,0.32)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[13.5rem]"
+                        >
+                          {isActivatingBooster ? 'Activating...' : 'Activate 1-Hour Boost'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleBuyBooster}
+                        disabled={!subscriptionDisplay.isActivePaid || isBuyingBooster}
+                        className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-fuchsia-300/25 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:border-fuchsia-200/40 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[13.5rem]"
+                      >
+                        {isBuyingBooster ? 'Starting checkout...' : 'Buy 5 for $1.99'}
+                      </button>
+                      {!subscriptionDisplay.isActivePaid ? (
+                        <span className="text-xs text-gray-300">Boosters unlock with active premium access.</span>
+                      ) : (
+                        <span className="text-xs text-gray-300">5-credit booster bundle. Charged in NGN at checkout.</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

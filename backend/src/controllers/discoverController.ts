@@ -6,6 +6,7 @@ import {
   getPassportFeatureSettings,
   normalizeCountryCode,
 } from '../utils/passportMode';
+import { isProfileBoosterActive } from '../utils/profileBooster';
 
 interface IUserProfile extends DocumentData {
   id: string;
@@ -43,6 +44,7 @@ interface IUserProfile extends DocumentData {
   subscriptionTier?: string;
   countryCode?: string;
   passportCountry?: string | null;
+  profileBoosterActiveUntil?: unknown;
   distance?: number;
 }
 
@@ -346,6 +348,10 @@ export const filterProfiles = async (req: Request, res: Response) => {
   });
 
   results.sort((a, b) => {
+    const aBoostRank = isProfileBoosterActive(a) ? 0 : 1;
+    const bBoostRank = isProfileBoosterActive(b) ? 0 : 1;
+    if (aBoostRank !== bBoostRank) return aBoostRank - bBoostRank;
+
     const aDistance = typeof a.distance === 'number' ? a.distance : Number.POSITIVE_INFINITY;
     const bDistance = typeof b.distance === 'number' ? b.distance : Number.POSITIVE_INFINITY;
     if (aDistance !== bDistance) return aDistance - bDistance;
@@ -464,6 +470,10 @@ export const discoverByInterests = async (req: Request, res: Response) => {
   }
 
   results.sort((a, b) => {
+    const aBoostRank = isProfileBoosterActive(a) ? 0 : 1;
+    const bBoostRank = isProfileBoosterActive(b) ? 0 : 1;
+    if (aBoostRank !== bBoostRank) return aBoostRank - bBoostRank;
+
     if (b.interestMatchCount !== a.interestMatchCount) {
       return b.interestMatchCount - a.interestMatchCount;
     }
@@ -617,6 +627,10 @@ export const discoverByProfileFit = async (req: Request, res: Response) => {
   }
 
   results.sort((a, b) => {
+    const aBoostRank = isProfileBoosterActive(a) ? 0 : 1;
+    const bBoostRank = isProfileBoosterActive(b) ? 0 : 1;
+    if (aBoostRank !== bBoostRank) return aBoostRank - bBoostRank;
+
     const aDistance = typeof a.distance === 'number' ? a.distance : Number.POSITIVE_INFINITY;
     const bDistance = typeof b.distance === 'number' ? b.distance : Number.POSITIVE_INFINITY;
     if (aDistance !== bDistance) return aDistance - bDistance;
