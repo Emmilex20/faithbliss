@@ -23,6 +23,7 @@ interface SwipeDeckProps {
   profileQueue: User[];
   viewerLatitude?: number;
   viewerLongitude?: number;
+  forceMobileCardLayout?: boolean;
   onStartOver: () => void;
   onGoBack: () => void;
   onLike: () => void;
@@ -40,6 +41,7 @@ export const SwipeDeck = ({
   profileQueue,
   viewerLatitude,
   viewerLongitude,
+  forceMobileCardLayout = false,
   onStartOver,
   onGoBack,
   onLike,
@@ -200,17 +202,22 @@ export const SwipeDeck = ({
       : state.phase === 'ENTER_NEXT' || state.phase === 'LOADING_NEXT'
       ? 'top-entering'
       : 'top-idle';
+  const useFlowDesktopLayout = forceMobileCardLayout;
+  const desktopCardShellClass = forceMobileCardLayout
+    ? 'mx-auto w-full lg:max-w-[1180px] xl:max-w-[1320px]'
+    : 'mx-auto h-full w-full lg:max-w-[560px]';
 
   return (
-    <div className="relative h-full w-full overflow-hidden">
-      {underlayProfile && underlayProfileId && (
+    <div className={useFlowDesktopLayout ? 'relative w-full overflow-visible' : 'relative h-full w-full overflow-hidden'}>
+      {!useFlowDesktopLayout && underlayProfile && underlayProfileId && (
         <div className="pointer-events-none absolute inset-0">
           <SwipeCard mode="underlay" direction={null} locked>
-            <div className="mx-auto h-full w-full lg:max-w-[560px]">
+            <div className={desktopCardShellClass}>
               <HingeStyleProfileCard
                 profile={underlayProfile}
                 viewerLatitude={viewerLatitude}
                 viewerLongitude={viewerLongitude}
+                forceMobileStyle={forceMobileCardLayout}
                 onGoBack={() => {}}
                 onLike={() => {}}
                 onPass={() => {}}
@@ -221,10 +228,10 @@ export const SwipeDeck = ({
         </div>
       )}
 
-      {showSkeletonCard && (
+      {!useFlowDesktopLayout && showSkeletonCard && (
         <div className="absolute inset-0">
           <SwipeCard mode="skeleton" direction={null} locked>
-            <div className="mx-auto h-full w-full lg:max-w-[560px]">
+            <div className={desktopCardShellClass}>
               <div className="h-full w-full overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900/60 p-4">
                 <div className="h-full w-full animate-pulse rounded-[1.5rem] bg-gradient-to-br from-slate-800/70 via-slate-700/40 to-slate-800/70" />
               </div>
@@ -234,7 +241,7 @@ export const SwipeDeck = ({
       )}
 
       {topProfile && topProfileId && (
-        <div className="absolute inset-0">
+        <div className={useFlowDesktopLayout ? 'relative w-full' : 'absolute inset-0'}>
           <SwipeCard
             key={`${topProfileId}-${topMode}`}
             mode={topMode}
@@ -243,11 +250,12 @@ export const SwipeDeck = ({
             locked={isInteractionLocked}
             onSwipeCommit={requestCommit}
           >
-            <div className="mx-auto h-full w-full lg:max-w-[560px]">
+            <div className={desktopCardShellClass}>
               <HingeStyleProfileCard
                 profile={topProfile}
                 viewerLatitude={viewerLatitude}
                 viewerLongitude={viewerLongitude}
+                forceMobileStyle={forceMobileCardLayout}
                 onGoBack={() => {
                   if (isInteractionLocked) return;
                   onGoBack();

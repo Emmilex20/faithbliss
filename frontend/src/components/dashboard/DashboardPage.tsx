@@ -623,6 +623,7 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
                         profileQueue={profileQueue}
                         viewerLatitude={typeof currentUserData?.latitude === 'number' ? currentUserData.latitude : undefined}
                         viewerLongitude={typeof currentUserData?.longitude === 'number' ? currentUserData.longitude : undefined}
+                        forceMobileCardLayout={true}
                         onStartOver={reset}
                         onGoBack={handleGoBack}
                         onLike={handleLike}

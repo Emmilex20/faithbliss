@@ -631,6 +631,10 @@ const getPotentialMatches = async (req: Request, res: Response) => {
           typeof u.personalPromptAnswer === 'string' && u.personalPromptAnswer.trim()
             ? u.personalPromptAnswer.trim()
             : '',
+        subscriptionStatus:
+          typeof u.subscriptionStatus === 'string' ? u.subscriptionStatus : '',
+        subscriptionTier:
+          typeof u.subscriptionTier === 'string' ? u.subscriptionTier : '',
         distance: typeof u.distance === 'number' ? Math.round(u.distance) : undefined,
       }))
     );

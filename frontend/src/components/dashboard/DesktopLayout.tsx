@@ -33,7 +33,7 @@ export const DesktopLayout = ({
       </div>
       
       {/* Main Content Area */}
-      <div className="flex min-h-screen flex-1 flex-col bg-[radial-gradient(circle_at_15%_20%,rgba(236,72,153,0.16),transparent_30%),radial-gradient(circle_at_90%_5%,rgba(59,130,246,0.14),transparent_30%)]">
+      <div className="flex min-h-screen flex-1 flex-col overflow-y-auto bg-[radial-gradient(circle_at_15%_20%,rgba(236,72,153,0.16),transparent_30%),radial-gradient(circle_at_90%_5%,rgba(59,130,246,0.14),transparent_30%)]">
         {/* Top Bar */}
         <TopBar
           userName={userName}
@@ -46,11 +46,11 @@ export const DesktopLayout = ({
           onToggleSidePanel={onToggleSidePanel}
         />
 
-        {topContent && <div className="mx-auto w-full max-w-[1080px] px-4 pt-2">{topContent}</div>}
+        {topContent && <div className="w-full px-6 pt-3 xl:px-8">{topContent}</div>}
         
         {/* Main Profile Display */}
-        <div className="flex flex-1 items-center justify-center overflow-hidden px-4 pb-5 pt-4">
-          <div className="relative h-full max-h-[calc(100vh-220px)] w-full max-w-[620px]">
+        <div className="flex flex-1 items-start justify-center overflow-visible px-6 pb-10 pt-5 xl:px-8">
+          <div className="relative w-full">
             {children}
           </div>
         </div>

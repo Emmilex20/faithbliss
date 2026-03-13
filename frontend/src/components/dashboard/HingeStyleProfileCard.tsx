@@ -11,6 +11,7 @@ interface HingeStyleProfileCardProps {
   profile: User;
   viewerLatitude?: number;
   viewerLongitude?: number;
+  forceMobileStyle?: boolean;
   onGoBack: () => void;
   onPass: () => void;
   onLike: () => void;
@@ -46,6 +47,7 @@ export const HingeStyleProfileCard = ({
   profile,
   viewerLatitude,
   viewerLongitude,
+  forceMobileStyle = false,
   onGoBack,
   onPass,
   onLike,
@@ -413,6 +415,11 @@ export const HingeStyleProfileCard = ({
   const formattedGender = profile.gender ? formatLabel(profile.gender) : '';
   const formattedDenomination = profile.denomination ? formatLabel(String(profile.denomination)) : '';
   const favoriteVerse = profile.favoriteVerse?.trim() || '';
+  const isPremiumProfile =
+    typeof profile.subscriptionStatus === 'string' &&
+    profile.subscriptionStatus.toLowerCase() === 'active' &&
+    typeof profile.subscriptionTier === 'string' &&
+    ['premium', 'elite'].includes(profile.subscriptionTier.toLowerCase());
   const spiritualGifts = (Array.isArray(profile.spiritualGifts) ? profile.spiritualGifts : [])
     .map((gift) => gift?.trim())
     .filter((gift): gift is string => Boolean(gift))
@@ -427,6 +434,22 @@ export const HingeStyleProfileCard = ({
     { label: heightFilterLabel, section: 'height' },
     { label: goalFilterLabel, section: 'relationship-goal' },
   ];
+  const renderPremiumCrown = (className: string) =>
+    isPremiumProfile ? (
+      <img
+        src="/crown.svg"
+        alt="Premium member"
+        className={className}
+        style={{
+          filter:
+            'brightness(0) saturate(100%) invert(78%) sepia(75%) saturate(1300%) hue-rotate(357deg) brightness(101%) contrast(104%) drop-shadow(0 8px 18px rgba(245, 158, 11, 0.28))',
+        }}
+        draggable={false}
+        loading="eager"
+        decoding="async"
+      />
+    ) : null;
+  const useDesktopMobileLayout = forceMobileStyle && !isMobileView;
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -478,7 +501,7 @@ export const HingeStyleProfileCard = ({
     };
   }, [rawPhotos]);
 
-  if (isMobileView) {
+  if (isMobileView || forceMobileStyle) {
     const mobileCoverPosition = currentPhotoAspectRatio < 0.95 ? '50% 24%' : '50% 35%';
     const aboutMeBody = profile.bio?.trim() || 'Still filling this out.';
     const promptQuestion = profile.personalPromptQuestion?.trim() || '';
@@ -504,6 +527,26 @@ export const HingeStyleProfileCard = ({
     const mobilePromptTextClass = isCompactHeight
       ? 'mt-2 text-[1.28rem] font-serif font-semibold leading-[1.16] tracking-[-0.02em] text-slate-950'
       : 'mt-3 text-[1.52rem] font-serif font-semibold leading-[1.14] tracking-[-0.025em] text-slate-950';
+    const mobileShellClass = useDesktopMobileLayout
+      ? 'flex w-full flex-col px-0 pb-8 pt-0 text-slate-900'
+      : 'flex h-full w-full flex-col bg-white px-3 pb-3 pt-3 text-slate-900';
+    const mobileFiltersBarClass = useDesktopMobileLayout
+      ? 'mb-6 flex flex-wrap items-center gap-3 overflow-visible'
+      : `flex items-center gap-2 overflow-x-auto ${isCompactHeight ? 'mb-2 pb-0.5' : 'mb-3 pb-1'}`;
+    const mobileContentScrollClass = useDesktopMobileLayout
+      ? 'overflow-visible px-0 pb-8 pt-2'
+      : 'min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-1 pb-4 pt-2 [-webkit-overflow-scrolling:touch] [touch-action:pan-y]';
+    const mobileHeaderClass = useDesktopMobileLayout
+      ? 'text-[3.35rem] min-w-0 flex-1 font-bold leading-[0.92] tracking-[-0.05em] text-white/95 drop-shadow-[0_10px_30px_rgba(15,23,42,0.28)]'
+      : `${isCompactHeight ? 'text-[1.9rem]' : 'text-[2.08rem]'} min-w-0 flex-1 truncate font-bold leading-[0.96] tracking-[-0.035em] text-slate-950`;
+    const primaryPhotoClass = useDesktopMobileLayout
+      ? 'relative isolate w-full cursor-zoom-in overflow-hidden rounded-[34px] bg-slate-100 shadow-[0_24px_52px_rgba(15,23,42,0.14)] aspect-[16/9] min-h-[560px] xl:min-h-[640px]'
+      : `relative isolate w-full cursor-zoom-in overflow-hidden rounded-[26px] bg-slate-100 shadow-[0_14px_34px_rgba(15,23,42,0.08)] ${isCompactHeight ? 'aspect-[4/5] min-h-[352px]' : 'aspect-[4/5] min-h-[420px]'}`;
+    const inlinePhotoClass = useDesktopMobileLayout
+      ? 'relative isolate mt-6 w-full cursor-zoom-in overflow-hidden rounded-[34px] bg-slate-100 shadow-[0_24px_52px_rgba(15,23,42,0.14)] aspect-[16/9] min-h-[500px] xl:min-h-[580px]'
+      : `relative isolate mt-4 w-full cursor-zoom-in overflow-hidden rounded-[26px] bg-slate-100 shadow-[0_14px_34px_rgba(15,23,42,0.08)] ${isCompactHeight ? 'aspect-[4/5] min-h-[352px]' : 'aspect-[4/5] min-h-[420px]'}`;
+    const desktopDetailGridClass = useDesktopMobileLayout ? 'mt-6 grid gap-5 lg:grid-cols-2' : '';
+    const desktopWideSectionClass = useDesktopMobileLayout ? 'lg:col-span-2' : '';
     const renderMobileInfoSection = ({
       title,
       value,
@@ -516,9 +559,9 @@ export const HingeStyleProfileCard = ({
       if (!value && !children) return null;
 
       return (
-        <div className="relative mt-4 rounded-[26px] bg-slate-100 px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+        <div className={`relative ${useDesktopMobileLayout ? 'mt-5 rounded-[30px] px-6 py-6 shadow-[0_16px_36px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.82)]' : 'mt-4 rounded-[26px] px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]'} bg-slate-100`}>
           <p className={mobileSectionLabelClass}>{title}</p>
-          {value ? <p className="mt-3 text-[1.18rem] font-semibold leading-7 text-slate-900">{value}</p> : null}
+          {value ? <p className={`${useDesktopMobileLayout ? 'mt-4 text-[1.28rem] leading-8' : 'mt-3 text-[1.18rem] leading-7'} font-semibold text-slate-900`}>{value}</p> : null}
           {children}
         </div>
       );
@@ -553,7 +596,7 @@ export const HingeStyleProfileCard = ({
     const renderInlineMobilePhoto = (photoUrl: string, photoIndex: number) => (
       <div
         key={`${profileId}-${photoIndex}-inline`}
-        className={`relative isolate mt-4 w-full cursor-zoom-in overflow-hidden rounded-[26px] bg-slate-100 shadow-[0_14px_34px_rgba(15,23,42,0.08)] ${isCompactHeight ? 'aspect-[4/5] min-h-[352px]' : 'aspect-[4/5] min-h-[420px]'}`}
+        className={inlinePhotoClass}
         onClick={() => openImageViewer(photoIndex)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
@@ -586,18 +629,18 @@ export const HingeStyleProfileCard = ({
 
     return (
       <>
-        <div className="flex h-full w-full flex-col bg-white px-3 pb-3 pt-3 text-slate-900">
-          <div className={`flex items-center gap-2 overflow-x-auto ${isCompactHeight ? 'mb-2 pb-0.5' : 'mb-3 pb-1'}`}>
+        <div className={mobileShellClass}>
+          <div className={mobileFiltersBarClass}>
             <button
               type="button"
               onClick={() => onOpenFilterSection?.('distance')}
               className={`inline-flex shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-white to-slate-100 text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:text-slate-950 hover:shadow-[0_14px_28px_rgba(15,23,42,0.12)] ${
-                isCompactHeight ? 'h-9 w-9' : 'h-10 w-10'
+                useDesktopMobileLayout ? 'h-11 w-11' : isCompactHeight ? 'h-9 w-9' : 'h-10 w-10'
               }`}
               aria-label="Filter options"
             >
-              <SlidersHorizontal className="h-4 w-4" />
-            </button>
+                  <SlidersHorizontal className={useDesktopMobileLayout ? 'h-5 w-5' : 'h-4 w-4'} />
+                </button>
             {mobileChips.map((chip, index) => (
               <button
                 key={chip.label}
@@ -607,19 +650,24 @@ export const HingeStyleProfileCard = ({
                   index === 0
                     ? 'border-slate-900 bg-slate-900 text-white'
                     : 'border-slate-300 bg-white text-slate-900'
-                } ${isCompactHeight ? 'px-3.5 py-1.5' : 'px-4 py-2'}`}
+                } ${useDesktopMobileLayout ? 'px-5 py-2.5 text-sm' : isCompactHeight ? 'px-3.5 py-1.5' : 'px-4 py-2'}`}
               >
                 {chip.label}
               </button>
             ))}
           </div>
 
-          <article className="flex min-h-0 flex-1 flex-col bg-transparent">
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-1 pb-4 pt-2 [-webkit-overflow-scrolling:touch] [touch-action:pan-y]">
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <h2 className={`${isCompactHeight ? 'text-[1.9rem]' : 'text-[2.08rem]'} min-w-0 flex-1 truncate font-bold leading-[0.96] tracking-[-0.035em] text-slate-950`}>
-                  {mobileDisplayName}
-                  {profile.age ? `, ${profile.age}` : ''}
+          <article className={`${useDesktopMobileLayout ? 'flex flex-col bg-transparent' : 'flex min-h-0 flex-1 flex-col bg-transparent'}`}>
+            <div className={mobileContentScrollClass}>
+              <div className={`${useDesktopMobileLayout ? 'mb-6' : 'mb-3'} flex items-start justify-between gap-3`}>
+                <h2 className={mobileHeaderClass}>
+                  <span className={`inline-flex ${useDesktopMobileLayout ? 'flex-wrap' : 'max-w-full'} items-center gap-2 align-top`}>
+                    <span className={useDesktopMobileLayout ? '' : 'truncate'}>
+                      {mobileDisplayName}
+                      {profile.age ? `, ${profile.age}` : ''}
+                    </span>
+                    {renderPremiumCrown(`${useDesktopMobileLayout ? 'h-[0.95em] w-[0.95em]' : 'h-[0.85em] w-[0.85em]'} shrink-0 object-contain`)}
+                  </span>
                 </h2>
                 <div className="flex shrink-0 items-center gap-2 pt-1 text-slate-400">
                   <button
@@ -642,7 +690,7 @@ export const HingeStyleProfileCard = ({
               </div>
 
               <div
-                className={`relative isolate w-full cursor-zoom-in overflow-hidden rounded-[26px] bg-slate-100 shadow-[0_14px_34px_rgba(15,23,42,0.08)] ${isCompactHeight ? 'aspect-[4/5] min-h-[352px]' : 'aspect-[4/5] min-h-[420px]'}`}
+                className={primaryPhotoClass}
                 onClick={() => openImageViewer(0)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -673,116 +721,132 @@ export const HingeStyleProfileCard = ({
                 {renderMobileLikeButton('absolute bottom-4 right-4')}
               </div>
 
-              <div className="relative mt-4 rounded-[26px] bg-slate-100 px-5 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+              <div className={`relative bg-slate-100 ${useDesktopMobileLayout ? 'mt-6 rounded-[32px] px-7 py-8 shadow-[0_18px_40px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.82)]' : 'mt-4 rounded-[26px] px-5 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]'}`}>
                 <p className={mobileSectionLabelClass}>About me</p>
                 <p className={mobileBodyTextClass}>
                   {aboutMeBody}
                 </p>
               </div>
 
-              {renderMobileInfoSection({
-                title: 'Gender & location',
-                children: (
-                  <div className="mt-3 space-y-3">
-                    {formattedGender ? (
-                      <div>
-                        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Gender</p>
-                        <p className="mt-1 text-[1.12rem] font-semibold leading-7 text-slate-900">{formattedGender}</p>
+              <div className={desktopDetailGridClass}>
+                <div className={desktopWideSectionClass}>
+                  {renderMobileInfoSection({
+                    title: 'Gender & location',
+                    children: (
+                      <div className={`mt-3 ${useDesktopMobileLayout ? 'grid gap-5 lg:grid-cols-2' : 'space-y-3'}`}>
+                        {formattedGender ? (
+                          <div>
+                            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Gender</p>
+                            <p className="mt-1 text-[1.12rem] font-semibold leading-7 text-slate-900">{formattedGender}</p>
+                          </div>
+                        ) : null}
+                        {locationText ? (
+                          <div>
+                            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Location</p>
+                            <p className="mt-1 text-[1.12rem] font-semibold leading-7 text-slate-900">{locationText}</p>
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
-                    {locationText ? (
-                      <div>
-                        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Location</p>
-                        <p className="mt-1 text-[1.12rem] font-semibold leading-7 text-slate-900">{locationText}</p>
+                    ),
+                  })}
+                </div>
+
+                <div className={desktopWideSectionClass}>
+                  {secondInlinePhoto ? renderInlineMobilePhoto(secondInlinePhoto, 1) : null}
+                </div>
+
+                {renderMobileInfoSection({ title: 'Height', value: mobileHeight })}
+                {renderMobileInfoSection({ title: 'Denomination', value: formattedDenomination })}
+
+                <div className={desktopWideSectionClass}>
+                  {laterDetailPhoto ? renderInlineMobilePhoto(laterDetailPhoto, 2) : null}
+                </div>
+
+                {promptQuestion || promptAnswer ? (
+                  <div className={`relative bg-slate-100 ${useDesktopMobileLayout ? 'rounded-[30px] px-6 py-7 shadow-[0_16px_36px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.82)]' : 'mt-4 rounded-[26px] px-5 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]'}`}>
+                    <p className={mobileSectionLabelClass}>
+                      {promptQuestion || 'Personal prompt'}
+                    </p>
+                    <p className={mobilePromptTextClass}>
+                      {promptAnswer || 'No response added yet.'}
+                    </p>
+                  </div>
+                ) : null}
+                {renderMobileInfoSection({
+                  title: 'Spiritual gifts',
+                  children: spiritualGifts.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2.5">
+                      {spiritualGifts.map((gift) => (
+                        <span
+                          key={gift}
+                          className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3.5 py-2 text-[0.76rem] font-semibold tracking-[-0.01em] text-slate-700 shadow-[0_6px_14px_rgba(15,23,42,0.06)]"
+                        >
+                          {gift}
+                        </span>
+                      ))}
+                    </div>
+                  ) : undefined,
+                })}
+
+                {renderMobileInfoSection({
+                  title: 'Favorite verse',
+                  value: favoriteVerse ? `"${favoriteVerse}"` : '',
+                })}
+
+                <div className={desktopWideSectionClass}>
+                  {mobileInterests.length > 0 ? (
+                    <div className={`bg-slate-100 ${useDesktopMobileLayout ? 'rounded-[30px] px-6 py-6 shadow-[0_16px_36px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.82)]' : 'mt-4 rounded-[26px] px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]'}`}>
+                      <p className={mobileSectionLabelClass}>Interests</p>
+                      <div className="mt-3 flex flex-wrap gap-2.5">
+                        {mobileInterests.map((interest) => (
+                          <span
+                            key={interest}
+                            className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3.5 py-2 text-[0.76rem] font-semibold tracking-[-0.01em] text-slate-700 shadow-[0_6px_14px_rgba(15,23,42,0.06)]"
+                          >
+                            {interest}
+                          </span>
+                        ))}
                       </div>
-                    ) : null}
-                  </div>
-                ),
-              })}
-
-              {secondInlinePhoto ? renderInlineMobilePhoto(secondInlinePhoto, 1) : null}
-
-              {renderMobileInfoSection({ title: 'Height', value: mobileHeight })}
-              {renderMobileInfoSection({ title: 'Denomination', value: formattedDenomination })}
-
-              {laterDetailPhoto ? renderInlineMobilePhoto(laterDetailPhoto, 2) : null}
-
-              {promptQuestion || promptAnswer ? (
-                <div className="relative mt-4 rounded-[26px] bg-slate-100 px-5 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                  <p className={mobileSectionLabelClass}>
-                    {promptQuestion || 'Personal prompt'}
-                  </p>
-                  <p className={mobilePromptTextClass}>
-                    {promptAnswer || 'No response added yet.'}
-                  </p>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-              {renderMobileInfoSection({
-                title: 'Spiritual gifts',
-                children: spiritualGifts.length > 0 ? (
-                  <div className="mt-3 flex flex-wrap gap-2.5">
-                    {spiritualGifts.map((gift) => (
-                      <span
-                        key={gift}
-                        className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3.5 py-2 text-[0.76rem] font-semibold tracking-[-0.01em] text-slate-700 shadow-[0_6px_14px_rgba(15,23,42,0.06)]"
-                      >
-                        {gift}
-                      </span>
-                    ))}
-                  </div>
-                ) : undefined,
-              })}
 
-              {renderMobileInfoSection({
-                title: 'Favorite verse',
-                value: favoriteVerse ? `"${favoriteVerse}"` : '',
-              })}
-
-              {mobileInterests.length > 0 ? (
-                <div className="mt-4 rounded-[26px] bg-slate-100 px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                  <p className={mobileSectionLabelClass}>Interests</p>
-                  <div className="mt-3 flex flex-wrap gap-2.5">
-                    {mobileInterests.map((interest) => (
-                      <span
-                        key={interest}
-                        className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3.5 py-2 text-[0.76rem] font-semibold tracking-[-0.01em] text-slate-700 shadow-[0_6px_14px_rgba(15,23,42,0.06)]"
-                      >
-                        {interest}
-                      </span>
-                    ))}
-                  </div>
+                <div className={desktopWideSectionClass}>
+                  {postInterestsPhotos.map((photoUrl, offset) =>
+                    renderInlineMobilePhoto(photoUrl, usedPreInterestPhotoCount + offset + 1)
+                  )}
                 </div>
-              ) : null}
 
-              {postInterestsPhotos.map((photoUrl, offset) =>
-                renderInlineMobilePhoto(photoUrl, usedPreInterestPhotoCount + offset + 1)
-              )}
+                <div className={desktopWideSectionClass}>
+                  <Link
+                    to={`/profile/${profileId}`}
+                    className={`inline-flex items-center justify-center rounded-full font-semibold transition-all duration-200 ${useDesktopMobileLayout ? 'min-w-[240px] border border-white/14 bg-[linear-gradient(135deg,rgba(255,255,255,0.12),rgba(255,255,255,0.06))] px-7 py-4 text-base text-white/95 shadow-[0_18px_36px_rgba(15,23,42,0.2)] backdrop-blur-xl hover:-translate-y-0.5 hover:border-white/24 hover:bg-[linear-gradient(135deg,rgba(255,255,255,0.16),rgba(255,255,255,0.08))] hover:shadow-[0_24px_44px_rgba(15,23,42,0.24)]' : 'mt-4 w-full bg-slate-900 px-5 py-4 text-sm text-white shadow-[0_16px_30px_rgba(15,23,42,0.18)]'}`}
+                  >
+                    View Full Profile
+                  </Link>
+                </div>
 
-              <Link
-                to={`/profile/${profileId}`}
-                className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-slate-900 px-5 py-4 text-sm font-semibold text-white shadow-[0_16px_30px_rgba(15,23,42,0.18)]"
-              >
-                View Full Profile
-              </Link>
-
-              <div className="pointer-events-none sticky bottom-3 z-30 mt-3 flex justify-start">
-                <button
-                  type="button"
-                  onPointerDown={stopEvent}
-                  onMouseDown={stopEvent}
-                  onTouchStart={stopEvent}
-                  onClick={(event) => {
-                    stopEvent(event);
-                    onPass();
-                  }}
-                  className="pointer-events-auto inline-flex h-[4.1rem] w-[4.1rem] items-center justify-center rounded-full bg-transparent text-slate-950 transition-all duration-200 hover:-translate-y-0.5"
-                  aria-label="Pass"
-                >
-                  <span className="relative inline-flex h-[2.8rem] w-[2.8rem] items-center justify-center rounded-[1.15rem] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 shadow-[0_10px_18px_rgba(15,23,42,0.26)]">
-                    <span className="absolute inset-[1px] rounded-[1rem] border border-white/10" />
-                    <X className="relative h-5.5 w-5.5 text-white stroke-[2.8]" />
-                  </span>
-                </button>
+                <div className={desktopWideSectionClass}>
+                  <div className={`pointer-events-none sticky z-30 flex ${useDesktopMobileLayout ? 'bottom-4 mt-3 justify-end pr-1' : 'bottom-3 mt-3 justify-start'}`}>
+                    <button
+                      type="button"
+                      onPointerDown={stopEvent}
+                      onMouseDown={stopEvent}
+                      onTouchStart={stopEvent}
+                      onClick={(event) => {
+                        stopEvent(event);
+                        onPass();
+                      }}
+                      className="pointer-events-auto inline-flex h-[4.1rem] w-[4.1rem] items-center justify-center rounded-full bg-transparent text-slate-950 transition-all duration-200 hover:-translate-y-0.5"
+                      aria-label="Pass"
+                    >
+                      <span className="relative inline-flex h-[2.8rem] w-[2.8rem] items-center justify-center rounded-[1.15rem] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 shadow-[0_10px_18px_rgba(15,23,42,0.26)]">
+                        <span className="absolute inset-[1px] rounded-[1rem] border border-white/10" />
+                        <X className="relative h-5.5 w-5.5 text-white stroke-[2.8]" />
+                      </span>
+                    </button>
+                  </div>
+              </div>
               </div>
             </div>
           </article>
@@ -923,8 +987,13 @@ export const HingeStyleProfileCard = ({
             {distanceBadge}
           </div>
           <h2 className="text-[2rem] font-semibold leading-tight text-white sm:text-[2.7rem]">
-            {profile.name}
-            {profile.age ? `, ${profile.age}` : ''}
+            <span className="inline-flex items-center gap-2 align-top">
+              <span>
+                {profile.name}
+                {profile.age ? `, ${profile.age}` : ''}
+              </span>
+              {renderPremiumCrown('mt-1 h-[0.9em] w-[0.9em] shrink-0 object-contain sm:h-[0.92em] sm:w-[0.92em]')}
+            </span>
           </h2>
           <p className="mt-1 text-base font-medium text-slate-100">{locationText}</p>
 

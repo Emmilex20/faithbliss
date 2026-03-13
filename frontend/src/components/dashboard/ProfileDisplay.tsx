@@ -7,6 +7,7 @@ interface ProfileDisplayProps {
   profileQueue?: User[];
   viewerLatitude?: number;
   viewerLongitude?: number;
+  forceMobileCardLayout?: boolean;
   onStartOver: () => void;
   onGoBack: () => void;
   onLike: () => void;
@@ -25,6 +26,7 @@ export const ProfileDisplay = ({
   profileQueue,
   viewerLatitude,
   viewerLongitude,
+  forceMobileCardLayout = false,
   onStartOver,
   onGoBack,
   onLike,
@@ -50,6 +52,7 @@ export const ProfileDisplay = ({
         profileQueue={resolvedQueue}
         viewerLatitude={viewerLatitude}
         viewerLongitude={viewerLongitude}
+        forceMobileCardLayout={forceMobileCardLayout}
         onStartOver={onStartOver}
         onGoBack={onGoBack}
         onLike={onLike}
