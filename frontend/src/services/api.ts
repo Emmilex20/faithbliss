@@ -427,6 +427,7 @@ export interface LocalizedPricingQuoteResponse {
 
 export interface FeatureSettingsResponse {
   passportModeEnabled: boolean;
+  maintenanceModeEnabled: boolean;
 }
 
 export interface AdminPlatformStatsResponse {
@@ -782,6 +783,17 @@ export const UserAPI = {
 
   getFeatureSettings: async (): Promise<FeatureSettingsResponse> => {
     return apiRequest('/api/users/feature-settings');
+  },
+
+  getPublicFeatureSettings: async (): Promise<FeatureSettingsResponse> => {
+    return apiRequest(
+      '/api/users/public-feature-settings',
+      {
+        method: 'GET',
+        cache: 'no-store',
+      },
+      false
+    );
   },
 
   updateFeatureSettings: async (

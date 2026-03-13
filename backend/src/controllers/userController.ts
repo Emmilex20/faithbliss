@@ -609,19 +609,37 @@ const getFeatureSettings = async (req: CustomRequest, res: Response) => {
   }
 };
 
+const getPublicFeatureSettings = async (_req: Request, res: Response) => {
+  try {
+    const settings = await getPassportFeatureSettings();
+    return res.status(200).json(settings);
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error fetching public feature settings:', error);
+    return res.status(500).json({ message: errorMessage });
+  }
+};
+
 const updateFeatureSettings = async (req: CustomRequest, res: Response) => {
   const firebaseUid = req.userId;
   const currentUser = await requireAdmin(firebaseUid, res);
   if (!currentUser) return;
 
   try {
-    const nextValue = Boolean(req.body?.passportModeEnabled);
+    const currentSettings = await getPassportFeatureSettings();
     const settings = await setPassportFeatureSettings({
-      passportModeEnabled: nextValue,
+      passportModeEnabled:
+        typeof req.body?.passportModeEnabled === 'boolean'
+          ? req.body.passportModeEnabled
+          : currentSettings.passportModeEnabled,
+      maintenanceModeEnabled:
+        typeof req.body?.maintenanceModeEnabled === 'boolean'
+          ? req.body.maintenanceModeEnabled
+          : currentSettings.maintenanceModeEnabled,
     });
 
     return res.status(200).json({
-      message: `Passport Mode ${settings.passportModeEnabled ? 'enabled' : 'disabled'}.`,
+      message: 'Feature settings updated successfully.',
       ...settings,
     });
   } catch (error) {
@@ -1000,6 +1018,7 @@ export {
   updatePassportSettings,
   activateProfileBooster,
   getFeatureSettings,
+  getPublicFeatureSettings,
   updateFeatureSettings,
   updateUserRole,
   updateUserByAdmin,

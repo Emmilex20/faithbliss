@@ -2,6 +2,7 @@ import { db } from '../config/firebase-admin';
 
 type PassportFeatureSettings = {
   passportModeEnabled: boolean;
+  maintenanceModeEnabled: boolean;
 };
 
 type PassportUserLike = {
@@ -120,6 +121,7 @@ export const getPassportFeatureSettings = async (): Promise<PassportFeatureSetti
   const data = doc.data() as Partial<PassportFeatureSettings> | undefined;
   return {
     passportModeEnabled: Boolean(data?.passportModeEnabled),
+    maintenanceModeEnabled: Boolean(data?.maintenanceModeEnabled),
   };
 };
 
@@ -129,6 +131,7 @@ export const setPassportFeatureSettings = async (
   await featureSettingsRef.set(
     {
       passportModeEnabled: Boolean(settings.passportModeEnabled),
+      maintenanceModeEnabled: Boolean(settings.maintenanceModeEnabled),
       updatedAt: new Date().toISOString(),
     },
     { merge: true }
@@ -136,6 +139,7 @@ export const setPassportFeatureSettings = async (
 
   return {
     passportModeEnabled: Boolean(settings.passportModeEnabled),
+    maintenanceModeEnabled: Boolean(settings.maintenanceModeEnabled),
   };
 };
 

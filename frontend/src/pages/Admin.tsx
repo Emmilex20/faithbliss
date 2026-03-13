@@ -45,6 +45,9 @@ const normalizeEditableGender = (value: unknown): 'MALE' | 'FEMALE' => {
   return normalized === 'FEMALE' ? 'FEMALE' : 'MALE';
 };
 
+const FEATURE_SETTINGS_SYNC_KEY = 'faithbliss:feature-settings-updated-at';
+const FEATURE_SETTINGS_SYNC_EVENT = 'faithbliss:feature-settings-updated';
+
 const isAdminRole = (role: string | undefined) => (role || '').trim().toLowerCase() === 'admin';
 
 const toEditableUser = (user: EditableSource): EditableUser => ({
@@ -382,6 +385,7 @@ const AdminPage = () => {
   const [resettingPassword, setResettingPassword] = useState(false);
   const [deletingUser, setDeletingUser] = useState(false);
   const [passportModeEnabled, setPassportModeEnabled] = useState(false);
+  const [maintenanceModeEnabled, setMaintenanceModeEnabled] = useState(false);
   const [featureLoading, setFeatureLoading] = useState(true);
   const [featureSaving, setFeatureSaving] = useState(false);
   const [supportTickets, setSupportTickets] = useState<Awaited<ReturnType<typeof API.Support.getTickets>>['tickets']>([]);
@@ -400,6 +404,12 @@ const AdminPage = () => {
   const [paymentSort, setPaymentSort] = useState<'latest' | 'oldest' | 'amount-high' | 'amount-low' | 'name-az'>('latest');
   const [deletingPaymentUserId, setDeletingPaymentUserId] = useState<string | null>(null);
   const [overviewRangeDays, setOverviewRangeDays] = useState<7 | 30 | 90>(7);
+
+  const broadcastFeatureSettingsUpdate = () => {
+    const marker = String(Date.now());
+    window.localStorage.setItem(FEATURE_SETTINGS_SYNC_KEY, marker);
+    window.dispatchEvent(new Event(FEATURE_SETTINGS_SYNC_EVENT));
+  };
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
@@ -420,6 +430,7 @@ const AdminPage = () => {
 
         if (isMounted) {
           setPassportModeEnabled(Boolean(settingsResponse.passportModeEnabled));
+          setMaintenanceModeEnabled(Boolean(settingsResponse.maintenanceModeEnabled));
           setSupportTickets(Array.isArray(issuesResponse.tickets) ? issuesResponse.tickets : []);
           setPaymentAnalytics(paymentsResponse);
           setPlatformStats(platformStatsResponse);
@@ -740,14 +751,43 @@ const AdminPage = () => {
       setFeatureSaving(true);
       const response = await API.User.updateFeatureSettings({
         passportModeEnabled: !passportModeEnabled,
+        maintenanceModeEnabled,
       });
       setPassportModeEnabled(Boolean(response.passportModeEnabled));
+      setMaintenanceModeEnabled(Boolean(response.maintenanceModeEnabled));
+      broadcastFeatureSettingsUpdate();
       showSuccess(response.message || 'Feature settings updated.');
     } catch (toggleError) {
       const message =
         toggleError instanceof Error && toggleError.message
           ? toggleError.message
           : 'Failed to update Passport Mode.';
+      showError(message);
+    } finally {
+      setFeatureSaving(false);
+    }
+  };
+
+  const handleToggleMaintenanceMode = async () => {
+    try {
+      setFeatureSaving(true);
+      const response = await API.User.updateFeatureSettings({
+        passportModeEnabled,
+        maintenanceModeEnabled: !maintenanceModeEnabled,
+      });
+      setPassportModeEnabled(Boolean(response.passportModeEnabled));
+      setMaintenanceModeEnabled(Boolean(response.maintenanceModeEnabled));
+      broadcastFeatureSettingsUpdate();
+      showSuccess(
+        response.maintenanceModeEnabled
+          ? 'Maintenance mode enabled. The project is now showing the broken-page screen outside admin.'
+          : 'Maintenance mode disabled. The project is live again.'
+      );
+    } catch (toggleError) {
+      const message =
+        toggleError instanceof Error && toggleError.message
+          ? toggleError.message
+          : 'Failed to update maintenance mode.';
       showError(message);
     } finally {
       setFeatureSaving(false);
@@ -995,9 +1035,18 @@ const AdminPage = () => {
                       </p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-gray-300">
-                      Passport Mode: <span className={passportModeEnabled ? 'font-semibold text-emerald-200' : 'font-semibold text-gray-200'}>
-                        {featureLoading ? 'Loading...' : passportModeEnabled ? 'Enabled' : 'Disabled'}
-                      </span>
+                      <div>
+                        Passport Mode:{' '}
+                        <span className={passportModeEnabled ? 'font-semibold text-emerald-200' : 'font-semibold text-gray-200'}>
+                          {featureLoading ? 'Loading...' : passportModeEnabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </div>
+                      <div className="mt-1">
+                        Maintenance:{' '}
+                        <span className={maintenanceModeEnabled ? 'font-semibold text-rose-200' : 'font-semibold text-gray-200'}>
+                          {featureLoading ? 'Loading...' : maintenanceModeEnabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -1272,38 +1321,76 @@ const AdminPage = () => {
             ) : null}
 
             {activeSection === 'features' ? (
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-violet-200">Feature control</p>
-                    <h2 className="mt-2 text-xl font-semibold text-white">Passport Mode</h2>
-                    <p className="mt-2 max-w-2xl text-sm text-gray-400">
-                      Controls whether premium users can target any country and be discoverable only within that selected country.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                    <div className="text-right">
-                      <p className="text-xs uppercase tracking-[0.18em] text-gray-400">Status</p>
-                      <p className={`text-sm font-semibold ${passportModeEnabled ? 'text-emerald-300' : 'text-slate-300'}`}>
-                        {featureLoading ? 'Loading...' : passportModeEnabled ? 'Enabled' : 'Disabled'}
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-violet-200">Feature control</p>
+                      <h2 className="mt-2 text-xl font-semibold text-white">Passport Mode</h2>
+                      <p className="mt-2 max-w-2xl text-sm text-gray-400">
+                        Controls whether premium users can target any country and be discoverable only within that selected country.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => void handleTogglePassportMode()}
-                      disabled={featureLoading || featureSaving}
-                      className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition ${
-                        passportModeEnabled
-                          ? 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/20'
-                          : 'bg-violet-500/15 text-violet-200 hover:bg-violet-500/20'
-                      } disabled:cursor-not-allowed disabled:opacity-60`}
-                    >
-                      {featureSaving
-                        ? 'Updating...'
-                        : passportModeEnabled
-                          ? 'Disable Passport Mode'
-                          : 'Enable Passport Mode'}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                      <div className="text-right">
+                        <p className="text-xs uppercase tracking-[0.18em] text-gray-400">Status</p>
+                        <p className={`text-sm font-semibold ${passportModeEnabled ? 'text-emerald-300' : 'text-slate-300'}`}>
+                          {featureLoading ? 'Loading...' : passportModeEnabled ? 'Enabled' : 'Disabled'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleTogglePassportMode()}
+                        disabled={featureLoading || featureSaving}
+                        className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition ${
+                          passportModeEnabled
+                            ? 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/20'
+                            : 'bg-violet-500/15 text-violet-200 hover:bg-violet-500/20'
+                        } disabled:cursor-not-allowed disabled:opacity-60`}
+                      >
+                        {featureSaving
+                          ? 'Updating...'
+                          : passportModeEnabled
+                            ? 'Disable Passport Mode'
+                            : 'Enable Passport Mode'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-rose-400/15 bg-[linear-gradient(180deg,rgba(244,63,94,0.08),rgba(15,23,42,0.28))] p-4 sm:p-6">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-rose-200">Project access</p>
+                      <h2 className="mt-2 text-xl font-semibold text-white">Maintenance Mode</h2>
+                      <p className="mt-2 max-w-2xl text-sm text-gray-300">
+                        When enabled, the entire project shows a broken-page notice for everyone except admins inside the admin panel.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                      <div className="text-right">
+                        <p className="text-xs uppercase tracking-[0.18em] text-gray-400">Status</p>
+                        <p className={`text-sm font-semibold ${maintenanceModeEnabled ? 'text-rose-300' : 'text-slate-300'}`}>
+                          {featureLoading ? 'Loading...' : maintenanceModeEnabled ? 'Enabled' : 'Disabled'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleToggleMaintenanceMode()}
+                        disabled={featureLoading || featureSaving}
+                        className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition ${
+                          maintenanceModeEnabled
+                            ? 'bg-rose-500/15 text-rose-200 hover:bg-rose-500/20'
+                            : 'bg-amber-500/15 text-amber-200 hover:bg-amber-500/20'
+                        } disabled:cursor-not-allowed disabled:opacity-60`}
+                      >
+                        {featureSaving
+                          ? 'Updating...'
+                          : maintenanceModeEnabled
+                            ? 'Disable Maintenance'
+                            : 'Enable Maintenance'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

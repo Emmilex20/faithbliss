@@ -11,6 +11,7 @@ import {
   updatePassportSettings,
   activateProfileBooster,
   getFeatureSettings,
+  getPublicFeatureSettings,
   updateFeatureSettings,
   updateUserRole,
   updateUserByAdmin,
@@ -34,6 +35,7 @@ router.put('/me', protect, updateUserProfile);
 router.patch('/me/settings', protect, updateUserSettings);
 router.patch('/me/passport', protect, updatePassportSettings);
 router.post('/me/profile-booster/activate', protect, activateProfileBooster);
+router.get('/public-feature-settings', getPublicFeatureSettings);
 router.get('/feature-settings', protect, getFeatureSettings);
 router.get('/admin/platform-stats', protect, getAdminPlatformStats);
 router.patch('/feature-settings', protect, updateFeatureSettings);

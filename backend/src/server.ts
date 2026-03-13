@@ -12,6 +12,7 @@ import { Server } from 'socket.io';
 
 import authRoutes from './routes/authRoutes';
 import { initializeLocalizedSubscription } from './controllers/paymentController';
+import { getPublicFeatureSettings } from './controllers/userController';
 import discoverRoutes from './routes/discoverRoutes';
 import matchRoutes from './routes/matchRoutes';
 import messageRoutes from './routes/messageRoutes';
@@ -49,7 +50,7 @@ app.use(
   cors({
     origin: allowedOrigins,
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires'],
   }),
 );
 
@@ -84,6 +85,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.get('/api/users/public-feature-settings', getPublicFeatureSettings);
 app.use('/api/users', protect, userRoutes);
 app.use('/api/matches', protect, matchRoutes);
 app.use('/api/messages', protect, messageRoutes);
