@@ -21,6 +21,20 @@ export type RegionalPricingQuote = {
   displayLabel: string;
 };
 
+export type ProfileBoosterPricingQuote = {
+  productType: 'profile_booster';
+  bundleSize: number;
+  region: PricingRegion;
+  countryCode: string | null;
+  displayCurrency: DisplayCurrency;
+  displayAmountMajor: number;
+  chargeCurrency: ChargeCurrency;
+  chargeAmountMajor: number;
+  chargeAmountSubunits: number;
+  exchangeRate: number;
+  displayLabel: string;
+};
+
 const NGN_PRICE_CATALOG: Record<BillingCycle, number> = {
   monthly: 5000,
   quarterly: 10000,
@@ -30,6 +44,10 @@ const GLOBAL_USD_PRICE_CATALOG: Record<BillingCycle, number> = {
   monthly: 11.99,
   quarterly: 23.97,
 };
+
+const PROFILE_BOOSTER_AFRICA_PRICE_NGN = 2000;
+const PROFILE_BOOSTER_GLOBAL_PRICE_USD = 7;
+const PROFILE_BOOSTER_BUNDLE_SIZE = 5;
 
 const AFRICAN_COUNTRY_CODES = new Set([
   'AO', 'BF', 'BI', 'BJ', 'BW', 'CD', 'CF', 'CG', 'CI', 'CM', 'CV', 'DJ', 'DZ', 'EG', 'EH', 'ER',
@@ -235,5 +253,70 @@ export const getRegionalPricingQuote = async (
     chargeAmountSubunits: ngnCharge.amount * 100,
     exchangeRate: ngnCharge.exchangeRate,
     displayLabel: formatDisplayLabel('USD', usdAmount),
+  };
+};
+
+export const getRegionalProfileBoosterQuote = async (
+  ipAddress: string | null,
+  fallbackCountryCode?: string | null,
+): Promise<ProfileBoosterPricingQuote> => {
+  const geo = await lookupCountryByIp(ipAddress);
+  const resolvedCountryCode = geo.countryCode || (fallbackCountryCode ? fallbackCountryCode.trim().toUpperCase() : null);
+  const region = getRegionFromCountry(resolvedCountryCode);
+  const usdRates = await getUsdExchangeRates();
+
+  if (region === 'nigeria') {
+    return {
+      productType: 'profile_booster',
+      bundleSize: PROFILE_BOOSTER_BUNDLE_SIZE,
+      region,
+      countryCode: resolvedCountryCode,
+      displayCurrency: 'NGN',
+      displayAmountMajor: PROFILE_BOOSTER_AFRICA_PRICE_NGN,
+      chargeCurrency: 'NGN',
+      chargeAmountMajor: PROFILE_BOOSTER_AFRICA_PRICE_NGN,
+      chargeAmountSubunits: PROFILE_BOOSTER_AFRICA_PRICE_NGN * 100,
+      exchangeRate: 1,
+      displayLabel: formatDisplayLabel('NGN', PROFILE_BOOSTER_AFRICA_PRICE_NGN),
+    };
+  }
+
+  if (region === 'africa') {
+    const displayCurrency = getAfricanDisplayCurrency(resolvedCountryCode);
+    const converted = convertNgnToDisplayWholeAmount(
+      PROFILE_BOOSTER_AFRICA_PRICE_NGN,
+      displayCurrency,
+      usdRates,
+    );
+
+    return {
+      productType: 'profile_booster',
+      bundleSize: PROFILE_BOOSTER_BUNDLE_SIZE,
+      region,
+      countryCode: resolvedCountryCode,
+      displayCurrency,
+      displayAmountMajor: converted.amount,
+      chargeCurrency: 'NGN',
+      chargeAmountMajor: PROFILE_BOOSTER_AFRICA_PRICE_NGN,
+      chargeAmountSubunits: PROFILE_BOOSTER_AFRICA_PRICE_NGN * 100,
+      exchangeRate: converted.exchangeRate,
+      displayLabel: formatDisplayLabel(displayCurrency, converted.amount),
+    };
+  }
+
+  const ngnCharge = convertUsdToNgnWholeAmount(PROFILE_BOOSTER_GLOBAL_PRICE_USD, usdRates);
+
+  return {
+    productType: 'profile_booster',
+    bundleSize: PROFILE_BOOSTER_BUNDLE_SIZE,
+    region,
+    countryCode: resolvedCountryCode,
+    displayCurrency: 'USD',
+    displayAmountMajor: PROFILE_BOOSTER_GLOBAL_PRICE_USD,
+    chargeCurrency: 'NGN',
+    chargeAmountMajor: ngnCharge.amount,
+    chargeAmountSubunits: ngnCharge.amount * 100,
+    exchangeRate: ngnCharge.exchangeRate,
+    displayLabel: formatDisplayLabel('USD', PROFILE_BOOSTER_GLOBAL_PRICE_USD),
   };
 };

@@ -5,6 +5,7 @@ import { protect } from '../middleware/authMiddleware';
 import {
   deleteAdminPaymentRecord,
   getAdminPaymentAnalytics,
+  getLocalizedProfileBoosterQuote,
   handlePaystackWebhook,
   getLocalizedPricingQuote,
   initializeProfileBoosterPurchase,
@@ -23,6 +24,7 @@ router.post('/webhook', handlePaystackWebhook);
 router.get('/admin/analytics', protect, getAdminPaymentAnalytics);
 router.delete('/admin/records/:userId', protect, deleteAdminPaymentRecord);
 router.get('/quote', protect, getLocalizedPricingQuote);
+router.get('/profile-booster/quote', protect, getLocalizedProfileBoosterQuote);
 router.get('/plans', protect, listSubscriptionPlans);
 router.post('/pay', protect, initializeLocalizedSubscription);
 router.post('/profile-booster/pay', protect, initializeProfileBoosterPurchase);

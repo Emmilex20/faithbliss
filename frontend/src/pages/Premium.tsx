@@ -14,7 +14,11 @@ import { SidePanel } from '@/components/dashboard/SidePanel';
 import ProfileBoosterIcon from '@/components/icons/ProfileBoosterIcon';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
-import { API, type LocalizedPricingQuoteResponse } from '@/services/api';
+import {
+  API,
+  type LocalizedPricingQuoteResponse,
+  type ProfileBoosterPricingQuote,
+} from '@/services/api';
 import {
   PREMIUM_PLAN_CONTENT,
   getSubscriptionTierLabel,
@@ -94,6 +98,20 @@ const fallbackQuote: LocalizedPricingQuoteResponse = {
   },
 };
 
+const fallbackBoosterQuote: ProfileBoosterPricingQuote = {
+  productType: 'profile_booster',
+  bundleSize: 5,
+  region: 'global',
+  countryCode: null,
+  displayCurrency: 'USD',
+  displayAmountMajor: 7,
+  chargeCurrency: 'NGN',
+  chargeAmountMajor: 0,
+  chargeAmountSubunits: 0,
+  exchangeRate: 1,
+  displayLabel: '$7.00',
+};
+
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message.trim()) {
     return error.message;
@@ -148,6 +166,7 @@ const PremiumContent = () => {
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [loadingPlanKey, setLoadingPlanKey] = useState<'premium:monthly' | 'premium:quarterly' | null>(null);
   const [pricingQuote, setPricingQuote] = useState<LocalizedPricingQuoteResponse | null>(null);
+  const [boosterQuote, setBoosterQuote] = useState<ProfileBoosterPricingQuote | null>(null);
   const [pricingLoading, setPricingLoading] = useState(true);
   const [isActivatingBooster, setIsActivatingBooster] = useState(false);
   const [isBuyingBooster, setIsBuyingBooster] = useState(false);
@@ -195,13 +214,18 @@ const PremiumContent = () => {
     const loadPricingQuote = async () => {
       try {
         setPricingLoading(true);
-        const quote = await API.Payment.getQuote();
+        const [quote, localizedBoosterQuote] = await Promise.all([
+          API.Payment.getQuote(),
+          API.Payment.getProfileBoosterQuote(),
+        ]);
         if (isMounted) {
           setPricingQuote(quote);
+          setBoosterQuote(localizedBoosterQuote);
         }
       } catch (error: unknown) {
         if (isMounted) {
           setPricingQuote(null);
+          setBoosterQuote(null);
         }
         showError(getErrorMessage(error, 'Unable to load localized pricing.'));
       } finally {
@@ -219,6 +243,7 @@ const PremiumContent = () => {
   }, [showError]);
 
   const effectiveQuote = pricingQuote ?? fallbackQuote;
+  const effectiveBoosterQuote = boosterQuote ?? fallbackBoosterQuote;
 
   const paidPlans = useMemo<DisplayPlan[]>(() => {
     const monthlyQuote = effectiveQuote.quotes.monthly;
@@ -482,7 +507,7 @@ const PremiumContent = () => {
                         <p className="mt-1 max-w-md text-sm leading-6 text-fuchsia-50/80">
                           {profileBoosterActiveUntil
                             ? `Your profile is prioritised in discovery feeds for the next ${profileBoosterCountdown || 'hour'}.`
-                            : 'Each successful premium payment adds one 1-hour profile boost.'}
+                            : 'Each successful premium payment adds one 1-hour profile boost, and extra 5-credit bundles are available anytime.'}
                         </p>
                       </div>
                     </div>
@@ -508,12 +533,14 @@ const PremiumContent = () => {
                         disabled={!subscriptionDisplay.isActivePaid || isBuyingBooster}
                         className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-fuchsia-300/25 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:border-fuchsia-200/40 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[13.5rem]"
                       >
-                        {isBuyingBooster ? 'Starting checkout...' : 'Buy 5 for $1.99'}
+                        {isBuyingBooster ? 'Starting checkout...' : `Buy ${effectiveBoosterQuote.bundleSize} for ${effectiveBoosterQuote.displayLabel}`}
                       </button>
                       {!subscriptionDisplay.isActivePaid ? (
                         <span className="text-xs text-gray-300">Boosters unlock with active premium access.</span>
                       ) : (
-                        <span className="text-xs text-gray-300">5-credit booster bundle. Charged in NGN at checkout.</span>
+                        <span className="text-xs text-gray-300">
+                          {effectiveBoosterQuote.bundleSize}-credit booster bundle. {getPricingNote(effectiveBoosterQuote.region, effectiveBoosterQuote.displayCurrency)}
+                        </span>
                       )}
                     </div>
                   </div>

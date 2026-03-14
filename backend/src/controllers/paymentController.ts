@@ -6,9 +6,9 @@ import * as admin from 'firebase-admin';
 import { usersCollection } from '../config/firebase-admin';
 import { getPlanDetails, initializeTransaction, verifyTransaction } from '../services/paystackService';
 import { extractClientIp } from '../services/geoLocationService';
-import { convertUsdToCurrencySubunits } from '../services/exchangeRateService';
 import {
   getRegionalPricingQuote,
+  getRegionalProfileBoosterQuote,
   type BillingCycle,
   type PricingRegion,
 } from '../services/regionalPricingService';
@@ -99,7 +99,7 @@ const PLAN_METADATA: Record<PlanTier, { name: string }> = {
   premium: { name: 'Premium Plan' },
   elite: { name: 'Pro Plan' },
 };
-const PROFILE_BOOSTER_PRICE_USD = 1.99;
+const PROFILE_BOOSTER_PRICE_USD = 7;
 
 const isAdminFromUserDoc = (userData: Record<string, any> | undefined): boolean => {
   const email = typeof userData?.email === 'string' ? userData.email.trim().toLowerCase() : '';
@@ -643,6 +643,23 @@ export const getLocalizedPricingQuote = async (req: Request, res: Response) => {
   }
 };
 
+export const getLocalizedProfileBoosterQuote = async (req: Request, res: Response) => {
+  try {
+    const clientIp = extractClientIp(req.headers as Record<string, unknown>);
+    const userPricingContext = req.userId ? await getUserPricingContext(req.userId) : null;
+    const fallbackCountryCode = inferCountryCodeFromUser(userPricingContext);
+    const quote = await getRegionalProfileBoosterQuote(clientIp, fallbackCountryCode);
+
+    return res.status(200).json(quote);
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error && error.message
+        ? error.message
+        : 'Booster pricing quote generation failed.';
+    return res.status(500).json({ message });
+  }
+};
+
 export const initializeProfileBoosterPurchase = async (req: Request, res: Response) => {
   try {
     const userId = req.userId;
@@ -667,22 +684,26 @@ export const initializeProfileBoosterPurchase = async (req: Request, res: Respon
 
     const callbackBaseUrl = process.env.CLIENT_URL?.trim();
     const callbackUrl = callbackBaseUrl ? `${callbackBaseUrl.replace(/\/+$/, '')}/payment-success` : undefined;
-    const ngnCharge = await convertUsdToCurrencySubunits(PROFILE_BOOSTER_PRICE_USD, 'NGN');
+    const clientIp = extractClientIp(req.headers as Record<string, unknown>);
+    const fallbackCountryCode = inferCountryCodeFromUser(userData as UserPricingContext);
+    const pricingQuote = await getRegionalProfileBoosterQuote(clientIp, fallbackCountryCode);
 
     const response = await initializeTransaction({
       email,
-      amount: ngnCharge.amount,
-      currency: 'NGN',
+      amount: pricingQuote.chargeAmountSubunits,
+      currency: pricingQuote.chargeCurrency,
       callback_url: callbackUrl,
       metadata: {
         userId,
         productType: 'profile_booster' satisfies PaymentProductType,
-        displayCurrency: 'USD',
-        displayAmountMajor: PROFILE_BOOSTER_PRICE_USD,
-        chargeCurrency: 'NGN',
-        chargeAmountMajor: ngnCharge.convertedMajorAmount,
-        chargeAmountSubunits: ngnCharge.amount,
-        exchangeRate: ngnCharge.exchangeRate,
+        pricingRegion: pricingQuote.region,
+        countryCode: pricingQuote.countryCode,
+        displayCurrency: pricingQuote.displayCurrency,
+        displayAmountMajor: pricingQuote.displayAmountMajor,
+        chargeCurrency: pricingQuote.chargeCurrency,
+        chargeAmountMajor: pricingQuote.chargeAmountMajor,
+        chargeAmountSubunits: pricingQuote.chargeAmountSubunits,
+        exchangeRate: pricingQuote.exchangeRate,
       },
     });
 
@@ -690,11 +711,15 @@ export const initializeProfileBoosterPurchase = async (req: Request, res: Respon
       authorizationUrl: response.data.authorization_url,
       accessCode: response.data.access_code,
       reference: response.data.reference,
-      displayCurrency: 'USD',
-      displayAmountMajor: PROFILE_BOOSTER_PRICE_USD,
-      chargeCurrency: 'NGN',
-      chargeAmountMajor: ngnCharge.convertedMajorAmount,
-      chargeAmountSubunits: ngnCharge.amount,
+      bundleSize: pricingQuote.bundleSize,
+      region: pricingQuote.region,
+      countryCode: pricingQuote.countryCode,
+      displayCurrency: pricingQuote.displayCurrency,
+      displayAmountMajor: pricingQuote.displayAmountMajor,
+      displayLabel: pricingQuote.displayLabel,
+      chargeCurrency: pricingQuote.chargeCurrency,
+      chargeAmountMajor: pricingQuote.chargeAmountMajor,
+      chargeAmountSubunits: pricingQuote.chargeAmountSubunits,
     });
   } catch (error: any) {
     return res.status(400).json({ message: error?.message || 'Booster payment initialization failed.' });

@@ -333,11 +333,29 @@ export interface ProfileBoosterPaymentInitResponse {
   authorizationUrl: string;
   accessCode: string;
   reference: string;
-  displayCurrency: 'USD';
+  bundleSize: number;
+  region: 'nigeria' | 'africa' | 'global';
+  countryCode: string | null;
+  displayCurrency: string;
+  displayAmountMajor: number;
+  displayLabel: string;
+  chargeCurrency: 'NGN';
+  chargeAmountMajor: number;
+  chargeAmountSubunits: number;
+}
+
+export interface ProfileBoosterPricingQuote {
+  productType: 'profile_booster';
+  bundleSize: number;
+  region: 'nigeria' | 'africa' | 'global';
+  countryCode: string | null;
+  displayCurrency: string;
   displayAmountMajor: number;
   chargeCurrency: 'NGN';
   chargeAmountMajor: number;
   chargeAmountSubunits: number;
+  exchangeRate: number;
+  displayLabel: string;
 }
 
 export interface VerifyPaymentResponse {
@@ -1055,6 +1073,9 @@ export const PaymentAPI = {
   },
   getQuote: async (): Promise<LocalizedPricingQuoteResponse> => {
     return apiRequest('/api/payments/quote');
+  },
+  getProfileBoosterQuote: async (): Promise<ProfileBoosterPricingQuote> => {
+    return apiRequest('/api/payments/profile-booster/quote');
   },
   getPlans: async (): Promise<{ plans: SubscriptionPlan[] }> => {
     return apiRequest('/api/payments/plans');
