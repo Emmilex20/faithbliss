@@ -530,7 +530,7 @@ const PremiumContent = () => {
                         <p className="mt-1 max-w-md text-sm leading-6 text-fuchsia-50/80">
                           {profileBoosterActiveUntil
                             ? `Your profile is prioritised in discovery feeds for the next ${profileBoosterCountdown || 'hour'}.`
-                            : 'Each successful premium payment adds one 1-hour profile boost, and extra 5-credit bundles are available anytime.'}
+                            : 'Each successful premium payment adds one 1-hour profile boost, and extra 5-booster bundles are available anytime.'}
                         </p>
                       </div>
                     </div>
