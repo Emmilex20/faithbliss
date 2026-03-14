@@ -30,11 +30,12 @@ import Report from './pages/Report.tsx';
 import Deactivate from './pages/Deactivate.tsx';
 import OnboardingDebug from './pages/OnboardingDebug.tsx';
 import Admin from './pages/Admin.tsx';
+import DeveloperHub from './pages/DeveloperHub.tsx';
 
 // Import the Contexts and Gates
 import { ToastProvider } from './contexts/ToastContext.tsx';
 import { AuthProvider } from './contexts/AuthContext.tsx';
-import { AdminRoute, AuthGate, PublicOnlyRoute } from './components/AuthGate.tsx';
+import { AdminRoute, AuthGate, DeveloperRoute, PublicOnlyRoute } from './components/AuthGate.tsx';
 
 const isFirebaseNetworkFailure = (reason: unknown): boolean => {
   const candidates = [
@@ -127,6 +128,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="matches" element={<MatchPage />} />
                 <Route element={<AdminRoute />}>
                   <Route path="admin" element={<Admin />} />
+                </Route>
+                <Route element={<DeveloperRoute />}>
+                  <Route path="developer" element={<DeveloperHub />} />
                 </Route>
 
               </Route>

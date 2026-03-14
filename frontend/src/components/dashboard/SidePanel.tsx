@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Settings,
   ShieldCheck,
+  Wrench,
   Star,
   User,
   UserX,
@@ -34,11 +35,15 @@ interface SidePanelProps {
 export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps) => {
   const { logout, isLoggingOut } = useAuthContext();
   const { data: unreadData } = useNotificationUnreadCount();
+  const extraRoles = Array.isArray(user?.roles)
+    ? user.roles.map((role) => String(role).trim().toLowerCase()).filter(Boolean)
+    : [];
   const unreadCount = unreadData?.count || 0;
   const displayImage = user?.profilePhoto1 || userImage || '/default-avatar.png';
   const faithJourney = user?.faithJourney || 'Passionate Believer';
   const subscriptionDisplay = useSubscriptionDisplay(user);
-  const isAdminUser = String(user?.role || 'user').toLowerCase() === 'admin';
+  const isAdminUser = String(user?.role || 'user').toLowerCase() === 'admin' || extraRoles.includes('admin');
+  const isDeveloperUser = extraRoles.includes('developer') || String(user?.role || 'user').toLowerCase() === 'developer';
   const profileBoosterCredits = typeof user?.profileBoosterCredits === 'number' ? user.profileBoosterCredits : 0;
   const profileBoosterActiveUntil =
     typeof user?.profileBoosterActiveUntil === 'string' && Date.parse(user.profileBoosterActiveUntil) > Date.now()
@@ -291,6 +296,20 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
                   <div>
                     <h4 className="font-semibold text-white">Admin Console</h4>
                     <p className="text-sm text-gray-400">User oversight and platform access</p>
+                  </div>
+                </div>
+              </Link>
+            ) : null}
+
+            {isDeveloperUser ? (
+              <Link to="/developer" onClick={onClose}>
+                <div className="group flex cursor-pointer items-center space-x-4 rounded-2xl p-4 transition-colors hover:bg-gray-800/50">
+                  <div className="rounded-xl bg-violet-500/20 p-2 transition-colors group-hover:bg-violet-500/30">
+                    <Wrench className="h-5 w-5 text-violet-300" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-white">Developer Hub</h4>
+                    <p className="text-sm text-gray-400">Platform diagnostics and live overview</p>
                   </div>
                 </div>
               </Link>

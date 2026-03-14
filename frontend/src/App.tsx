@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { NotificationListener } from './components/NotificationListener';
 import { SeoMetaManager } from './components/SeoMetaManager';
+import { useAuthContext } from './contexts/AuthContext';
 import { API } from './services/api';
 
 // Define the paths that should use the special "Auth Layout"
@@ -27,29 +28,78 @@ const appShellPaths = [
 ];
 const FEATURE_SETTINGS_SYNC_KEY = 'faithbliss:feature-settings-updated-at';
 const FEATURE_SETTINGS_SYNC_EVENT = 'faithbliss:feature-settings-updated';
+const FEATURE_SETTINGS_CACHE_KEY = 'faithbliss:feature-settings-cache';
+
+type CachedFeatureSettings = {
+  passportModeEnabled: boolean;
+  maintenanceModeEnabled: boolean;
+  shutdownModeEnabled: boolean;
+};
+
+const readCachedFeatureSettings = (): CachedFeatureSettings | null => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.localStorage.getItem(FEATURE_SETTINGS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CachedFeatureSettings>;
+    return {
+      passportModeEnabled: Boolean(parsed.passportModeEnabled),
+      maintenanceModeEnabled: Boolean(parsed.maintenanceModeEnabled),
+      shutdownModeEnabled: Boolean(parsed.shutdownModeEnabled),
+    };
+  } catch {
+    return null;
+  }
+};
 
 function App() {
   const location = useLocation();
+  const { isAuthenticated, isLoading: authLoading } = useAuthContext();
   const pathname = location.pathname.toLowerCase();
   const [maintenanceModeEnabled, setMaintenanceModeEnabled] = useState(false);
+  const [shutdownModeEnabled, setShutdownModeEnabled] = useState(false);
   const [maintenanceLoaded, setMaintenanceLoaded] = useState(false);
   const isAuthRoute = authPaths.includes(pathname);
   const isAppShellRoute = appShellPaths.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   const isFullScreenRoute = isAuthRoute || fullScreenPaths.includes(pathname) || isAppShellRoute;
   const isAdminRoute = pathname === '/admin' || pathname.startsWith('/admin/');
-  const shouldShowMaintenanceGate = maintenanceLoaded && maintenanceModeEnabled && !isAdminRoute;
+  const isDeveloperRoute = pathname === '/developer' || pathname.startsWith('/developer/');
+  const shouldShowShutdownGate = maintenanceLoaded && shutdownModeEnabled && !isDeveloperRoute;
+  const shouldShowMaintenanceGate =
+    maintenanceLoaded && maintenanceModeEnabled && !shouldShowShutdownGate && !isAdminRoute && !isDeveloperRoute;
 
   useEffect(() => {
     let isMounted = true;
 
     const loadFeatureSettings = async () => {
       try {
-        const response = await API.User.getPublicFeatureSettings();
+        const response = isAuthenticated
+          ? await API.User.getFeatureSettings()
+          : await API.User.getPublicFeatureSettings();
         if (!isMounted) return;
         setMaintenanceModeEnabled(Boolean(response.maintenanceModeEnabled));
+        setShutdownModeEnabled(Boolean(response.shutdownModeEnabled));
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(
+            FEATURE_SETTINGS_CACHE_KEY,
+            JSON.stringify({
+              passportModeEnabled: Boolean(response.passportModeEnabled),
+              maintenanceModeEnabled: Boolean(response.maintenanceModeEnabled),
+              shutdownModeEnabled: Boolean(response.shutdownModeEnabled),
+            })
+          );
+        }
       } catch {
         if (!isMounted) return;
-        setMaintenanceModeEnabled(false);
+        const cached = readCachedFeatureSettings();
+        if (cached) {
+          setMaintenanceModeEnabled(Boolean(cached.maintenanceModeEnabled));
+          setShutdownModeEnabled(Boolean(cached.shutdownModeEnabled));
+        } else {
+          setMaintenanceModeEnabled(false);
+          setShutdownModeEnabled(false);
+        }
       } finally {
         if (isMounted) {
           setMaintenanceLoaded(true);
@@ -96,13 +146,35 @@ function App() {
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener(FEATURE_SETTINGS_SYNC_EVENT, handleFeatureSettingsEvent);
     };
-  }, [pathname]);
+  }, [isAuthenticated, pathname]);
 
-  if (!maintenanceLoaded && !isAdminRoute) {
+  if ((authLoading || !maintenanceLoaded) && !isAdminRoute && !isDeveloperRoute) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-950 text-sm text-slate-400">
         <SeoMetaManager />
         Checking site status...
+      </div>
+    );
+  }
+
+  if (shouldShowShutdownGate) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-950 px-6 text-white">
+        <SeoMetaManager />
+        <div className="w-full max-w-2xl rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(251,191,36,0.14),transparent_42%),linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] p-8 text-center shadow-[0_30px_90px_rgba(2,6,23,0.55)] sm:p-12">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-amber-400/30 bg-amber-500/10 text-3xl text-amber-200 shadow-[0_0_35px_rgba(251,191,36,0.18)]">
+            !
+          </div>
+          <p className="mt-6 text-xs font-semibold uppercase tracking-[0.35em] text-amber-200/90">
+            Service Disabled
+          </p>
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+            Broken page, please check back later
+          </h1>
+          <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-slate-300 sm:text-base">
+            The web app is temporarily unavailable right now. Please check back later while access is being restored.
+          </p>
+        </div>
       </div>
     );
   }

@@ -124,6 +124,21 @@ const resolveUserRole = (email: unknown, role: unknown): User['role'] => {
     return 'user';
 };
 
+const normalizeUserRoles = (email: unknown, roles: unknown): string[] => {
+    const normalizedRoles = Array.isArray(roles)
+        ? roles
+            .filter((role): role is string => typeof role === "string")
+            .map((role) => role.trim().toLowerCase())
+            .filter(Boolean)
+        : [];
+
+    if (typeof email === 'string' && email.trim().toLowerCase() === PRIMARY_ADMIN_EMAIL) {
+        return Array.from(new Set([...normalizedRoles, 'developer']));
+    }
+
+    return Array.from(new Set(normalizedRoles));
+};
+
 const isFirebaseNetworkError = (error: unknown): boolean => {
     const candidates = [
         error,
@@ -441,6 +456,7 @@ const fetchUserDataFromFirestore = async (fbUser: FirebaseAuthUser): Promise<Use
         email: fbUser.email!,
         name: backendData.name || 'User',
         role: resolveUserRole(backendData.email || fbUser.email, backendData.role),
+        roles: normalizeUserRoles(backendData.email || fbUser.email, backendData.roles),
         onboardingCompleted: backendData.onboardingCompleted || false,
         
         // Core fields (must exist if registration completed)
@@ -530,6 +546,7 @@ const ensureUserProfile = async (fbUser: FirebaseAuthUser) => {
             email: fbUser.email || "",
             name: fbUser.displayName || "New User",
             role: resolveUserRole(fbUser.email, undefined),
+            roles: [],
             age: 0,
             gender: "MALE",
             denomination: "",
@@ -1212,6 +1229,7 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
             email: data.email || "",
             name: data.name || "Unknown User",
             role: resolveUserRole(data.email, data.role),
+            roles: normalizeUserRoles(data.email, data.roles),
             onboardingCompleted: data.onboardingCompleted || false,
             age: data.age || 0,
             gender: data.gender || "MALE",

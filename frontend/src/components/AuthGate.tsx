@@ -4,6 +4,16 @@ import { useAuthContext } from '../contexts/AuthContext';
 
 const ONBOARDING_PAUSE_STORAGE_KEY = 'faithbliss_onboarding_pause_state';
 
+const hasUserRole = (user: { role?: string; roles?: string[] } | null | undefined, role: string) => {
+  const normalizedRole = role.trim().toLowerCase();
+  const primaryRole = String(user?.role || 'user').trim().toLowerCase();
+  const extraRoles = Array.isArray(user?.roles)
+    ? user.roles.map((value) => String(value).trim().toLowerCase()).filter(Boolean)
+    : [];
+
+  return primaryRole === normalizedRole || extraRoles.includes(normalizedRole);
+};
+
 export const AuthGate: React.FC = () => {
   const { isLoading, isAuthenticated, user } = useAuthContext();
   const location = useLocation();
@@ -73,7 +83,23 @@ export const AdminRoute: React.FC = () => {
     return <Navigate to="/login" replace />;
   }
 
-  if (String(user?.role || 'user').toLowerCase() !== 'admin') {
+  if (!hasUserRole(user, 'admin')) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Outlet />;
+};
+
+export const DeveloperRoute: React.FC = () => {
+  const { isAuthenticated, user, isLoading } = useAuthContext();
+
+  if (isLoading) return null;
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!hasUserRole(user, 'developer')) {
     return <Navigate to="/dashboard" replace />;
   }
 

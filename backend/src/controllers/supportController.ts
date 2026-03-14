@@ -20,6 +20,7 @@ type FirestoreUser = {
   email?: string;
   name?: string;
   role?: string;
+  roles?: string[];
 };
 
 const getEffectiveRole = (user: FirestoreUser | null | undefined): string => {
@@ -28,6 +29,17 @@ const getEffectiveRole = (user: FirestoreUser | null | undefined): string => {
 
   const role = typeof user?.role === 'string' ? user.role.trim().toLowerCase() : '';
   return role || 'user';
+};
+
+const hasRole = (user: FirestoreUser | null | undefined, role: string): boolean => {
+  const normalizedRole = role.trim().toLowerCase();
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.trim().toLowerCase())
+    : [];
+
+  return getEffectiveRole(user) === normalizedRole || roles.includes(normalizedRole);
 };
 
 const requireAdmin = async (req: Request, res: Response) => {
@@ -45,7 +57,7 @@ const requireAdmin = async (req: Request, res: Response) => {
   }
 
   const currentUser = currentUserDoc.data() as FirestoreUser;
-  if (getEffectiveRole(currentUser) !== 'admin') {
+  if (!hasRole(currentUser, 'admin')) {
     res.status(403).json({ message: 'Admin access required.' });
     return null;
   }
@@ -60,7 +72,7 @@ const getAdminRecipients = async (): Promise<Array<{ id: string; email?: string 
   return snapshot.docs
     .map((doc) => ({ id: doc.id, ...(doc.data() as FirestoreUser) }))
     .filter((user) => {
-      if (getEffectiveRole(user) !== 'admin') return false;
+      if (!hasRole(user, 'admin')) return false;
       if (seenIds.has(user.id)) return false;
       seenIds.add(user.id);
       return true;

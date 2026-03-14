@@ -16,6 +16,7 @@ interface IFirestoreUser {
   name: string;
   email: string;
   role?: string;
+  roles?: string[];
   profilePhoto1: string;
   profilePhoto2?: string;
   profilePhoto3?: string;
@@ -75,8 +76,33 @@ const getEffectiveRole = (user: IFirestoreUser | null | undefined): string => {
   return role || 'user';
 };
 
+const getNormalizedRoles = (user: IFirestoreUser | null | undefined): string[] => {
+  const normalizedRoles = Array.isArray(user?.roles)
+    ? user.roles
+        .filter((role): role is string => typeof role === 'string')
+        .map((role) => role.trim().toLowerCase())
+        .filter(Boolean)
+    : [];
+
+  const email = typeof user?.email === 'string' ? user.email.trim().toLowerCase() : '';
+  if (email === PRIMARY_ADMIN_EMAIL) {
+    return Array.from(new Set([...normalizedRoles, 'developer']));
+  }
+
+  return Array.from(new Set(normalizedRoles));
+};
+
+const hasRole = (user: IFirestoreUser | null | undefined, role: string): boolean => {
+  const normalizedRole = role.trim().toLowerCase();
+  return getEffectiveRole(user) === normalizedRole || getNormalizedRoles(user).includes(normalizedRole);
+};
+
 const isAdminUser = (user: IFirestoreUser | null | undefined): boolean =>
-  getEffectiveRole(user) === 'admin';
+  hasRole(user, 'admin');
+
+const isDeveloperUser = (user: IFirestoreUser | null | undefined): boolean => {
+  return hasRole(user, 'developer');
+};
 
 const matchesCollection = db.collection('matches');
 
@@ -138,6 +164,26 @@ const requireAdmin = async (
   return currentUser;
 };
 
+const requireDeveloper = async (
+  firebaseUid: string | undefined,
+  res: Response
+): Promise<(IFirestoreUser & { firebaseUid: string }) | null> => {
+  if (!firebaseUid) {
+    res.status(401).json({ message: 'Unauthorized: Missing user context.' });
+    return null;
+  }
+
+  const currentUser = await fetchUserProfile(firebaseUid, res);
+  if (!currentUser) return null;
+
+  if (!isDeveloperUser(currentUser)) {
+    res.status(403).json({ message: 'Developer access required.' });
+    return null;
+  }
+
+  return currentUser;
+};
+
 const getMe = async (req: CustomRequest, res: Response) => {
   const firebaseUid = req.userId;
 
@@ -154,6 +200,7 @@ const getMe = async (req: CustomRequest, res: Response) => {
     firebaseUid: uid,
     ...userData,
     role: getEffectiveRole(userData),
+    roles: getNormalizedRoles(userData),
     passportCountry: normalizeCountryCode(userData.passportCountry) || null,
     profilePhotoCount: countProfilePhotos(userData),
   });
@@ -179,6 +226,7 @@ const getUserById = async (req: CustomRequest, res: Response) => {
       id: userDoc.id,
       name: user.name,
       role: getEffectiveRole(user),
+      roles: getNormalizedRoles(user),
       profilePhoto1: user.profilePhoto1,
       profilePhotoCount: countProfilePhotos(user),
       age: user.age,
@@ -209,6 +257,7 @@ const getAllUsers = async (req: CustomRequest, res: Response) => {
     const snapshot = await usersCollection.get();
     const filteredUsers = snapshot.docs
       .map((doc) => ({ ...(doc.data() as IFirestoreUser), id: doc.id }))
+      .filter((user) => !(isAdminUser(user) && isDeveloperUser(user)))
       .filter((user) => {
         if (!search) return true;
         const name = typeof user.name === 'string' ? user.name.toLowerCase() : '';
@@ -227,6 +276,7 @@ const getAllUsers = async (req: CustomRequest, res: Response) => {
         email: user.email,
         name: user.name,
         role: getEffectiveRole(user),
+        roles: getNormalizedRoles(user),
         profilePhoto1: user.profilePhoto1,
         profilePhotoCount: countProfilePhotos(user),
         onboardingCompleted: user.onboardingCompleted,
@@ -307,6 +357,105 @@ const getAdminPlatformStats = async (req: CustomRequest, res: Response) => {
     const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
     console.error('Error fetching admin platform stats:', error);
     return res.status(500).json({ message: `Failed to retrieve platform stats: ${errorMessage}` });
+  }
+};
+
+const getDeveloperOverview = async (req: CustomRequest, res: Response) => {
+  const firebaseUid = req.userId;
+  const currentUser = await requireDeveloper(firebaseUid, res);
+  if (!currentUser) return;
+
+  try {
+    const [usersSnapshot, matchesSnapshot, supportSnapshot, featureSettings] = await Promise.all([
+      usersCollection.get(),
+      matchesCollection.get(),
+      db.collection('supportTickets').get(),
+      getPassportFeatureSettings(),
+    ]);
+
+    const now = Date.now();
+    const dayAgo = now - 24 * 60 * 60 * 1000;
+
+    let activeToday = 0;
+    let completedOnboarding = 0;
+    let activeBoosts = 0;
+    let activePremium = 0;
+    let admins = 0;
+    let developers = 0;
+
+    usersSnapshot.forEach((doc) => {
+      const user = doc.data() as IFirestoreUser;
+      if (isAdminUser(user)) admins += 1;
+      if (isDeveloperUser(user)) developers += 1;
+      if (user.onboardingCompleted) completedOnboarding += 1;
+      if (
+        typeof user.subscriptionStatus === 'string' &&
+        user.subscriptionStatus.toLowerCase() === 'active' &&
+        typeof user.subscriptionTier === 'string' &&
+        ['premium', 'elite'].includes(user.subscriptionTier.toLowerCase())
+      ) {
+        activePremium += 1;
+      }
+
+      const lastSeenAt = normalizeFirestoreTimestamp(user.lastSeenAt);
+      if (lastSeenAt) {
+        const seenAt = new Date(lastSeenAt).getTime();
+        if (!Number.isNaN(seenAt) && seenAt >= dayAgo) {
+          activeToday += 1;
+        }
+      }
+
+      const boosterActiveUntil = normalizeFirestoreTimestamp(user.profileBoosterActiveUntil);
+      if (boosterActiveUntil) {
+        const activeUntil = new Date(boosterActiveUntil).getTime();
+        if (!Number.isNaN(activeUntil) && activeUntil > now) {
+          activeBoosts += 1;
+        }
+      }
+    });
+
+    const supportTickets = supportSnapshot.docs
+      .map((doc) => {
+        const data = doc.data() as Record<string, unknown>;
+        return {
+          id: doc.id,
+          type: typeof data.type === 'string' ? data.type : 'HELP',
+          subject: typeof data.subject === 'string' ? data.subject : 'Support ticket',
+          status: typeof data.status === 'string' ? data.status : 'OPEN',
+          reporterEmail: typeof data.reporterEmail === 'string' ? data.reporterEmail : '',
+          createdAt: normalizeFirestoreTimestamp(data.createdAt),
+        };
+      })
+      .sort((left, right) => {
+        const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+        const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+        return rightTime - leftTime;
+      });
+
+    const openTickets = supportTickets.filter((ticket) => ticket.status.toLowerCase() !== 'responded').length;
+    const respondedTickets = supportTickets.length - openTickets;
+
+    return res.status(200).json({
+      summary: {
+        totalUsers: usersSnapshot.size,
+        admins,
+        developers,
+        completedOnboarding,
+        activePremium,
+        activeToday,
+        activeBoosts,
+        totalMatches: matchesSnapshot.size,
+        totalTickets: supportTickets.length,
+        openTickets,
+        respondedTickets,
+      },
+      featureSettings,
+      recentTickets: supportTickets.slice(0, 6),
+    });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error fetching developer overview:', error);
+    return res.status(500).json({ message: `Failed to retrieve developer overview: ${errorMessage}` });
   }
 };
 
@@ -601,6 +750,10 @@ const getFeatureSettings = async (req: CustomRequest, res: Response) => {
 
   try {
     const settings = await getPassportFeatureSettings();
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
     return res.status(200).json(settings);
   } catch (error) {
     const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
@@ -612,6 +765,10 @@ const getFeatureSettings = async (req: CustomRequest, res: Response) => {
 const getPublicFeatureSettings = async (_req: Request, res: Response) => {
   try {
     const settings = await getPassportFeatureSettings();
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
     return res.status(200).json(settings);
   } catch (error) {
     const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
@@ -632,10 +789,8 @@ const updateFeatureSettings = async (req: CustomRequest, res: Response) => {
         typeof req.body?.passportModeEnabled === 'boolean'
           ? req.body.passportModeEnabled
           : currentSettings.passportModeEnabled,
-      maintenanceModeEnabled:
-        typeof req.body?.maintenanceModeEnabled === 'boolean'
-          ? req.body.maintenanceModeEnabled
-          : currentSettings.maintenanceModeEnabled,
+      maintenanceModeEnabled: currentSettings.maintenanceModeEnabled,
+      shutdownModeEnabled: currentSettings.shutdownModeEnabled,
     });
 
     return res.status(200).json({
@@ -645,6 +800,39 @@ const updateFeatureSettings = async (req: CustomRequest, res: Response) => {
   } catch (error) {
     const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
     console.error('Error updating feature settings:', error);
+    return res.status(500).json({ message: errorMessage });
+  }
+};
+
+const updateDeveloperFeatureSettings = async (req: CustomRequest, res: Response) => {
+  const firebaseUid = req.userId;
+  const currentUser = await requireDeveloper(firebaseUid, res);
+  if (!currentUser) return;
+
+  try {
+    const currentSettings = await getPassportFeatureSettings();
+    const settings = await setPassportFeatureSettings({
+      passportModeEnabled:
+        typeof req.body?.passportModeEnabled === 'boolean'
+          ? req.body.passportModeEnabled
+          : currentSettings.passportModeEnabled,
+      maintenanceModeEnabled:
+        typeof req.body?.maintenanceModeEnabled === 'boolean'
+          ? req.body.maintenanceModeEnabled
+          : currentSettings.maintenanceModeEnabled,
+      shutdownModeEnabled:
+        typeof req.body?.shutdownModeEnabled === 'boolean'
+          ? req.body.shutdownModeEnabled
+          : currentSettings.shutdownModeEnabled,
+    });
+
+    return res.status(200).json({
+      message: 'Developer feature settings updated successfully.',
+      ...settings,
+    });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error updating developer feature settings:', error);
     return res.status(500).json({ message: errorMessage });
   }
 };
@@ -686,7 +874,7 @@ const updateUserRole = async (req: CustomRequest, res: Response) => {
   }
 
   if (!['user', 'admin'].includes(nextRole)) {
-    return res.status(400).json({ message: 'Role must be either user or admin.' });
+    return res.status(400).json({ message: 'Role must be user or admin.' });
   }
 
   try {
@@ -716,6 +904,7 @@ const updateUserRole = async (req: CustomRequest, res: Response) => {
         email: targetUser.email,
         name: targetUser.name,
         role: nextRole,
+        roles: getNormalizedRoles(targetUser),
       },
     });
   } catch (error) {
@@ -746,6 +935,7 @@ const updateUserByAdmin = async (req: CustomRequest, res: Response) => {
 
     const targetUser = targetDoc.data() as IFirestoreUser;
     const updates: Record<string, unknown> = {};
+    const currentRoles = getNormalizedRoles(targetUser).filter((role) => role !== 'admin' && role !== 'user');
 
     const toTrimmedString = (value: unknown, maxLen: number): string | undefined => {
       if (typeof value !== 'string') return undefined;
@@ -794,12 +984,33 @@ const updateUserByAdmin = async (req: CustomRequest, res: Response) => {
     const nextRole = typeof body.role === 'string' ? body.role.trim().toLowerCase() : '';
     if (nextRole) {
       if (!['user', 'admin'].includes(nextRole)) {
-        return res.status(400).json({ message: 'Role must be either user or admin.' });
+        return res.status(400).json({ message: 'Role must be user or admin.' });
       }
       if (isAdminUser(targetUser)) {
         return res.status(403).json({ message: 'Admin roles cannot be changed from the admin console.' });
       }
       updates.role = nextRole;
+    }
+
+    if ('roles' in body) {
+      if (!Array.isArray(body.roles)) {
+        return res.status(400).json({ message: 'Roles must be an array when provided.' });
+      }
+
+      const nextRoles = body.roles
+        .filter((role): role is string => typeof role === 'string')
+        .map((role) => role.trim().toLowerCase())
+        .filter((role) => role === 'developer');
+
+      updates.roles = Array.from(new Set(nextRoles));
+    } else if ('hasDeveloperAccess' in body) {
+      if (typeof body.hasDeveloperAccess !== 'boolean') {
+        return res.status(400).json({ message: 'Developer access flag must be a boolean.' });
+      }
+
+      updates.roles = body.hasDeveloperAccess
+        ? Array.from(new Set([...currentRoles, 'developer']))
+        : currentRoles.filter((role) => role !== 'developer');
     }
 
     const nextSubscriptionStatus =
@@ -867,6 +1078,7 @@ const updateUserByAdmin = async (req: CustomRequest, res: Response) => {
         name: updatedUser.name,
         email: updatedUser.email,
         role: getEffectiveRole(updatedUser),
+        roles: getNormalizedRoles(updatedUser),
         age: updatedUser.age,
         gender: updatedUser.gender,
         location: updatedUser.location,
@@ -1012,6 +1224,7 @@ export {
   getUserById,
   getAllUsers,
   getAdminPlatformStats,
+  getDeveloperOverview,
   getOnboardingDebug,
   updateUserProfile,
   updateUserSettings,
@@ -1020,6 +1233,7 @@ export {
   getFeatureSettings,
   getPublicFeatureSettings,
   updateFeatureSettings,
+  updateDeveloperFeatureSettings,
   updateUserRole,
   updateUserByAdmin,
   resetUserPasswordByAdmin,

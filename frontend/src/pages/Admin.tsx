@@ -11,6 +11,8 @@ type EditableUser = {
   name: string;
   email: string;
   role: 'user' | 'admin' | string;
+  roles: string[];
+  hasDeveloperAccess: boolean;
   age: number;
   gender: 'MALE' | 'FEMALE';
   location: string;
@@ -28,6 +30,7 @@ type EditableSource = {
   name?: string;
   email?: string;
   role?: string;
+  roles?: string[];
   age?: number;
   gender?: string;
   location?: string;
@@ -47,14 +50,29 @@ const normalizeEditableGender = (value: unknown): 'MALE' | 'FEMALE' => {
 
 const FEATURE_SETTINGS_SYNC_KEY = 'faithbliss:feature-settings-updated-at';
 const FEATURE_SETTINGS_SYNC_EVENT = 'faithbliss:feature-settings-updated';
+const FEATURE_SETTINGS_CACHE_KEY = 'faithbliss:feature-settings-cache';
 
 const isAdminRole = (role: string | undefined) => (role || '').trim().toLowerCase() === 'admin';
+const getNormalizedRoles = (roles: unknown): string[] =>
+  Array.isArray(roles)
+    ? roles.map((role) => String(role).trim().toLowerCase()).filter(Boolean)
+    : [];
+
+const getRoleSummaryLabel = (user: { role?: string; roles?: string[] }) => {
+  const baseRole = isAdminRole(user.role) ? 'Admin' : 'User';
+  return getNormalizedRoles(user.roles).includes('developer') ? `${baseRole} + Developer` : baseRole;
+};
+
+const isAdminDeveloperUser = (user: { role?: string; roles?: string[] }) =>
+  isAdminRole(user.role) && getNormalizedRoles(user.roles).includes('developer');
 
 const toEditableUser = (user: EditableSource): EditableUser => ({
   id: user.id,
   name: user.name || '',
   email: user.email || '',
-  role: (user.role || 'user') as 'user' | 'admin' | string,
+  role: (user.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin' | string,
+  roles: getNormalizedRoles(user.roles),
+  hasDeveloperAccess: getNormalizedRoles(user.roles).includes('developer'),
   age: typeof user.age === 'number' ? user.age : 18,
   gender: normalizeEditableGender(user.gender),
   location: user.location || '',
@@ -385,7 +403,6 @@ const AdminPage = () => {
   const [resettingPassword, setResettingPassword] = useState(false);
   const [deletingUser, setDeletingUser] = useState(false);
   const [passportModeEnabled, setPassportModeEnabled] = useState(false);
-  const [maintenanceModeEnabled, setMaintenanceModeEnabled] = useState(false);
   const [featureLoading, setFeatureLoading] = useState(true);
   const [featureSaving, setFeatureSaving] = useState(false);
   const [supportTickets, setSupportTickets] = useState<Awaited<ReturnType<typeof API.Support.getTickets>>['tickets']>([]);
@@ -405,8 +422,18 @@ const AdminPage = () => {
   const [deletingPaymentUserId, setDeletingPaymentUserId] = useState<string | null>(null);
   const [overviewRangeDays, setOverviewRangeDays] = useState<7 | 30 | 90>(7);
 
-  const broadcastFeatureSettingsUpdate = () => {
+  const broadcastFeatureSettingsUpdate = (settings: {
+    passportModeEnabled: boolean;
+    shutdownModeEnabled?: boolean;
+  }) => {
     const marker = String(Date.now());
+    window.localStorage.setItem(
+      FEATURE_SETTINGS_CACHE_KEY,
+      JSON.stringify({
+        passportModeEnabled: Boolean(settings.passportModeEnabled),
+        shutdownModeEnabled: Boolean(settings.shutdownModeEnabled),
+      })
+    );
     window.localStorage.setItem(FEATURE_SETTINGS_SYNC_KEY, marker);
     window.dispatchEvent(new Event(FEATURE_SETTINGS_SYNC_EVENT));
   };
@@ -430,7 +457,6 @@ const AdminPage = () => {
 
         if (isMounted) {
           setPassportModeEnabled(Boolean(settingsResponse.passportModeEnabled));
-          setMaintenanceModeEnabled(Boolean(settingsResponse.maintenanceModeEnabled));
           setSupportTickets(Array.isArray(issuesResponse.tickets) ? issuesResponse.tickets : []);
           setPaymentAnalytics(paymentsResponse);
           setPlatformStats(platformStatsResponse);
@@ -460,9 +486,12 @@ const AdminPage = () => {
 
   const { data, loading, error, refetch } = useAllUsers({ page: 1, limit: 200, search: debouncedSearch });
 
-  const users = useMemo(() => data?.users || [], [data?.users]);
+  const users = useMemo(
+    () => (data?.users || []).filter((user) => !isAdminDeveloperUser(user)),
+    [data?.users]
+  );
   const stats = useMemo(() => {
-    const total = data?.total ?? users.length;
+    const total = users.length;
     const admins = users.filter((user) => String(user.role || 'user').toLowerCase() === 'admin').length;
     const premium = users.filter((user) => user.subscriptionStatus === 'active').length;
     const completedOnboarding = users.filter((user) => user.onboardingCompleted).length;
@@ -669,7 +698,13 @@ const AdminPage = () => {
     const payload: AdminUpdateUserPayload = {
       name: editingUser.name.trim(),
       email: editingUser.email.trim().toLowerCase(),
-      role: isAdminRole(selectedUser.role) ? undefined : editingUser.role === 'admin' ? 'admin' : 'user',
+      role: isAdminRole(selectedUser.role)
+        ? undefined
+        : editingUser.role === 'admin'
+          ? 'admin'
+          : 'user',
+      roles: editingUser.hasDeveloperAccess ? ['developer'] : [],
+      hasDeveloperAccess: editingUser.hasDeveloperAccess,
       age: Number(editingUser.age),
       gender: editingUser.gender,
       location: editingUser.location.trim(),
@@ -751,43 +786,15 @@ const AdminPage = () => {
       setFeatureSaving(true);
       const response = await API.User.updateFeatureSettings({
         passportModeEnabled: !passportModeEnabled,
-        maintenanceModeEnabled,
       });
       setPassportModeEnabled(Boolean(response.passportModeEnabled));
-      setMaintenanceModeEnabled(Boolean(response.maintenanceModeEnabled));
-      broadcastFeatureSettingsUpdate();
+      broadcastFeatureSettingsUpdate(response);
       showSuccess(response.message || 'Feature settings updated.');
     } catch (toggleError) {
       const message =
         toggleError instanceof Error && toggleError.message
           ? toggleError.message
           : 'Failed to update Passport Mode.';
-      showError(message);
-    } finally {
-      setFeatureSaving(false);
-    }
-  };
-
-  const handleToggleMaintenanceMode = async () => {
-    try {
-      setFeatureSaving(true);
-      const response = await API.User.updateFeatureSettings({
-        passportModeEnabled,
-        maintenanceModeEnabled: !maintenanceModeEnabled,
-      });
-      setPassportModeEnabled(Boolean(response.passportModeEnabled));
-      setMaintenanceModeEnabled(Boolean(response.maintenanceModeEnabled));
-      broadcastFeatureSettingsUpdate();
-      showSuccess(
-        response.maintenanceModeEnabled
-          ? 'Maintenance mode enabled. The project is now showing the broken-page screen outside admin.'
-          : 'Maintenance mode disabled. The project is live again.'
-      );
-    } catch (toggleError) {
-      const message =
-        toggleError instanceof Error && toggleError.message
-          ? toggleError.message
-          : 'Failed to update maintenance mode.';
       showError(message);
     } finally {
       setFeatureSaving(false);
@@ -1039,12 +1046,6 @@ const AdminPage = () => {
                         Passport Mode:{' '}
                         <span className={passportModeEnabled ? 'font-semibold text-emerald-200' : 'font-semibold text-gray-200'}>
                           {featureLoading ? 'Loading...' : passportModeEnabled ? 'Enabled' : 'Disabled'}
-                        </span>
-                      </div>
-                      <div className="mt-1">
-                        Maintenance:{' '}
-                        <span className={maintenanceModeEnabled ? 'font-semibold text-rose-200' : 'font-semibold text-gray-200'}>
-                          {featureLoading ? 'Loading...' : maintenanceModeEnabled ? 'Enabled' : 'Disabled'}
                         </span>
                       </div>
                     </div>
@@ -1358,41 +1359,6 @@ const AdminPage = () => {
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-rose-400/15 bg-[linear-gradient(180deg,rgba(244,63,94,0.08),rgba(15,23,42,0.28))] p-4 sm:p-6">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-rose-200">Project access</p>
-                      <h2 className="mt-2 text-xl font-semibold text-white">Maintenance Mode</h2>
-                      <p className="mt-2 max-w-2xl text-sm text-gray-300">
-                        When enabled, the entire project shows a broken-page notice for everyone except admins inside the admin panel.
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                      <div className="text-right">
-                        <p className="text-xs uppercase tracking-[0.18em] text-gray-400">Status</p>
-                        <p className={`text-sm font-semibold ${maintenanceModeEnabled ? 'text-rose-300' : 'text-slate-300'}`}>
-                          {featureLoading ? 'Loading...' : maintenanceModeEnabled ? 'Enabled' : 'Disabled'}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void handleToggleMaintenanceMode()}
-                        disabled={featureLoading || featureSaving}
-                        className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition ${
-                          maintenanceModeEnabled
-                            ? 'bg-rose-500/15 text-rose-200 hover:bg-rose-500/20'
-                            : 'bg-amber-500/15 text-amber-200 hover:bg-amber-500/20'
-                        } disabled:cursor-not-allowed disabled:opacity-60`}
-                      >
-                        {featureSaving
-                          ? 'Updating...'
-                          : maintenanceModeEnabled
-                            ? 'Disable Maintenance'
-                            : 'Enable Maintenance'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
               </div>
             ) : null}
 
@@ -1450,7 +1416,7 @@ const AdminPage = () => {
                             <div className="grid grid-cols-2 gap-3">
                               <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
                                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Role</p>
-                                <p className="mt-1 text-sm text-white">{String(user.role || 'user')}</p>
+                                <p className="mt-1 text-sm text-white">{getRoleSummaryLabel(user)}</p>
                               </div>
                               <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
                                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Status</p>
@@ -1497,7 +1463,7 @@ const AdminPage = () => {
                             </div>
                             <div>
                               <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-medium text-white">
-                                {String(user.role || 'user')}
+                                {getRoleSummaryLabel(user)}
                               </span>
                             </div>
                             <div>
@@ -2003,6 +1969,13 @@ const AdminPage = () => {
                 </div>
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <label className="flex items-center justify-between rounded-2xl border border-violet-400/15 bg-violet-500/5 px-4 py-3">
+                    <div>
+                      <span className="text-sm text-white">Developer hub access</span>
+                      <p className="mt-1 text-xs text-violet-200/80">Allows entry into the developer hub without changing the base role.</p>
+                    </div>
+                    <input type="checkbox" checked={editingUser.hasDeveloperAccess} onChange={(e) => updateEditingField('hasDeveloperAccess', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
+                  </label>
                   <label className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
                     <span className="text-sm text-white">Onboarding completed</span>
                     <input type="checkbox" checked={editingUser.onboardingCompleted} onChange={(e) => updateEditingField('onboardingCompleted', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />

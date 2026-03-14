@@ -17,6 +17,7 @@ export interface IUserProfile extends DocumentData {
     name: string;
     email: string;
     role?: string;
+    roles?: string[];
     gender: string;
     age: number;
     denomination: string;
@@ -49,6 +50,21 @@ const resolveUserRole = (email: unknown, role?: unknown): string => {
     }
 
     return 'user';
+};
+
+const resolveUserRoles = (email: unknown, roles?: unknown): string[] => {
+    const normalizedRoles = Array.isArray(roles)
+        ? roles
+            .filter((value): value is string => typeof value === 'string')
+            .map((value) => value.trim().toLowerCase())
+            .filter(Boolean)
+        : [];
+
+    if (typeof email === 'string' && email.trim().toLowerCase() === PRIMARY_ADMIN_EMAIL) {
+        return Array.from(new Set([...normalizedRoles, 'developer']));
+    }
+
+    return Array.from(new Set(normalizedRoles));
 };
 
 // Create a Multer instance using the Cloudinary storage engine
@@ -124,6 +140,7 @@ const createProfileAfterFirebaseRegister = async (req: Request, res: Response) =
             name, 
             email, 
             role: resolveUserRole(email),
+            roles: resolveUserRoles(email),
             gender, 
             age: parseInt(age), 
             denomination, 

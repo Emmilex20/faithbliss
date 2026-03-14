@@ -4,6 +4,7 @@ import {
   getMe,
   getAllUsers,
   getAdminPlatformStats,
+  getDeveloperOverview,
   getUserById,
   getOnboardingDebug,
   updateUserProfile,
@@ -13,6 +14,7 @@ import {
   getFeatureSettings,
   getPublicFeatureSettings,
   updateFeatureSettings,
+  updateDeveloperFeatureSettings,
   updateUserRole,
   updateUserByAdmin,
   resetUserPasswordByAdmin,
@@ -38,7 +40,9 @@ router.post('/me/profile-booster/activate', protect, activateProfileBooster);
 router.get('/public-feature-settings', getPublicFeatureSettings);
 router.get('/feature-settings', protect, getFeatureSettings);
 router.get('/admin/platform-stats', protect, getAdminPlatformStats);
+router.get('/developer/overview', protect, getDeveloperOverview);
 router.patch('/feature-settings', protect, updateFeatureSettings);
+router.patch('/developer/feature-settings', protect, updateDeveloperFeatureSettings);
 router.patch('/:id/role', protect, updateUserRole);
 router.patch('/:id', protect, updateUserByAdmin);
 router.post('/:id/reset-password', protect, resetUserPasswordByAdmin);

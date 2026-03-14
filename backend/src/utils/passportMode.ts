@@ -3,6 +3,7 @@ import { db } from '../config/firebase-admin';
 type PassportFeatureSettings = {
   passportModeEnabled: boolean;
   maintenanceModeEnabled: boolean;
+  shutdownModeEnabled: boolean;
 };
 
 type PassportUserLike = {
@@ -122,6 +123,7 @@ export const getPassportFeatureSettings = async (): Promise<PassportFeatureSetti
   return {
     passportModeEnabled: Boolean(data?.passportModeEnabled),
     maintenanceModeEnabled: Boolean(data?.maintenanceModeEnabled),
+    shutdownModeEnabled: Boolean(data?.shutdownModeEnabled),
   };
 };
 
@@ -132,6 +134,7 @@ export const setPassportFeatureSettings = async (
     {
       passportModeEnabled: Boolean(settings.passportModeEnabled),
       maintenanceModeEnabled: Boolean(settings.maintenanceModeEnabled),
+      shutdownModeEnabled: Boolean(settings.shutdownModeEnabled),
       updatedAt: new Date().toISOString(),
     },
     { merge: true }
@@ -140,6 +143,7 @@ export const setPassportFeatureSettings = async (
   return {
     passportModeEnabled: Boolean(settings.passportModeEnabled),
     maintenanceModeEnabled: Boolean(settings.maintenanceModeEnabled),
+    shutdownModeEnabled: Boolean(settings.shutdownModeEnabled),
   };
 };
 

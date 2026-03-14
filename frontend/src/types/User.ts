@@ -4,7 +4,8 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role?: 'user' | 'admin' | string;
+  role?: 'user' | 'admin' | 'developer' | string;
+  roles?: string[];
   onboardingCompleted: boolean;
 
   age: number;

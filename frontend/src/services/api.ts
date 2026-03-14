@@ -395,7 +395,8 @@ export interface UpdateUserRoleResponse {
     id: string;
     email: string;
     name: string;
-    role: string;
+    role: 'user' | 'admin' | string;
+    roles?: string[];
   };
 }
 
@@ -403,6 +404,8 @@ export interface AdminUpdateUserPayload {
   name?: string;
   email?: string;
   role?: 'user' | 'admin';
+  roles?: string[];
+  hasDeveloperAccess?: boolean;
   age?: number;
   gender?: string;
   location?: string;
@@ -422,6 +425,7 @@ export interface AdminUpdateUserResponse {
     name: string;
     email: string;
     role?: string;
+    roles?: string[];
     age: number;
     gender: string;
     location: string;
@@ -457,6 +461,7 @@ export interface LocalizedPricingQuoteResponse {
 export interface FeatureSettingsResponse {
   passportModeEnabled: boolean;
   maintenanceModeEnabled: boolean;
+  shutdownModeEnabled: boolean;
 }
 
 export interface AdminPlatformStatsResponse {
@@ -465,6 +470,31 @@ export interface AdminPlatformStatsResponse {
   activeToday: number;
   totalMatches: number;
   activeBoosts: number;
+}
+
+export interface DeveloperOverviewResponse {
+  summary: {
+    totalUsers: number;
+    admins: number;
+    developers: number;
+    completedOnboarding: number;
+    activePremium: number;
+    activeToday: number;
+    activeBoosts: number;
+    totalMatches: number;
+    totalTickets: number;
+    openTickets: number;
+    respondedTickets: number;
+  };
+  featureSettings: FeatureSettingsResponse;
+  recentTickets: Array<{
+    id: string;
+    type: 'HELP' | 'REPORT' | string;
+    subject: string;
+    status: string;
+    reporterEmail: string;
+    createdAt: string | null;
+  }>;
 }
 
 export interface UpdatePassportModeResponse {
@@ -811,24 +841,26 @@ export const UserAPI = {
   },
 
   getFeatureSettings: async (): Promise<FeatureSettingsResponse> => {
-    return apiRequest('/api/users/feature-settings');
+    return apiRequest(`/api/users/feature-settings?ts=${Date.now()}`);
   },
 
   getPublicFeatureSettings: async (): Promise<FeatureSettingsResponse> => {
-    return apiRequest(
-      '/api/users/public-feature-settings',
-      {
-        method: 'GET',
-        cache: 'no-store',
-      },
-      false
-    );
+    return apiRequest(`/api/users/public-feature-settings?ts=${Date.now()}`, { method: 'GET' }, false);
   },
 
   updateFeatureSettings: async (
-    payload: FeatureSettingsResponse
+    payload: Partial<FeatureSettingsResponse>
   ): Promise<FeatureSettingsResponse & { message: string }> => {
     return apiRequest('/api/users/feature-settings', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  updateDeveloperFeatureSettings: async (
+    payload: Partial<FeatureSettingsResponse>
+  ): Promise<FeatureSettingsResponse & { message: string }> => {
+    return apiRequest('/api/users/developer/feature-settings', {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });
@@ -916,6 +948,9 @@ export const UserAPI = {
       method: 'PATCH',
       body: JSON.stringify({ role }),
     });
+  },
+  getDeveloperOverview: async (): Promise<DeveloperOverviewResponse> => {
+    return apiRequest('/api/users/developer/overview');
   },
 
   adminUpdateUser: async (userId: string, payload: AdminUpdateUserPayload): Promise<AdminUpdateUserResponse> => {
