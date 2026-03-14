@@ -17,7 +17,6 @@ import { useToast } from '@/contexts/ToastContext';
 import {
   API,
   type LocalizedPricingQuoteResponse,
-  type ProfileBoosterPricingQuote,
   type ProfileBoosterPricingQuoteResponse,
 } from '@/services/api';
 import {
