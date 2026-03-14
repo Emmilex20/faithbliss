@@ -333,6 +333,7 @@ export interface ProfileBoosterPaymentInitResponse {
   authorizationUrl: string;
   accessCode: string;
   reference: string;
+  bundleKey: 'single' | 'bundle';
   bundleSize: number;
   region: 'nigeria' | 'africa' | 'global';
   countryCode: string | null;
@@ -346,6 +347,7 @@ export interface ProfileBoosterPaymentInitResponse {
 
 export interface ProfileBoosterPricingQuote {
   productType: 'profile_booster';
+  bundleKey: 'single' | 'bundle';
   bundleSize: number;
   region: 'nigeria' | 'africa' | 'global';
   countryCode: string | null;
@@ -356,6 +358,15 @@ export interface ProfileBoosterPricingQuote {
   chargeAmountSubunits: number;
   exchangeRate: number;
   displayLabel: string;
+}
+
+export interface ProfileBoosterPricingQuoteResponse {
+  countryCode: string | null;
+  region: 'nigeria' | 'africa' | 'global';
+  quotes: {
+    single: ProfileBoosterPricingQuote;
+    bundle: ProfileBoosterPricingQuote;
+  };
 }
 
 export interface VerifyPaymentResponse {
@@ -1074,7 +1085,7 @@ export const PaymentAPI = {
   getQuote: async (): Promise<LocalizedPricingQuoteResponse> => {
     return apiRequest('/api/payments/quote');
   },
-  getProfileBoosterQuote: async (): Promise<ProfileBoosterPricingQuote> => {
+  getProfileBoosterQuote: async (): Promise<ProfileBoosterPricingQuoteResponse> => {
     return apiRequest('/api/payments/profile-booster/quote');
   },
   getPlans: async (): Promise<{ plans: SubscriptionPlan[] }> => {
@@ -1086,9 +1097,10 @@ export const PaymentAPI = {
       body: JSON.stringify(payload),
     });
   },
-  buyProfileBooster: async (): Promise<ProfileBoosterPaymentInitResponse> => {
+  buyProfileBooster: async (payload?: { bundleKey?: 'single' | 'bundle' }): Promise<ProfileBoosterPaymentInitResponse> => {
     return apiRequest('/api/payments/profile-booster/pay', {
       method: 'POST',
+      body: JSON.stringify(payload ?? { bundleKey: 'bundle' }),
     });
   },
   initialize: async (payload: { tier: 'premium' | 'elite'; currency: 'NGN' | 'USD' }): Promise<{

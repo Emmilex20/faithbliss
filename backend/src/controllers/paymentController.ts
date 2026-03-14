@@ -92,6 +92,7 @@ type PaymentAnalyticsRecord = {
 };
 
 type PaymentProductType = 'subscription' | 'profile_booster';
+type ProfileBoosterBundleKey = 'single' | 'bundle';
 
 const PRIMARY_ADMIN_EMAIL = 'aginaemmanuel6@gmail.com';
 
@@ -100,6 +101,25 @@ const PLAN_METADATA: Record<PlanTier, { name: string }> = {
   elite: { name: 'Pro Plan' },
 };
 const PROFILE_BOOSTER_PRICE_USD = 7;
+const PROFILE_BOOSTER_SINGLE_PRICE_USD = 4;
+
+const normalizeProfileBoosterBundleKey = (value: unknown): ProfileBoosterBundleKey =>
+  value === 'single' ? 'single' : 'bundle';
+
+const normalizeProfileBoosterCredits = (value: unknown): number => {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.max(1, Math.floor(value));
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.max(1, Math.floor(parsed));
+    }
+  }
+
+  return PROFILE_BOOST_PURCHASE_CREDITS;
+};
 
 const isAdminFromUserDoc = (userData: Record<string, any> | undefined): boolean => {
   const email = typeof userData?.email === 'string' ? userData.email.trim().toLowerCase() : '';
@@ -648,9 +668,19 @@ export const getLocalizedProfileBoosterQuote = async (req: Request, res: Respons
     const clientIp = extractClientIp(req.headers as Record<string, unknown>);
     const userPricingContext = req.userId ? await getUserPricingContext(req.userId) : null;
     const fallbackCountryCode = inferCountryCodeFromUser(userPricingContext);
-    const quote = await getRegionalProfileBoosterQuote(clientIp, fallbackCountryCode);
+    const [single, bundle] = await Promise.all([
+      getRegionalProfileBoosterQuote(clientIp, 'single', fallbackCountryCode),
+      getRegionalProfileBoosterQuote(clientIp, 'bundle', fallbackCountryCode),
+    ]);
 
-    return res.status(200).json(quote);
+    return res.status(200).json({
+      countryCode: single.countryCode,
+      region: single.region,
+      quotes: {
+        single,
+        bundle,
+      },
+    });
   } catch (error: unknown) {
     const message =
       error instanceof Error && error.message
@@ -664,6 +694,7 @@ export const initializeProfileBoosterPurchase = async (req: Request, res: Respon
   try {
     const userId = req.userId;
     const email = req.user?.email || req.body?.email;
+    const bundleKey = normalizeProfileBoosterBundleKey(req.body?.bundleKey);
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized: Firebase UID missing.' });
@@ -686,7 +717,7 @@ export const initializeProfileBoosterPurchase = async (req: Request, res: Respon
     const callbackUrl = callbackBaseUrl ? `${callbackBaseUrl.replace(/\/+$/, '')}/payment-success` : undefined;
     const clientIp = extractClientIp(req.headers as Record<string, unknown>);
     const fallbackCountryCode = inferCountryCodeFromUser(userData as UserPricingContext);
-    const pricingQuote = await getRegionalProfileBoosterQuote(clientIp, fallbackCountryCode);
+    const pricingQuote = await getRegionalProfileBoosterQuote(clientIp, bundleKey, fallbackCountryCode);
 
     const response = await initializeTransaction({
       email,
@@ -696,6 +727,8 @@ export const initializeProfileBoosterPurchase = async (req: Request, res: Respon
       metadata: {
         userId,
         productType: 'profile_booster' satisfies PaymentProductType,
+        bundleKey: pricingQuote.bundleKey,
+        creditsToGrant: pricingQuote.bundleSize,
         pricingRegion: pricingQuote.region,
         countryCode: pricingQuote.countryCode,
         displayCurrency: pricingQuote.displayCurrency,
@@ -711,6 +744,7 @@ export const initializeProfileBoosterPurchase = async (req: Request, res: Respon
       authorizationUrl: response.data.authorization_url,
       accessCode: response.data.access_code,
       reference: response.data.reference,
+      bundleKey: pricingQuote.bundleKey,
       bundleSize: pricingQuote.bundleSize,
       region: pricingQuote.region,
       countryCode: pricingQuote.countryCode,
@@ -1002,10 +1036,17 @@ export const verifySubscription = async (req: Request, res: Response) => {
       : 'subscription';
 
     if (productType === 'profile_booster') {
+      const creditsToGrant = normalizeProfileBoosterCredits(metadata.creditsToGrant);
+      const displayAmountMajor =
+        typeof metadata.displayAmountMajor === 'number'
+          ? metadata.displayAmountMajor
+          : creditsToGrant === 1
+            ? PROFILE_BOOSTER_SINGLE_PRICE_USD
+            : PROFILE_BOOSTER_PRICE_USD;
       const boosterGrant = await grantProfileBoosterForPayment(
         userId,
         data.reference,
-        PROFILE_BOOST_PURCHASE_CREDITS
+        creditsToGrant
       );
       await upsertProfileBoosterPurchase(userId, {
         productType: 'profile_booster',
@@ -1016,10 +1057,7 @@ export const verifySubscription = async (req: Request, res: Response) => {
           typeof metadata.pricingRegion === 'string' ? metadata.pricingRegion : 'global',
         displayCurrency:
           typeof metadata.displayCurrency === 'string' ? metadata.displayCurrency : 'USD',
-        displayAmountMajor:
-          typeof metadata.displayAmountMajor === 'number'
-            ? metadata.displayAmountMajor
-            : PROFILE_BOOSTER_PRICE_USD,
+        displayAmountMajor,
         chargeCurrency:
           typeof metadata.chargeCurrency === 'string' ? metadata.chargeCurrency : data.currency || 'NGN',
         chargeAmountMajor:
@@ -1041,7 +1079,7 @@ export const verifySubscription = async (req: Request, res: Response) => {
       });
       return res.status(200).json({
         message: boosterGrant.granted
-          ? `Profile booster bundle purchased successfully. ${PROFILE_BOOST_PURCHASE_CREDITS} credits added.`
+          ? `Profile booster bundle purchased successfully. ${creditsToGrant} credit${creditsToGrant === 1 ? '' : 's'} added.`
           : 'Profile booster payment already processed.',
         purchaseType: 'profile_booster',
         data,
@@ -1159,10 +1197,17 @@ export const handlePaystackWebhook = async (req: Request, res: Response) => {
         : 'subscription';
 
       if (productType === 'profile_booster') {
+        const creditsToGrant = normalizeProfileBoosterCredits(metadata.creditsToGrant);
+        const displayAmountMajor =
+          typeof metadata.displayAmountMajor === 'number'
+            ? metadata.displayAmountMajor
+            : creditsToGrant === 1
+              ? PROFILE_BOOSTER_SINGLE_PRICE_USD
+              : PROFILE_BOOSTER_PRICE_USD;
         await grantProfileBoosterForPayment(
           userId,
           data.reference,
-          PROFILE_BOOST_PURCHASE_CREDITS
+          creditsToGrant
         );
         await upsertProfileBoosterPurchase(userId, {
           productType: 'profile_booster',
@@ -1173,10 +1218,7 @@ export const handlePaystackWebhook = async (req: Request, res: Response) => {
             typeof metadata.pricingRegion === 'string' ? metadata.pricingRegion : 'global',
           displayCurrency:
             typeof metadata.displayCurrency === 'string' ? metadata.displayCurrency : 'USD',
-          displayAmountMajor:
-            typeof metadata.displayAmountMajor === 'number'
-              ? metadata.displayAmountMajor
-              : PROFILE_BOOSTER_PRICE_USD,
+          displayAmountMajor,
           chargeCurrency:
             typeof metadata.chargeCurrency === 'string' ? metadata.chargeCurrency : data.currency || 'NGN',
           chargeAmountMajor:

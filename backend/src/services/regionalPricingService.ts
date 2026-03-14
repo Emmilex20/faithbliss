@@ -23,6 +23,7 @@ export type RegionalPricingQuote = {
 
 export type ProfileBoosterPricingQuote = {
   productType: 'profile_booster';
+  bundleKey: 'single' | 'bundle';
   bundleSize: number;
   region: PricingRegion;
   countryCode: string | null;
@@ -46,8 +47,11 @@ const GLOBAL_USD_PRICE_CATALOG: Record<BillingCycle, number> = {
 };
 
 const PROFILE_BOOSTER_AFRICA_PRICE_NGN = 2000;
+const PROFILE_BOOSTER_SINGLE_AFRICA_PRICE_NGN = 800;
 const PROFILE_BOOSTER_GLOBAL_PRICE_USD = 7;
+const PROFILE_BOOSTER_SINGLE_GLOBAL_PRICE_USD = 4;
 const PROFILE_BOOSTER_BUNDLE_SIZE = 5;
+const PROFILE_BOOSTER_SINGLE_SIZE = 1;
 
 const AFRICAN_COUNTRY_CODES = new Set([
   'AO', 'BF', 'BI', 'BJ', 'BW', 'CD', 'CF', 'CG', 'CI', 'CM', 'CV', 'DJ', 'DZ', 'EG', 'EH', 'ER',
@@ -256,67 +260,83 @@ export const getRegionalPricingQuote = async (
   };
 };
 
-export const getRegionalProfileBoosterQuote = async (
-  ipAddress: string | null,
-  fallbackCountryCode?: string | null,
-): Promise<ProfileBoosterPricingQuote> => {
-  const geo = await lookupCountryByIp(ipAddress);
-  const resolvedCountryCode = geo.countryCode || (fallbackCountryCode ? fallbackCountryCode.trim().toUpperCase() : null);
-  const region = getRegionFromCountry(resolvedCountryCode);
-  const usdRates = await getUsdExchangeRates();
+const buildRegionalProfileBoosterQuote = (
+  bundleKey: 'single' | 'bundle',
+  region: PricingRegion,
+  countryCode: string | null,
+  usdRates: Record<string, number>,
+): ProfileBoosterPricingQuote => {
+  const bundleSize = bundleKey === 'single' ? PROFILE_BOOSTER_SINGLE_SIZE : PROFILE_BOOSTER_BUNDLE_SIZE;
+  const africaBasePrice = bundleKey === 'single' ? PROFILE_BOOSTER_SINGLE_AFRICA_PRICE_NGN : PROFILE_BOOSTER_AFRICA_PRICE_NGN;
+  const globalBasePrice = bundleKey === 'single' ? PROFILE_BOOSTER_SINGLE_GLOBAL_PRICE_USD : PROFILE_BOOSTER_GLOBAL_PRICE_USD;
 
   if (region === 'nigeria') {
     return {
       productType: 'profile_booster',
-      bundleSize: PROFILE_BOOSTER_BUNDLE_SIZE,
+      bundleKey,
+      bundleSize,
       region,
-      countryCode: resolvedCountryCode,
+      countryCode,
       displayCurrency: 'NGN',
-      displayAmountMajor: PROFILE_BOOSTER_AFRICA_PRICE_NGN,
+      displayAmountMajor: africaBasePrice,
       chargeCurrency: 'NGN',
-      chargeAmountMajor: PROFILE_BOOSTER_AFRICA_PRICE_NGN,
-      chargeAmountSubunits: PROFILE_BOOSTER_AFRICA_PRICE_NGN * 100,
+      chargeAmountMajor: africaBasePrice,
+      chargeAmountSubunits: africaBasePrice * 100,
       exchangeRate: 1,
-      displayLabel: formatDisplayLabel('NGN', PROFILE_BOOSTER_AFRICA_PRICE_NGN),
+      displayLabel: formatDisplayLabel('NGN', africaBasePrice),
     };
   }
 
   if (region === 'africa') {
-    const displayCurrency = getAfricanDisplayCurrency(resolvedCountryCode);
+    const displayCurrency = getAfricanDisplayCurrency(countryCode);
     const converted = convertNgnToDisplayWholeAmount(
-      PROFILE_BOOSTER_AFRICA_PRICE_NGN,
+      africaBasePrice,
       displayCurrency,
       usdRates,
     );
 
     return {
       productType: 'profile_booster',
-      bundleSize: PROFILE_BOOSTER_BUNDLE_SIZE,
+      bundleKey,
+      bundleSize,
       region,
-      countryCode: resolvedCountryCode,
+      countryCode,
       displayCurrency,
       displayAmountMajor: converted.amount,
       chargeCurrency: 'NGN',
-      chargeAmountMajor: PROFILE_BOOSTER_AFRICA_PRICE_NGN,
-      chargeAmountSubunits: PROFILE_BOOSTER_AFRICA_PRICE_NGN * 100,
+      chargeAmountMajor: africaBasePrice,
+      chargeAmountSubunits: africaBasePrice * 100,
       exchangeRate: converted.exchangeRate,
       displayLabel: formatDisplayLabel(displayCurrency, converted.amount),
     };
   }
 
-  const ngnCharge = convertUsdToNgnWholeAmount(PROFILE_BOOSTER_GLOBAL_PRICE_USD, usdRates);
+  const ngnCharge = convertUsdToNgnWholeAmount(globalBasePrice, usdRates);
 
   return {
     productType: 'profile_booster',
-    bundleSize: PROFILE_BOOSTER_BUNDLE_SIZE,
+    bundleKey,
+    bundleSize,
     region,
-    countryCode: resolvedCountryCode,
+    countryCode,
     displayCurrency: 'USD',
-    displayAmountMajor: PROFILE_BOOSTER_GLOBAL_PRICE_USD,
+    displayAmountMajor: globalBasePrice,
     chargeCurrency: 'NGN',
     chargeAmountMajor: ngnCharge.amount,
     chargeAmountSubunits: ngnCharge.amount * 100,
     exchangeRate: ngnCharge.exchangeRate,
-    displayLabel: formatDisplayLabel('USD', PROFILE_BOOSTER_GLOBAL_PRICE_USD),
+    displayLabel: formatDisplayLabel('USD', globalBasePrice),
   };
+};
+
+export const getRegionalProfileBoosterQuote = async (
+  ipAddress: string | null,
+  bundleKey: 'single' | 'bundle',
+  fallbackCountryCode?: string | null,
+): Promise<ProfileBoosterPricingQuote> => {
+  const geo = await lookupCountryByIp(ipAddress);
+  const resolvedCountryCode = geo.countryCode || (fallbackCountryCode ? fallbackCountryCode.trim().toUpperCase() : null);
+  const region = getRegionFromCountry(resolvedCountryCode);
+  const usdRates = await getUsdExchangeRates();
+  return buildRegionalProfileBoosterQuote(bundleKey, region, resolvedCountryCode, usdRates);
 };

@@ -18,6 +18,7 @@ import {
   API,
   type LocalizedPricingQuoteResponse,
   type ProfileBoosterPricingQuote,
+  type ProfileBoosterPricingQuoteResponse,
 } from '@/services/api';
 import {
   PREMIUM_PLAN_CONTENT,
@@ -98,18 +99,39 @@ const fallbackQuote: LocalizedPricingQuoteResponse = {
   },
 };
 
-const fallbackBoosterQuote: ProfileBoosterPricingQuote = {
-  productType: 'profile_booster',
-  bundleSize: 5,
-  region: 'global',
+const fallbackBoosterQuote: ProfileBoosterPricingQuoteResponse = {
   countryCode: null,
-  displayCurrency: 'USD',
-  displayAmountMajor: 7,
-  chargeCurrency: 'NGN',
-  chargeAmountMajor: 0,
-  chargeAmountSubunits: 0,
-  exchangeRate: 1,
-  displayLabel: '$7.00',
+  region: 'global',
+  quotes: {
+    single: {
+      productType: 'profile_booster',
+      bundleKey: 'single',
+      bundleSize: 1,
+      region: 'global',
+      countryCode: null,
+      displayCurrency: 'USD',
+      displayAmountMajor: 4,
+      chargeCurrency: 'NGN',
+      chargeAmountMajor: 0,
+      chargeAmountSubunits: 0,
+      exchangeRate: 1,
+      displayLabel: '$4.00',
+    },
+    bundle: {
+      productType: 'profile_booster',
+      bundleKey: 'bundle',
+      bundleSize: 5,
+      region: 'global',
+      countryCode: null,
+      displayCurrency: 'USD',
+      displayAmountMajor: 7,
+      chargeCurrency: 'NGN',
+      chargeAmountMajor: 0,
+      chargeAmountSubunits: 0,
+      exchangeRate: 1,
+      displayLabel: '$7.00',
+    },
+  },
 };
 
 const getErrorMessage = (error: unknown, fallback: string) => {
@@ -166,7 +188,7 @@ const PremiumContent = () => {
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [loadingPlanKey, setLoadingPlanKey] = useState<'premium:monthly' | 'premium:quarterly' | null>(null);
   const [pricingQuote, setPricingQuote] = useState<LocalizedPricingQuoteResponse | null>(null);
-  const [boosterQuote, setBoosterQuote] = useState<ProfileBoosterPricingQuote | null>(null);
+  const [boosterQuote, setBoosterQuote] = useState<ProfileBoosterPricingQuoteResponse | null>(null);
   const [pricingLoading, setPricingLoading] = useState(true);
   const [isActivatingBooster, setIsActivatingBooster] = useState(false);
   const [isBuyingBooster, setIsBuyingBooster] = useState(false);
@@ -244,6 +266,8 @@ const PremiumContent = () => {
 
   const effectiveQuote = pricingQuote ?? fallbackQuote;
   const effectiveBoosterQuote = boosterQuote ?? fallbackBoosterQuote;
+  const boosterSingleQuote = effectiveBoosterQuote.quotes.single;
+  const boosterBundleQuote = effectiveBoosterQuote.quotes.bundle;
 
   const paidPlans = useMemo<DisplayPlan[]>(() => {
     const monthlyQuote = effectiveQuote.quotes.monthly;
@@ -356,7 +380,7 @@ const PremiumContent = () => {
     }
   };
 
-  const handleBuyBooster = async () => {
+  const handleBuyBooster = async (bundleKey: 'single' | 'bundle') => {
     if (!subscriptionDisplay.isActivePaid) {
       showError('Only active premium users can buy extra booster credits.');
       return;
@@ -364,7 +388,7 @@ const PremiumContent = () => {
 
     try {
       setIsBuyingBooster(true);
-      const response = await API.Payment.buyProfileBooster();
+      const response = await API.Payment.buyProfileBooster({ bundleKey });
       if (!response.authorizationUrl) {
         throw new Error('Booster checkout URL is unavailable.');
       }
@@ -529,17 +553,25 @@ const PremiumContent = () => {
                       )}
                       <button
                         type="button"
-                        onClick={handleBuyBooster}
+                        onClick={() => handleBuyBooster('bundle')}
                         disabled={!subscriptionDisplay.isActivePaid || isBuyingBooster}
                         className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-fuchsia-300/25 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:border-fuchsia-200/40 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[13.5rem]"
                       >
-                        {isBuyingBooster ? 'Starting checkout...' : `Buy ${effectiveBoosterQuote.bundleSize} for ${effectiveBoosterQuote.displayLabel}`}
+                        {isBuyingBooster ? 'Starting checkout...' : `Buy ${boosterBundleQuote.bundleSize} for ${boosterBundleQuote.displayLabel}`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBuyBooster('single')}
+                        disabled={!subscriptionDisplay.isActivePaid || isBuyingBooster}
+                        className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-amber-300/25 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-white transition hover:border-amber-200/40 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[13.5rem]"
+                      >
+                        {isBuyingBooster ? 'Starting checkout...' : `Buy ${boosterSingleQuote.bundleSize} for ${boosterSingleQuote.displayLabel}`}
                       </button>
                       {!subscriptionDisplay.isActivePaid ? (
                         <span className="text-xs text-gray-300">Boosters unlock with active premium access.</span>
                       ) : (
                         <span className="text-xs text-gray-300">
-                          {effectiveBoosterQuote.bundleSize}-credit booster bundle. {getPricingNote(effectiveBoosterQuote.region, effectiveBoosterQuote.displayCurrency)}
+                          {boosterBundleQuote.bundleSize}-credit bundle and {boosterSingleQuote.bundleSize}-credit top-up available. {getPricingNote(boosterBundleQuote.region, boosterBundleQuote.displayCurrency)}
                         </span>
                       )}
                     </div>
