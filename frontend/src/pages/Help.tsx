@@ -1,7 +1,7 @@
 // src/pages/Help.tsx
 
 import { useEffect, useState } from 'react';
-import { ArrowLeft, HelpCircle, Send } from 'lucide-react';
+import { ArrowLeft, HelpCircle, Send, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { TopBar } from '@/components/dashboard/TopBar';
@@ -90,6 +90,30 @@ const HelpContent = () => {
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <Link
+            to="/safety-note"
+            className="group flex items-start justify-between gap-4 rounded-[1.7rem] border border-cyan-300/15 bg-[linear-gradient(135deg,rgba(34,211,238,0.10),rgba(14,165,233,0.05),rgba(15,23,42,0.28))] p-5 transition hover:border-cyan-200/30 hover:bg-[linear-gradient(135deg,rgba(34,211,238,0.14),rgba(14,165,233,0.08),rgba(15,23,42,0.34))]"
+          >
+            <div className="flex items-start gap-4">
+              <div className="rounded-2xl bg-cyan-500/15 p-3 text-cyan-200">
+                <ShieldCheck className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-200">Safety note</p>
+                <h3 className="mt-2 text-xl font-semibold text-white">Safe dating guidance built for real conversations</h3>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-300">
+                  Read practical advice for spotting scams, protecting your privacy, planning first dates safely, and reporting concerning behavior quickly.
+                </p>
+              </div>
+            </div>
+            <span className="hidden rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/90 sm:inline-flex">
+              Open
+            </span>
+          </Link>
+
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-white/5 p-6">

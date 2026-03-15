@@ -28,6 +28,7 @@ import Privacy from './pages/Privacy.tsx';
 import Settings from './pages/Settings.tsx';
 import Help from './pages/Help.tsx';
 import Report from './pages/Report.tsx';
+import SafetyNote from './pages/SafetyNote.tsx';
 import Deactivate from './pages/Deactivate.tsx';
 import OnboardingDebug from './pages/OnboardingDebug.tsx';
 import Admin from './pages/Admin.tsx';
@@ -120,6 +121,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="settings" element={<Settings />} />
                 <Route path="help" element={<Help />} />
                 <Route path="report" element={<Report />} />
+                <Route path="safety-note" element={<SafetyNote />} />
                 <Route path="deactivate" element={<Deactivate />} />
                 <Route path="debug/onboarding" element={<OnboardingDebug />} />
 
