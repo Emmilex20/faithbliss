@@ -53,6 +53,42 @@ export const verifyTransaction = async (reference: string) => {
   });
 };
 
+export const chargeAuthorization = async (payload: {
+  authorization_code: string;
+  email: string;
+  amount: number;
+  currency?: string;
+  reference?: string;
+  metadata?: Record<string, unknown>;
+  callback_url?: string;
+  queue?: boolean;
+}) => {
+  return paystackRequest<Record<string, any>>('/transaction/charge_authorization', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+};
+
+export const enableSubscription = async (payload: {
+  code: string;
+  token: string;
+}) => {
+  return paystackRequest<Record<string, any>>('/subscription/enable', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+};
+
+export const disableSubscription = async (payload: {
+  code: string;
+  token: string;
+}) => {
+  return paystackRequest<Record<string, any>>('/subscription/disable', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+};
+
 export const getPlanDetails = async (planCode: string) => {
   return paystackRequest<{
     id: number;

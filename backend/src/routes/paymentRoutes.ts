@@ -12,6 +12,7 @@ import {
   initializeLocalizedSubscription,
   initializeSubscription,
   listSubscriptionPlans,
+  updateSubscriptionAutoRenew,
   verifySubscription,
 } from '../controllers/paymentController';
 
@@ -27,6 +28,7 @@ router.get('/quote', protect, getLocalizedPricingQuote);
 router.get('/profile-booster/quote', protect, getLocalizedProfileBoosterQuote);
 router.get('/plans', protect, listSubscriptionPlans);
 router.post('/pay', protect, initializeLocalizedSubscription);
+router.patch('/subscription/auto-renew', protect, updateSubscriptionAutoRenew);
 router.post('/profile-booster/pay', protect, initializeProfileBoosterPurchase);
 router.post('/initialize', protect, initializeSubscription);
 router.post('/verify', protect, verifySubscription);

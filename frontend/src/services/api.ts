@@ -375,6 +375,12 @@ export interface VerifyPaymentResponse {
   data: Record<string, unknown>;
 }
 
+export interface UpdateSubscriptionAutoRenewResponse {
+  message: string;
+  autoRenewEnabled: boolean;
+  renewalProvider: 'plan' | 'authorization';
+}
+
 export interface LocalizedPricingQuote {
   tier: 'premium';
   billingCycle: 'monthly' | 'quarterly';
@@ -1129,6 +1135,12 @@ export const PaymentAPI = {
   pay: async (payload: { tier: 'premium'; billingCycle: 'monthly' | 'quarterly' }): Promise<LocalizedPaymentInitResponse> => {
     return apiRequest('/api/pay', {
       method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+  updateSubscriptionAutoRenew: async (payload: { enabled: boolean }): Promise<UpdateSubscriptionAutoRenewResponse> => {
+    return apiRequest('/api/payments/subscription/auto-renew', {
+      method: 'PATCH',
       body: JSON.stringify(payload),
     });
   },

@@ -25,6 +25,7 @@ import uploadRoutes from './routes/uploadRoutes';
 import userRoutes from './routes/userRoutes';
 import { protect } from './middleware/authMiddleware';
 import { startStoryCleanupService } from './services/storyCleanupService';
+import { startSubscriptionRenewalService } from './services/subscriptionRenewalService';
 import { initializeSocketIO } from './socket/socket';
 
 const app = express();
@@ -116,6 +117,7 @@ app.use((err: any, _req: Request, res: Response, _next: any) => {
 
 httpServer.listen(PORT, () => {
   startStoryCleanupService();
+  startSubscriptionRenewalService();
   console.log(`Server running on port ${PORT} (HTTP + WebSocket)`);
 });
 

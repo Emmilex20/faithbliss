@@ -17,6 +17,7 @@ import Profile from './pages/Profile.tsx'
 import Messages from './pages/Messages.tsx';
 import Notifications from './pages/Notifications.tsx';
 import Premium from './pages/Premium.tsx';
+import InAppPurchases from './pages/InAppPurchases.tsx';
 import PaymentSuccess from './pages/PaymentSuccess.tsx';
 import OnboardingRouteWrapper from './pages/OnboardingPage.tsx';
 import MatchPage from './pages/MatchesPage.tsx';
@@ -114,6 +115,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="messages" element={<Messages />} />
                 <Route path="notifications" element={<Notifications />} />
                 <Route path="premium" element={<Premium />} />
+                <Route path="purchases" element={<InAppPurchases />} />
                 <Route path="payment-success" element={<PaymentSuccess />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="help" element={<Help />} />

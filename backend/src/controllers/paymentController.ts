@@ -4,7 +4,13 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import * as admin from 'firebase-admin';
 import { usersCollection } from '../config/firebase-admin';
-import { getPlanDetails, initializeTransaction, verifyTransaction } from '../services/paystackService';
+import {
+  disableSubscription as disablePaystackSubscription,
+  enableSubscription as enablePaystackSubscription,
+  getPlanDetails,
+  initializeTransaction,
+  verifyTransaction,
+} from '../services/paystackService';
 import { extractClientIp } from '../services/geoLocationService';
 import {
   getRegionalPricingQuote,
@@ -42,7 +48,13 @@ type StoredSubscription = {
   reference?: string;
   customerCode?: string;
   subscriptionCode?: string;
+  subscriptionEmailToken?: string;
   authorizationCode?: string;
+  customerEmail?: string;
+  renewalProvider?: 'plan' | 'authorization';
+  autoRenewEnabled?: boolean;
+  autoRenewDisabledAt?: string;
+  lastChargeAttemptAt?: string;
   nextPaymentDate?: string;
 };
 
@@ -268,6 +280,38 @@ const resolvePlanConfig = (tier: PlanTier, currency: Currency) => {
   return { planCode, fallbackAmount };
 };
 
+const resolveLocalizedSubscriptionPlanConfig = (billingCycle: BillingCycle) => {
+  const envSuffix = billingCycle.toUpperCase();
+  const planCode = process.env[`PAYSTACK_PLAN_CODE_PREMIUM_${envSuffix}`]?.trim();
+  const fallbackAmount = billingCycle === 'quarterly' ? 10000 : 5000;
+
+  if (!planCode) {
+    throw new Error(
+      `Missing PAYSTACK_PLAN_CODE_PREMIUM_${envSuffix}. Create the ${billingCycle} recurring plan in Paystack and set this env var.`
+    );
+  }
+
+  return { planCode, fallbackAmount };
+};
+
+const resolveRenewalProvider = (
+  region: PricingRegion | string | undefined,
+  planCode?: string | null,
+): 'plan' | 'authorization' => {
+  if (typeof region === 'string' && region.trim().toLowerCase() === 'global') {
+    return 'authorization';
+  }
+
+  if (typeof planCode === 'string' && planCode.trim()) {
+    return 'plan';
+  }
+
+  return 'authorization';
+};
+
+const isAutoRenewEnabled = (subscription: StoredSubscription | null | undefined) =>
+  subscription?.autoRenewEnabled !== false;
+
 const resolveLivePlanConfig = async (tier: PlanTier, currency: Currency) => {
   const { planCode, fallbackAmount } = resolvePlanConfig(tier, currency);
 
@@ -472,6 +516,16 @@ const resolveTierFromPlanCode = (planCode?: string | null): PlanTier | undefined
     }
   }
 
+  const localizedMonthlyPlanCode = process.env.PAYSTACK_PLAN_CODE_PREMIUM_MONTHLY?.trim();
+  if (localizedMonthlyPlanCode && localizedMonthlyPlanCode === normalizedPlanCode) {
+    return 'premium';
+  }
+
+  const localizedQuarterlyPlanCode = process.env.PAYSTACK_PLAN_CODE_PREMIUM_QUARTERLY?.trim();
+  if (localizedQuarterlyPlanCode && localizedQuarterlyPlanCode === normalizedPlanCode) {
+    return 'premium';
+  }
+
   return undefined;
 };
 
@@ -536,6 +590,8 @@ export const initializeSubscription = async (req: Request, res: Response) => {
       currency: resolvedCurrency,
       planCode,
       reference: response.data.reference,
+      autoRenewEnabled: true,
+      autoRenewDisabledAt: undefined,
     });
 
     return res.status(200).json({
@@ -580,16 +636,23 @@ export const initializeLocalizedSubscription = async (req: Request, res: Respons
     const userPricingContext = await getUserPricingContext(userId);
     const fallbackCountryCode = inferCountryCodeFromUser(userPricingContext);
     const pricingQuote = await getRegionalPricingQuote(billingCycle, clientIp, fallbackCountryCode);
+    const shouldUsePlanSubscription = pricingQuote.region !== 'global';
+    const planCode = shouldUsePlanSubscription
+      ? resolveLocalizedSubscriptionPlanConfig(billingCycle).planCode
+      : null;
 
     const response = await initializeTransaction({
       email,
       amount: pricingQuote.chargeAmountSubunits,
       currency: pricingQuote.chargeCurrency,
+      ...(planCode ? { plan: planCode } : {}),
       callback_url: callbackUrl,
       metadata: {
         userId,
         tier,
         billingCycle,
+        renewalProvider: shouldUsePlanSubscription ? 'plan' : 'authorization',
+        ...(planCode ? { planCode } : {}),
         pricingRegion: pricingQuote.region,
         countryCode: pricingQuote.countryCode,
         displayCurrency: pricingQuote.displayCurrency,
@@ -611,8 +674,12 @@ export const initializeLocalizedSubscription = async (req: Request, res: Respons
       chargeAmountMajor: pricingQuote.chargeAmountMajor,
       chargeAmountSubunits: pricingQuote.chargeAmountSubunits,
       exchangeRate: pricingQuote.exchangeRate,
-      planCode: null,
+      planCode,
       reference: response.data.reference,
+      customerEmail: email,
+      renewalProvider: shouldUsePlanSubscription ? 'plan' : 'authorization',
+      autoRenewEnabled: true,
+      autoRenewDisabledAt: undefined,
       countryCode: pricingQuote.countryCode,
     });
 
@@ -709,9 +776,6 @@ export const initializeProfileBoosterPurchase = async (req: Request, res: Respon
     }
 
     const userData = userSnapshot.data() as Record<string, any> | undefined;
-    if (!isActivePremiumUser(userData)) {
-      return res.status(403).json({ message: 'An active premium subscription is required to buy additional boosters.' });
-    }
 
     const callbackBaseUrl = process.env.CLIENT_URL?.trim();
     const callbackUrl = callbackBaseUrl ? `${callbackBaseUrl.replace(/\/+$/, '')}/payment-success` : undefined;
@@ -757,6 +821,84 @@ export const initializeProfileBoosterPurchase = async (req: Request, res: Respon
     });
   } catch (error: any) {
     return res.status(400).json({ message: error?.message || 'Booster payment initialization failed.' });
+  }
+};
+
+export const updateSubscriptionAutoRenew = async (req: Request, res: Response) => {
+  try {
+    const userId = req.userId;
+    const { enabled } = req.body as { enabled?: boolean };
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized: Firebase UID missing.' });
+    }
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ message: 'A boolean enabled value is required.' });
+    }
+
+    const existingSubscription = await getStoredSubscription(userId);
+    if (!existingSubscription) {
+      return res.status(404).json({ message: 'No subscription record found for this account.' });
+    }
+
+    const renewalProvider =
+      existingSubscription.renewalProvider ||
+      resolveRenewalProvider(existingSubscription.pricingRegion, existingSubscription.planCode);
+    const currentEnabled = isAutoRenewEnabled(existingSubscription);
+
+    if (enabled === currentEnabled) {
+      return res.status(200).json({
+        message: enabled ? 'Auto-debit is already enabled.' : 'Auto-debit is already paused.',
+        autoRenewEnabled: enabled,
+        renewalProvider,
+      });
+    }
+
+    if (renewalProvider === 'plan') {
+      const subscriptionCode = typeof existingSubscription.subscriptionCode === 'string'
+        ? existingSubscription.subscriptionCode.trim()
+        : '';
+      const subscriptionEmailToken = typeof existingSubscription.subscriptionEmailToken === 'string'
+        ? existingSubscription.subscriptionEmailToken.trim()
+        : '';
+
+      if (!subscriptionCode || !subscriptionEmailToken) {
+        return res.status(400).json({
+          message: 'This Paystack subscription cannot be updated yet. Please contact support if your plan was created before subscription controls were added.',
+        });
+      }
+
+      if (enabled) {
+        await enablePaystackSubscription({
+          code: subscriptionCode,
+          token: subscriptionEmailToken,
+        });
+      } else {
+        await disablePaystackSubscription({
+          code: subscriptionCode,
+          token: subscriptionEmailToken,
+        });
+      }
+    }
+
+    await updateSubscription(userId, {
+      renewalProvider,
+      autoRenewEnabled: enabled,
+      autoRenewDisabledAt: enabled ? admin.firestore.FieldValue.delete() : new Date().toISOString(),
+      lastChargeAttemptAt: admin.firestore.FieldValue.delete(),
+    });
+
+    return res.status(200).json({
+      message: enabled ? 'Auto-debit enabled successfully.' : 'Auto-debit paused successfully.',
+      autoRenewEnabled: enabled,
+      renewalProvider,
+    });
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error && error.message
+        ? error.message
+        : 'Unable to update subscription auto-debit.';
+    return res.status(400).json({ message });
   }
 };
 
@@ -1105,6 +1247,9 @@ export const verifySubscription = async (req: Request, res: Response) => {
       (typeof rawPlanCode === 'string' && rawPlanCode.trim()) ||
       (typeof existingSubscription?.planCode === 'string' && existingSubscription.planCode.trim()) ||
       undefined;
+    const pricingRegion =
+      (typeof metadata.pricingRegion === 'string' && metadata.pricingRegion.trim().toLowerCase()) ||
+      existingSubscription?.pricingRegion;
     const nextPaymentDate =
       typeof data.next_payment_date === 'string' && data.next_payment_date.trim()
         ? data.next_payment_date
@@ -1115,9 +1260,7 @@ export const verifySubscription = async (req: Request, res: Response) => {
       tier,
       currency,
       billingCycle: billingCycle === 'quarterly' ? 'quarterly' : 'monthly',
-      pricingRegion:
-        (typeof metadata.pricingRegion === 'string' && metadata.pricingRegion.trim().toLowerCase()) ||
-        existingSubscription?.pricingRegion,
+      pricingRegion,
       displayCurrency:
         (typeof metadata.displayCurrency === 'string' && metadata.displayCurrency.trim()) ||
         existingSubscription?.displayCurrency,
@@ -1139,8 +1282,23 @@ export const verifySubscription = async (req: Request, res: Response) => {
           : existingSubscription?.exchangeRate,
       reference: data.reference,
       planCode,
+      subscriptionCode: data.subscription?.subscription_code || data.subscription_code,
+      subscriptionEmailToken: data.subscription?.email_token,
       customerCode: data.customer?.customer_code,
       authorizationCode: data.authorization?.authorization_code,
+      customerEmail:
+        (typeof data.customer?.email === 'string' && data.customer.email.trim()) ||
+        (typeof existingSubscription?.customerEmail === 'string' && existingSubscription.customerEmail.trim()) ||
+        undefined,
+      renewalProvider:
+        (typeof metadata.renewalProvider === 'string' &&
+        ['plan', 'authorization'].includes(metadata.renewalProvider.trim().toLowerCase())
+          ? (metadata.renewalProvider.trim().toLowerCase() as 'plan' | 'authorization')
+          : existingSubscription?.renewalProvider) ||
+        resolveRenewalProvider(pricingRegion, planCode),
+      autoRenewEnabled: isAutoRenewEnabled(existingSubscription),
+      autoRenewDisabledAt: existingSubscription?.autoRenewDisabledAt,
+      lastChargeAttemptAt: undefined,
       nextPaymentDate,
     });
     await grantProfileBoosterForPayment(userId, data.reference);
@@ -1261,6 +1419,9 @@ export const handlePaystackWebhook = async (req: Request, res: Response) => {
         (typeof rawPlanCode === 'string' && rawPlanCode.trim()) ||
         (typeof existingSubscription?.planCode === 'string' && existingSubscription.planCode.trim()) ||
         undefined;
+      const pricingRegion =
+        (typeof metadata.pricingRegion === 'string' && metadata.pricingRegion.trim().toLowerCase()) ||
+        existingSubscription?.pricingRegion;
       const nextPaymentDate =
         typeof data.next_payment_date === 'string' && data.next_payment_date.trim()
           ? data.next_payment_date
@@ -1271,9 +1432,7 @@ export const handlePaystackWebhook = async (req: Request, res: Response) => {
         tier,
         currency,
         billingCycle: billingCycle === 'quarterly' ? 'quarterly' : 'monthly',
-        pricingRegion:
-          (typeof metadata.pricingRegion === 'string' && metadata.pricingRegion.trim().toLowerCase()) ||
-          existingSubscription?.pricingRegion,
+        pricingRegion,
         displayCurrency:
           (typeof metadata.displayCurrency === 'string' && metadata.displayCurrency.trim()) ||
           existingSubscription?.displayCurrency,
@@ -1297,7 +1456,21 @@ export const handlePaystackWebhook = async (req: Request, res: Response) => {
         planCode,
         customerCode: data.customer?.customer_code,
         subscriptionCode: data.subscription?.subscription_code || data.subscription_code,
+        subscriptionEmailToken: data.subscription?.email_token,
         authorizationCode: data.authorization?.authorization_code,
+        customerEmail:
+          (typeof data.customer?.email === 'string' && data.customer.email.trim()) ||
+          (typeof existingSubscription?.customerEmail === 'string' && existingSubscription.customerEmail.trim()) ||
+          undefined,
+        renewalProvider:
+          (typeof metadata.renewalProvider === 'string' &&
+          ['plan', 'authorization'].includes(metadata.renewalProvider.trim().toLowerCase())
+            ? (metadata.renewalProvider.trim().toLowerCase() as 'plan' | 'authorization')
+            : existingSubscription?.renewalProvider) ||
+          resolveRenewalProvider(pricingRegion, planCode),
+        autoRenewEnabled: isAutoRenewEnabled(existingSubscription),
+        autoRenewDisabledAt: existingSubscription?.autoRenewDisabledAt,
+        lastChargeAttemptAt: undefined,
         nextPaymentDate,
       });
       await grantProfileBoosterForPayment(userId, data.reference);

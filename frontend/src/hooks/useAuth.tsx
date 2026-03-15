@@ -422,6 +422,9 @@ const normalizeSubscription = (subscription: Record<string, any> | undefined) =>
         customerCode: typeof subscription.customerCode === "string" ? subscription.customerCode : undefined,
         subscriptionCode: typeof subscription.subscriptionCode === "string" ? subscription.subscriptionCode : undefined,
         authorizationCode: typeof subscription.authorizationCode === "string" ? subscription.authorizationCode : undefined,
+        renewalProvider: typeof subscription.renewalProvider === "string" ? subscription.renewalProvider : undefined,
+        autoRenewEnabled: typeof subscription.autoRenewEnabled === "boolean" ? subscription.autoRenewEnabled : undefined,
+        autoRenewDisabledAt: timestampToIsoString(subscription.autoRenewDisabledAt),
         nextPaymentDate,
         updatedAt,
     };

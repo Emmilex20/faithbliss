@@ -3,7 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef, useState } from 'react';
 import { Bell, Filter, ArrowLeft, Download } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useNotificationUnreadCount } from '@/hooks/useAPI';
 import { useRequireAuth } from '@/hooks/useAuth';
 import ProfileBoosterIcon from '@/components/icons/ProfileBoosterIcon';
@@ -40,6 +40,7 @@ export const TopBar = ({
   showBackButton = false,
   onBack,
 }: TopBarProps) => {
+  const location = useLocation();
   const displayImage = user?.profilePhotos?.photo1 || userImage || '/default-avatar.png';
   const { data: unreadData } = useNotificationUnreadCount();
   const unreadCount = unreadData?.count || 0;
@@ -51,6 +52,7 @@ export const TopBar = ({
   const profileBoosterCredits = typeof user?.profileBoosterCredits === 'number' ? user.profileBoosterCredits : 0;
   const profileBoosterActive = typeof user?.profileBoosterActiveUntil === 'string'
     && Date.parse(user.profileBoosterActiveUntil) > Date.now();
+  const showMobileBoosterShortcut = Boolean(user) && location.pathname !== '/purchases';
 
   const [notificationsAvailable, setNotificationsAvailable] = useState(false);
   const [notificationsPermission, setNotificationsPermission] = useState<'default' | 'granted' | 'denied'>('default');
@@ -148,11 +150,11 @@ export const TopBar = ({
   };
 
   return (
-    <div className="bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 px-3 py-2.5 sm:px-4 sm:py-4 sticky top-0 z-50">
+    <div className="sticky top-0 z-50 border-b border-gray-700/50 bg-gray-900/80 px-2.5 py-2 sm:px-4 sm:py-4 backdrop-blur-xl">
       <div className="absolute inset-0 bg-gradient-to-r from-pink-500/5 via-purple-500/5 to-blue-500/5"></div>
 
       <div className="max-w-7xl mx-auto relative z-10">
-        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-3">
+        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-1.5 sm:gap-3">
           <div className="flex items-center gap-0">
             {showBackButton ? (
               <button
@@ -180,12 +182,12 @@ export const TopBar = ({
 
             <Link
               to="/dashboard"
-              className="flex items-center ml-1 sm:-ml-6 hover:opacity-80 transition-opacity cursor-pointer"
+              className="ml-0.5 flex items-center transition-opacity hover:opacity-80 sm:-ml-6"
             >
               <img
                 src="/FaithBliss-Logo%20Source.svg"
                 alt="FaithBliss"
-                className="-mt-2.5 h-12 w-36 shrink-0 object-cover object-left sm:-mt-2 sm:h-14 sm:w-44"
+                className="-mt-1.5 h-10 w-28 shrink-0 object-cover object-left sm:-mt-2 sm:h-14 sm:w-44"
                 loading="eager"
                 decoding="async"
               />
@@ -203,10 +205,10 @@ export const TopBar = ({
             </div>
           ) : <div />}
 
-          <div className="relative flex items-center gap-2 justify-end">
-            {isPremiumUser && (
+          <div className="relative flex items-center justify-end gap-0.5 sm:gap-2">
+            {user && (
               <Link
-                to="/premium"
+                to="/purchases"
                 className="hidden sm:inline-flex items-center gap-2 rounded-full border border-fuchsia-300/20 bg-[linear-gradient(135deg,rgba(236,72,153,0.14),rgba(124,58,237,0.12))] px-3 py-2 text-xs font-semibold text-white transition hover:border-fuchsia-200/30 hover:bg-[linear-gradient(135deg,rgba(236,72,153,0.18),rgba(124,58,237,0.16))]"
               >
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-black/20">
@@ -241,7 +243,7 @@ export const TopBar = ({
             )}
 
             <Link to="/notifications">
-              <button type="button" className="relative p-2 sm:p-3 hover:bg-white/10 rounded-2xl transition-all hover:scale-105 group">
+              <button type="button" className="group relative rounded-2xl p-1.5 transition-all hover:scale-105 hover:bg-white/10 sm:p-3">
                 <Bell className="w-5 h-5 sm:w-6 sm:h-6 text-gray-300 group-hover:text-white transition-colors" />
                 {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-pink-500 to-red-500 rounded-full flex items-center justify-center">
@@ -251,17 +253,17 @@ export const TopBar = ({
               </button>
             </Link>
 
-            {isPremiumUser && (
-              <Link to="/premium" className="sm:hidden">
+            {showMobileBoosterShortcut && (
+              <Link to="/purchases" className="sm:hidden">
                 <button
                   type="button"
-                  className="relative inline-flex p-2 rounded-2xl text-fuchsia-100 transition-all hover:scale-105 hover:bg-white/10"
+                  className="relative inline-flex rounded-2xl p-1.5 text-fuchsia-100 transition-all hover:scale-105 hover:bg-white/10"
                   aria-label={profileBoosterActive ? 'Profile boost active' : `You have ${profileBoosterCredits} booster credits`}
                 >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[linear-gradient(135deg,rgba(236,72,153,0.28),rgba(124,58,237,0.22))] shadow-[0_10px_18px_rgba(168,85,247,0.18)]">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[linear-gradient(135deg,rgba(236,72,153,0.28),rgba(124,58,237,0.22))] shadow-[0_10px_18px_rgba(168,85,247,0.18)]">
                     <ProfileBoosterIcon className="h-4 w-4" glowId="topbar-booster-mobile" />
                   </div>
-                  <span className={`absolute -right-1 -top-1 min-w-[1.15rem] rounded-full px-1 py-[2px] text-[10px] font-bold leading-none ${
+                  <span className={`absolute -right-1 -top-1 min-w-[1rem] rounded-full px-1 py-[2px] text-[10px] font-bold leading-none ${
                     profileBoosterActive
                       ? 'animate-[pulse_2.2s_ease-in-out_infinite] bg-emerald-500 text-white shadow-[0_0_0_4px_rgba(16,185,129,0.16)]'
                       : 'bg-fuchsia-500 text-white'
@@ -277,7 +279,7 @@ export const TopBar = ({
                 <button
                   type="button"
                   onClick={onToggleFilters}
-                  className={`inline-flex p-2 rounded-2xl transition-all hover:scale-105 sm:hidden ${
+                  className={`inline-flex rounded-2xl p-1.5 transition-all hover:scale-105 sm:hidden ${
                     showFilters
                       ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
                       : 'hover:bg-white/10 text-gray-300 hover:text-white'
@@ -305,9 +307,9 @@ export const TopBar = ({
             <button
               type="button"
               onClick={() => setShowMobileProfileMenu((prev) => !prev)}
-              className="p-2 sm:p-3 hover:bg-white/10 rounded-2xl transition-all hover:scale-105 group lg:hidden"
+              className="group rounded-2xl p-1.5 transition-all hover:scale-105 hover:bg-white/10 sm:p-3 lg:hidden"
             >
-              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full flex items-center justify-center">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-r from-pink-500 to-purple-600 sm:h-8 sm:w-8">
                 {displayImage ? (
                   <img
                     src={displayImage}

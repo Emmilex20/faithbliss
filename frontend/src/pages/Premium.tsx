@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
-  Clock3,
   Crown,
   Sparkles,
   Zap,
@@ -11,13 +10,11 @@ import { Link } from 'react-router-dom';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { TopBar } from '@/components/dashboard/TopBar';
 import { SidePanel } from '@/components/dashboard/SidePanel';
-import ProfileBoosterIcon from '@/components/icons/ProfileBoosterIcon';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import {
   API,
   type LocalizedPricingQuoteResponse,
-  type ProfileBoosterPricingQuoteResponse,
 } from '@/services/api';
 import {
   PREMIUM_PLAN_CONTENT,
@@ -98,41 +95,6 @@ const fallbackQuote: LocalizedPricingQuoteResponse = {
   },
 };
 
-const fallbackBoosterQuote: ProfileBoosterPricingQuoteResponse = {
-  countryCode: null,
-  region: 'global',
-  quotes: {
-    single: {
-      productType: 'profile_booster',
-      bundleKey: 'single',
-      bundleSize: 1,
-      region: 'global',
-      countryCode: null,
-      displayCurrency: 'USD',
-      displayAmountMajor: 4,
-      chargeCurrency: 'NGN',
-      chargeAmountMajor: 0,
-      chargeAmountSubunits: 0,
-      exchangeRate: 1,
-      displayLabel: '$4.00',
-    },
-    bundle: {
-      productType: 'profile_booster',
-      bundleKey: 'bundle',
-      bundleSize: 5,
-      region: 'global',
-      countryCode: null,
-      displayCurrency: 'USD',
-      displayAmountMajor: 7,
-      chargeCurrency: 'NGN',
-      chargeAmountMajor: 0,
-      chargeAmountSubunits: 0,
-      exchangeRate: 1,
-      displayLabel: '$7.00',
-    },
-  },
-};
-
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message.trim()) {
     return error.message;
@@ -163,23 +125,6 @@ const getPricingNote = (region: 'nigeria' | 'africa' | 'global', displayCurrency
   return 'Shown in USD. Paystack charges in NGN at checkout.';
 };
 
-const formatProfileBoosterCountdown = (activeUntil: string | null | undefined) => {
-  if (!activeUntil) return null;
-
-  const timeLeftMs = Date.parse(activeUntil) - Date.now();
-  if (Number.isNaN(timeLeftMs) || timeLeftMs <= 0) return null;
-
-  const totalMinutes = Math.ceil(timeLeftMs / 60000);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m remaining`;
-  }
-
-  return `${minutes}m remaining`;
-};
-
 const PremiumContent = () => {
   const { user, refetchUser } = useAuthContext();
   const { showError, showSuccess } = useToast();
@@ -187,10 +132,7 @@ const PremiumContent = () => {
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [loadingPlanKey, setLoadingPlanKey] = useState<'premium:monthly' | 'premium:quarterly' | null>(null);
   const [pricingQuote, setPricingQuote] = useState<LocalizedPricingQuoteResponse | null>(null);
-  const [boosterQuote, setBoosterQuote] = useState<ProfileBoosterPricingQuoteResponse | null>(null);
   const [pricingLoading, setPricingLoading] = useState(true);
-  const [isActivatingBooster, setIsActivatingBooster] = useState(false);
-  const [isBuyingBooster, setIsBuyingBooster] = useState(false);
 
   const layoutName = user?.name || 'User';
   const layoutImage = user?.profilePhoto1 || undefined;
@@ -202,12 +144,6 @@ const PremiumContent = () => {
   const activeBillingCycle = user?.subscription?.billingCycle === 'quarterly' ? 'quarterly' : 'monthly';
   const normalizedActiveTier: DisplayPlan['tier'] = isPremium ? 'premium' : 'free';
   const subscriptionDisplay = useSubscriptionDisplay(user);
-  const profileBoosterCredits = typeof user?.profileBoosterCredits === 'number' ? user.profileBoosterCredits : 0;
-  const profileBoosterActiveUntil =
-    typeof user?.profileBoosterActiveUntil === 'string' && Date.parse(user.profileBoosterActiveUntil) > Date.now()
-      ? user.profileBoosterActiveUntil
-      : null;
-  const profileBoosterCountdown = formatProfileBoosterCountdown(profileBoosterActiveUntil);
 
   useEffect(() => {
     if (!user?.id) {
@@ -235,18 +171,13 @@ const PremiumContent = () => {
     const loadPricingQuote = async () => {
       try {
         setPricingLoading(true);
-        const [quote, localizedBoosterQuote] = await Promise.all([
-          API.Payment.getQuote(),
-          API.Payment.getProfileBoosterQuote(),
-        ]);
+        const quote = await API.Payment.getQuote();
         if (isMounted) {
           setPricingQuote(quote);
-          setBoosterQuote(localizedBoosterQuote);
         }
       } catch (error: unknown) {
         if (isMounted) {
           setPricingQuote(null);
-          setBoosterQuote(null);
         }
         showError(getErrorMessage(error, 'Unable to load localized pricing.'));
       } finally {
@@ -264,9 +195,6 @@ const PremiumContent = () => {
   }, [showError]);
 
   const effectiveQuote = pricingQuote ?? fallbackQuote;
-  const effectiveBoosterQuote = boosterQuote ?? fallbackBoosterQuote;
-  const boosterSingleQuote = effectiveBoosterQuote.quotes.single;
-  const boosterBundleQuote = effectiveBoosterQuote.quotes.bundle;
 
   const paidPlans = useMemo<DisplayPlan[]>(() => {
     const monthlyQuote = effectiveQuote.quotes.monthly;
@@ -345,56 +273,6 @@ const PremiumContent = () => {
     } catch (error: unknown) {
       setLoadingPlanKey(null);
       showError(getErrorMessage(error, 'Unable to start payment.'));
-    }
-  };
-
-  const handleActivateBooster = async () => {
-    if (!subscriptionDisplay.isActivePaid) {
-      showError('An active premium subscription is required to use profile boosters.');
-      return;
-    }
-
-    if (profileBoosterActiveUntil) {
-      showSuccess('Your profile boost is already live.');
-      return;
-    }
-
-    if (profileBoosterCredits < 1) {
-      showError('No booster credits available yet. Your next premium payment will add one.');
-      return;
-    }
-
-    try {
-      setIsActivatingBooster(true);
-      const response = await API.User.activateProfileBooster();
-      await refetchUser();
-      showSuccess(
-        `Your profile is now boosted for 1 hour. ${response.remainingCredits} credit${response.remainingCredits === 1 ? '' : 's'} left.`,
-        'Booster Activated'
-      );
-    } catch (error: unknown) {
-      showError(getErrorMessage(error, 'Unable to activate your booster right now.'));
-    } finally {
-      setIsActivatingBooster(false);
-    }
-  };
-
-  const handleBuyBooster = async (bundleKey: 'single' | 'bundle') => {
-    if (!subscriptionDisplay.isActivePaid) {
-      showError('Only active premium users can buy extra booster credits.');
-      return;
-    }
-
-    try {
-      setIsBuyingBooster(true);
-      const response = await API.Payment.buyProfileBooster({ bundleKey });
-      if (!response.authorizationUrl) {
-        throw new Error('Booster checkout URL is unavailable.');
-      }
-      window.location.assign(response.authorizationUrl);
-    } catch (error: unknown) {
-      setIsBuyingBooster(false);
-      showError(getErrorMessage(error, 'Unable to start booster checkout.'));
     }
   };
 
@@ -494,88 +372,15 @@ const PremiumContent = () => {
                 </div>
 
                 {subscriptionDisplay.isActivePaid ? (
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="mt-4">
                     <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Countdown</p>
-                      <p className="mt-2 text-lg font-semibold text-white">
-                        {subscriptionDisplay.countdownLabel || 'Renewal active'}
-                      </p>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                      <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">
-                        <Clock3 className="h-3.5 w-3.5" />
-                        Next renewal
-                      </p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Next renewal</p>
                       <p className="mt-2 text-lg font-semibold text-white">
                         {subscriptionDisplay.renewalLabel || 'Auto-renewing'}
                       </p>
                     </div>
                   </div>
                 ) : null}
-
-                <div className="mt-4 rounded-[1.75rem] border border-fuchsia-400/20 bg-[linear-gradient(135deg,rgba(236,72,153,0.16),rgba(124,58,237,0.16))] p-4 shadow-[0_18px_40px_rgba(168,85,247,0.14)] sm:p-5">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-start gap-3 sm:gap-4">
-                      <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.4rem] border border-fuchsia-200/20 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.24),rgba(255,255,255,0.08)_32%,rgba(15,23,42,0.82)_100%)] shadow-[0_18px_36px_rgba(76,29,149,0.34)] ring-1 ring-fuchsia-300/10 sm:h-[4.5rem] sm:w-[4.5rem]">
-                        <div className="absolute inset-1 rounded-[1.1rem] bg-[linear-gradient(145deg,rgba(168,85,247,0.18),rgba(236,72,153,0.12),rgba(2,6,23,0.06))]" />
-                        <ProfileBoosterIcon className="relative z-10 h-9 w-9 drop-shadow-[0_10px_18px_rgba(236,72,153,0.28)] sm:h-10 sm:w-10" glowId="premium-page-booster" />
-                      </div>
-                      <div className="min-w-0 pt-0.5">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-fuchsia-100/80">
-                          Profile Booster
-                        </p>
-                        <h4 className="mt-1 text-lg font-semibold text-white sm:text-xl">
-                          {profileBoosterActiveUntil ? 'Boost Live' : `${profileBoosterCredits} booster credit${profileBoosterCredits === 1 ? '' : 's'}`}
-                        </h4>
-                        <p className="mt-1 max-w-md text-sm leading-6 text-fuchsia-50/80">
-                          {profileBoosterActiveUntil
-                            ? `Your profile is prioritised in discovery feeds for the next ${profileBoosterCountdown || 'hour'}.`
-                            : 'Each successful premium payment adds one 1-hour profile boost, and extra 5-booster bundles are available anytime.'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-2.5 sm:min-w-[13.5rem] sm:items-end">
-                      {profileBoosterActiveUntil ? (
-                        <span className="inline-flex w-fit animate-[pulse_2.4s_ease-in-out_infinite] items-center rounded-full border border-emerald-400/25 bg-emerald-500/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100 shadow-[0_0_0_4px_rgba(16,185,129,0.08)]">
-                          {profileBoosterCountdown || 'Boost active'}
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={handleActivateBooster}
-                          disabled={!subscriptionDisplay.isActivePaid || profileBoosterCredits < 1 || isActivatingBooster}
-                          className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-gradient-to-r from-fuchsia-500 via-pink-500 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(217,70,239,0.32)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[13.5rem]"
-                        >
-                          {isActivatingBooster ? 'Activating...' : 'Activate 1-Hour Boost'}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleBuyBooster('bundle')}
-                        disabled={!subscriptionDisplay.isActivePaid || isBuyingBooster}
-                        className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-fuchsia-300/25 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:border-fuchsia-200/40 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[13.5rem]"
-                      >
-                        {isBuyingBooster ? 'Starting checkout...' : `Buy ${boosterBundleQuote.bundleSize} for ${boosterBundleQuote.displayLabel}`}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleBuyBooster('single')}
-                        disabled={!subscriptionDisplay.isActivePaid || isBuyingBooster}
-                        className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-amber-300/25 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-white transition hover:border-amber-200/40 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[13.5rem]"
-                      >
-                        {isBuyingBooster ? 'Starting checkout...' : `Buy ${boosterSingleQuote.bundleSize} for ${boosterSingleQuote.displayLabel}`}
-                      </button>
-                      {!subscriptionDisplay.isActivePaid ? (
-                        <span className="text-xs text-gray-300">Boosters unlock with active premium access.</span>
-                      ) : (
-                        <span className="text-xs text-gray-300">
-                          {boosterBundleQuote.bundleSize}-credit bundle and {boosterSingleQuote.bundleSize}-credit top-up available. {getPricingNote(boosterBundleQuote.region, boosterBundleQuote.displayCurrency)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </div>

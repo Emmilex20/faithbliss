@@ -8,11 +8,12 @@ import ProfileHeader from '@/components/profile/ProfileHeader';
 import { TopBar } from '@/components/dashboard/TopBar';
 import { SidePanel } from '@/components/dashboard/SidePanel';
 import { useAuthContext } from '@/contexts/AuthContext';
-import ProfileTabs from '@/components/profile/ProfileTabs';
+import ProfileTabs, { type TabSection } from '@/components/profile/ProfileTabs';
 import PhotosSection from '@/components/profile/PhotosSection';
 import BasicInfoSection from '@/components/profile/BasicInfoSection';
 import PassionsSection from '@/components/profile/PassionsSection';
 import FaithSection from '@/components/profile/FaithSection';
+import ManageSubscriptionSection from '@/components/profile/ManageSubscriptionSection';
 import SaveButton from '@/components/profile/SaveButton';
 import type { ProfileData } from '@/types/profile';
 import type { UpdateProfileDto } from '@/services/api';
@@ -33,7 +34,7 @@ const ProfilePage: React.FC = () => {
 
   const { data: userData, loading, execute } = useUserProfile(currentUserId, currentUserEmail);
 
-  const [activeSection, setActiveSection] = useState<'photos' | 'basics' | 'passions' | 'faith'>('photos');
+  const [activeSection, setActiveSection] = useState<TabSection>('photos');
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
@@ -322,6 +323,13 @@ const ProfilePage: React.FC = () => {
                   ? `${activeTierLabel} subscriber with premium matching benefits active.`
                   : 'You are currently on the free plan.'}
               </p>
+              <button
+                type="button"
+                onClick={() => setActiveSection('subscription')}
+                className="mt-4 inline-flex items-center rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/90 transition hover:border-white/30 hover:bg-white/10"
+              >
+                Manage subscription
+              </button>
             </div>
 
             <div className={`inline-flex w-fit items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] ${
@@ -407,9 +415,15 @@ const ProfilePage: React.FC = () => {
         {profileData && activeSection === 'faith' && (
           <FaithSection profileData={profileData} setProfileData={setProfileData} />
         )}
+
+        {activeSection === 'subscription' && (
+          <ManageSubscriptionSection user={layoutUser} />
+        )}
       </div>
 
-      <SaveButton isSaving={isSaving} saveMessage={saveMessage} handleSave={handleSave} />
+      {activeSection !== 'subscription' ? (
+        <SaveButton isSaving={isSaving} saveMessage={saveMessage} handleSave={handleSave} />
+      ) : null}
 
       <div className="h-32" />
     </>

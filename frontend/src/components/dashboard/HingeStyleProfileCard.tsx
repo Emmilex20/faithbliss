@@ -827,7 +827,7 @@ export const HingeStyleProfileCard = ({
                 </div>
 
                 <div className={desktopWideSectionClass}>
-                  <div className={`pointer-events-none sticky z-30 flex ${useDesktopMobileLayout ? 'bottom-4 mt-3 justify-end pr-1' : 'bottom-3 mt-3 justify-start'}`}>
+                  <div className={`pointer-events-none z-30 flex ${useDesktopMobileLayout ? 'sticky bottom-4 mt-3 justify-end pr-1' : 'fixed bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] left-5 justify-start'}`}>
                     <button
                       type="button"
                       onPointerDown={stopEvent}

@@ -109,6 +109,9 @@ export interface User {
     customerCode?: string;
     subscriptionCode?: string;
     authorizationCode?: string;
+    renewalProvider?: 'plan' | 'authorization' | string;
+    autoRenewEnabled?: boolean;
+    autoRenewDisabledAt?: string;
     nextPaymentDate?: string;
     updatedAt?: string;
   };
