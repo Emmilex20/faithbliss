@@ -45,10 +45,6 @@ export const TopBar = ({
   const { data: unreadData } = useNotificationUnreadCount();
   const unreadCount = unreadData?.count || 0;
   const { logout } = useRequireAuth();
-  const isPremiumUser = typeof user?.subscriptionStatus === 'string'
-    && user.subscriptionStatus.toLowerCase() === 'active'
-    && typeof user?.subscriptionTier === 'string'
-    && ['premium', 'elite'].includes(user.subscriptionTier.toLowerCase());
   const profileBoosterCredits = typeof user?.profileBoosterCredits === 'number' ? user.profileBoosterCredits : 0;
   const profileBoosterActive = typeof user?.profileBoosterActiveUntil === 'string'
     && Date.parse(user.profileBoosterActiveUntil) > Date.now();
