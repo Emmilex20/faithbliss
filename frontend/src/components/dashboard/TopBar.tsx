@@ -48,7 +48,7 @@ export const TopBar = ({
   const profileBoosterCredits = typeof user?.profileBoosterCredits === 'number' ? user.profileBoosterCredits : 0;
   const profileBoosterActive = typeof user?.profileBoosterActiveUntil === 'string'
     && Date.parse(user.profileBoosterActiveUntil) > Date.now();
-  const showMobileBoosterShortcut = Boolean(user) && location.pathname !== '/purchases';
+  const showMobileBoosterShortcut = Boolean(user) && location.pathname !== '/premium';
 
   const [notificationsAvailable, setNotificationsAvailable] = useState(false);
   const [notificationsPermission, setNotificationsPermission] = useState<'default' | 'granted' | 'denied'>('default');
@@ -204,7 +204,7 @@ export const TopBar = ({
           <div className="relative flex items-center justify-end gap-0.5 sm:gap-2">
             {user && (
               <Link
-                to="/purchases"
+                to="/premium"
                 className="hidden sm:inline-flex items-center gap-2 rounded-full border border-fuchsia-300/20 bg-[linear-gradient(135deg,rgba(236,72,153,0.14),rgba(124,58,237,0.12))] px-3 py-2 text-xs font-semibold text-white transition hover:border-fuchsia-200/30 hover:bg-[linear-gradient(135deg,rgba(236,72,153,0.18),rgba(124,58,237,0.16))]"
               >
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-black/20">
@@ -250,7 +250,7 @@ export const TopBar = ({
             </Link>
 
             {showMobileBoosterShortcut && (
-              <Link to="/purchases" className="sm:hidden">
+              <Link to="/premium" className="sm:hidden">
                 <button
                   type="button"
                   className="relative inline-flex rounded-2xl p-1.5 text-fuchsia-100 transition-all hover:scale-105 hover:bg-white/10"

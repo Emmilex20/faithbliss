@@ -111,7 +111,7 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
 
           <div className="mt-3 space-y-3">
             <Link
-              to="/purchases"
+              to="/premium"
               onClick={onClose}
               className="flex items-center justify-between gap-3 rounded-2xl border border-fuchsia-300/15 bg-[linear-gradient(135deg,rgba(236,72,153,0.14),rgba(124,58,237,0.12))] px-3 py-3 transition hover:border-fuchsia-200/25 hover:bg-[linear-gradient(135deg,rgba(236,72,153,0.18),rgba(124,58,237,0.16))]"
             >
