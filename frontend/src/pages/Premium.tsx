@@ -7,7 +7,7 @@ import {
   Sparkles,
   Zap,
 } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { TopBar } from '@/components/dashboard/TopBar';
 import { SidePanel } from '@/components/dashboard/SidePanel';
@@ -183,9 +183,7 @@ const formatProfileBoosterCountdown = (activeUntil: string | null | undefined) =
 const PremiumContent = () => {
   const { user, refetchUser } = useAuthContext();
   const { showError, showSuccess } = useToast();
-  const location = useLocation();
   const planSectionRef = useRef<HTMLDivElement | null>(null);
-  const boosterSectionRef = useRef<HTMLDivElement | null>(null);
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [loadingPlanKey, setLoadingPlanKey] = useState<'premium:monthly' | 'premium:quarterly' | null>(null);
   const [pricingQuote, setPricingQuote] = useState<LocalizedPricingQuoteResponse | null>(null);
@@ -260,22 +258,6 @@ const PremiumContent = () => {
       isMounted = false;
     };
   }, [showError]);
-
-  useEffect(() => {
-    if (location.hash !== '#boosters') {
-      return;
-    }
-
-    const scrollToBoosterSection = () => {
-      boosterSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    };
-
-    const animationFrame = window.requestAnimationFrame(scrollToBoosterSection);
-
-    return () => {
-      window.cancelAnimationFrame(animationFrame);
-    };
-  }, [location.hash]);
 
   useEffect(() => {
     let isMounted = true;
@@ -444,7 +426,7 @@ const PremiumContent = () => {
   const isBoosterActivationDisabled =
     !subscriptionDisplay.isActivePaid || profileBoosterCredits < 1 || Boolean(profileBoosterActiveUntil) || isActivatingBooster;
   const boosterSection = (
-    <section ref={boosterSectionRef} id="boosters" className="px-6 pb-16 lg:px-12">
+    <section id="boosters" className="px-6 pb-16 lg:px-12">
       <div className="rounded-3xl border border-fuchsia-300/20 bg-[linear-gradient(145deg,rgba(17,24,39,0.88),rgba(88,28,135,0.38))] p-5 shadow-[0_18px_40px_rgba(88,28,135,0.22)] sm:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-2xl">
