@@ -292,7 +292,7 @@ const ManageSubscriptionSection: React.FC<ManageSubscriptionSectionProps> = ({ u
 
             {isActivePaid ? (
               <Link
-                to="/premium"
+                to="/premium#boosters"
                 className="flex w-full items-center justify-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-medium text-gray-200 transition hover:border-white/20 hover:bg-black/30"
               >
                 Manage boosters

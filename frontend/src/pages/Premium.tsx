@@ -7,7 +7,7 @@ import {
   Sparkles,
   Zap,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { TopBar } from '@/components/dashboard/TopBar';
 import { SidePanel } from '@/components/dashboard/SidePanel';
@@ -183,7 +183,9 @@ const formatProfileBoosterCountdown = (activeUntil: string | null | undefined) =
 const PremiumContent = () => {
   const { user, refetchUser } = useAuthContext();
   const { showError, showSuccess } = useToast();
+  const location = useLocation();
   const planSectionRef = useRef<HTMLDivElement | null>(null);
+  const boosterSectionRef = useRef<HTMLDivElement | null>(null);
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [loadingPlanKey, setLoadingPlanKey] = useState<'premium:monthly' | 'premium:quarterly' | null>(null);
   const [pricingQuote, setPricingQuote] = useState<LocalizedPricingQuoteResponse | null>(null);
@@ -258,6 +260,22 @@ const PremiumContent = () => {
       isMounted = false;
     };
   }, [showError]);
+
+  useEffect(() => {
+    if (location.hash !== '#boosters') {
+      return;
+    }
+
+    const scrollToBoosterSection = () => {
+      boosterSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    const animationFrame = window.requestAnimationFrame(scrollToBoosterSection);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, [location.hash]);
 
   useEffect(() => {
     let isMounted = true;
@@ -425,6 +443,89 @@ const PremiumContent = () => {
     : `${profileBoosterCredits} credit${profileBoosterCredits === 1 ? '' : 's'}`;
   const isBoosterActivationDisabled =
     !subscriptionDisplay.isActivePaid || profileBoosterCredits < 1 || Boolean(profileBoosterActiveUntil) || isActivatingBooster;
+  const boosterSection = (
+    <section ref={boosterSectionRef} id="boosters" className="px-6 pb-16 lg:px-12">
+      <div className="rounded-3xl border border-fuchsia-300/20 bg-[linear-gradient(145deg,rgba(17,24,39,0.88),rgba(88,28,135,0.38))] p-5 shadow-[0_18px_40px_rgba(88,28,135,0.22)] sm:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-fuchsia-200/20 bg-white/10">
+                <ProfileBoosterIcon className="h-6 w-6" glowId="premium-booster-card" />
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-fuchsia-100/70">Booster corner</p>
+                <h3 className="mt-1 text-xl font-semibold text-white">Profile boosters</h3>
+              </div>
+            </div>
+            <p className="mt-4 text-sm text-gray-200">
+              Keep booster credits ready for the moments when extra visibility matters most.
+            </p>
+          </div>
+
+          <div className="w-fit rounded-full bg-white/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-fuchsia-50">
+            {boosterStatusPill}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm font-medium text-white">1 credit = 1 hour boost</p>
+              {profileBoosterActiveUntil ? (
+                <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-200">
+                  <Clock3 className="h-3.5 w-3.5" />
+                  {profileBoosterCountdown || 'Live now'}
+                </div>
+              ) : null}
+            </div>
+            <p className="mt-2 text-xs text-gray-300">
+              Buy a quick top-up here and activate when timing matters.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleActivateBooster}
+            disabled={isBoosterActivationDisabled}
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/15 bg-black/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-black/30 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {profileBoosterActiveUntil
+              ? profileBoosterCountdown || 'Boost live'
+              : isActivatingBooster
+              ? 'Activating...'
+              : 'Activate credit'}
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:max-w-xl">
+          <button
+            type="button"
+            onClick={() => handleBuyBooster('single')}
+            disabled={isBuyingBooster !== null}
+            className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isBuyingBooster === 'single'
+              ? 'Starting...'
+              : `${singleBoosterQuote.bundleSize} Boost${singleBoosterQuote.bundleSize === 1 ? '' : 's'} - ${boosterPricingLoading ? '...' : singleBoosterQuote.displayLabel}`}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleBuyBooster('bundle')}
+            disabled={isBuyingBooster !== null}
+            className="rounded-2xl bg-gradient-to-r from-pink-500 to-purple-600 px-4 py-3 text-sm font-semibold text-white transition hover:from-pink-400 hover:to-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isBuyingBooster === 'bundle'
+              ? 'Starting...'
+              : `${bundleBoosterQuote.bundleSize} Boosts - ${boosterPricingLoading ? '...' : bundleBoosterQuote.displayLabel}`}
+          </button>
+        </div>
+
+        <p className="mt-3 text-[11px] text-fuchsia-100/75">
+          {subscriptionDisplay.isActivePaid ? 'Checkout stays in Paystack.' : 'Premium is required before you can activate credits.'}
+        </p>
+      </div>
+    </section>
+  );
 
   const mainContent = (
     <div className="flex-1">
@@ -531,88 +632,6 @@ const PremiumContent = () => {
                     </div>
                   </div>
                 ) : null}
-              </div>
-
-              <div
-                id="boosters"
-                className="rounded-3xl border border-fuchsia-300/20 bg-[linear-gradient(145deg,rgba(17,24,39,0.88),rgba(88,28,135,0.38))] p-5 shadow-[0_18px_40px_rgba(88,28,135,0.22)]"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-fuchsia-200/20 bg-white/10">
-                      <ProfileBoosterIcon className="h-6 w-6" glowId="premium-booster-card" />
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-fuchsia-100/70">Booster corner</p>
-                      <h3 className="mt-1 text-lg font-semibold text-white">Profile boosters</h3>
-                    </div>
-                  </div>
-
-                  <span className={`rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${
-                    profileBoosterActiveUntil
-                      ? 'bg-emerald-500/15 text-emerald-200'
-                      : 'bg-white/10 text-fuchsia-50'
-                  }`}>
-                    {boosterStatusPill}
-                  </span>
-                </div>
-
-                <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-white">1 credit = 1 hour boost</p>
-                    {profileBoosterActiveUntil ? (
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-200">
-                        <Clock3 className="h-3.5 w-3.5" />
-                        {profileBoosterCountdown || 'Live now'}
-                      </div>
-                    ) : null}
-                  </div>
-                  <p className="mt-2 text-xs text-gray-300">
-                    Buy a quick top-up here and activate when timing matters.
-                  </p>
-                </div>
-
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => handleBuyBooster('single')}
-                    disabled={isBuyingBooster !== null}
-                    className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isBuyingBooster === 'single'
-                      ? 'Starting...'
-                      : `${singleBoosterQuote.bundleSize} Boost${singleBoosterQuote.bundleSize === 1 ? '' : 's'} - ${boosterPricingLoading ? '...' : singleBoosterQuote.displayLabel}`}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleBuyBooster('bundle')}
-                    disabled={isBuyingBooster !== null}
-                    className="rounded-2xl bg-gradient-to-r from-pink-500 to-purple-600 px-4 py-3 text-sm font-semibold text-white transition hover:from-pink-400 hover:to-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isBuyingBooster === 'bundle'
-                      ? 'Starting...'
-                      : `${bundleBoosterQuote.bundleSize} Boosts - ${boosterPricingLoading ? '...' : bundleBoosterQuote.displayLabel}`}
-                  </button>
-                </div>
-
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleActivateBooster}
-                    disabled={isBoosterActivationDisabled}
-                    className="inline-flex items-center justify-center rounded-full border border-white/15 bg-black/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-black/30 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {profileBoosterActiveUntil
-                      ? profileBoosterCountdown || 'Boost live'
-                      : isActivatingBooster
-                      ? 'Activating...'
-                      : 'Activate credit'}
-                  </button>
-
-                  <p className="text-[11px] text-fuchsia-100/75">
-                    {subscriptionDisplay.isActivePaid ? 'Checkout stays in Paystack.' : 'Premium is required before you can activate credits.'}
-                  </p>
-                </div>
               </div>
             </div>
           </div>
@@ -733,6 +752,8 @@ const PremiumContent = () => {
           })}
         </div>
       </section>
+
+      {boosterSection}
 
       <section className="px-6 pb-16 lg:px-12">
         <div className="rounded-3xl border border-white/10 bg-gradient-to-r from-white/5 via-white/3 to-white/5 p-8">
