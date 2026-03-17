@@ -185,7 +185,7 @@ export default function Home() {
               {/* These are page links, so <Link> is correct */}
               <Link to="/login">
                 <button className="text-sm md:text-base bg-pink-500 text-white px-6 py-2 rounded-full hover:bg-pink-600 transition-all whitespace-nowrap">
-                  Sign in
+                  Join Now
                 </button>
               </Link>
             </div>
