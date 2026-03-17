@@ -10,7 +10,6 @@ import { SeoMetaManager } from "../components/SeoMetaManager";
 export default function Home() {
   const [scrollY, setScrollY] = useState(0);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
   
   // Array of background images
   // IMPORTANT: Place these images in the 'frontend/public' folder
@@ -22,70 +21,6 @@ export default function Home() {
     ],
     []
   );
-
-  // Love stories data
-  const loveStories = [
-    {
-      id: 1,
-      initials: "S&D",
-      names: "Sarah & David",
-      status: "Engaged 2025",
-      gradient: "from-purple-500 to-pink-500",
-      borderColor: "purple-500",
-      textColor: "purple-300",
-      quote: "Found my prayer partner and soulmate! We bonded over mission trips and now we're planning to serve together in ministry."
-    },
-    {
-      id: 2,
-      initials: "J&R",
-      names: "James & Rachel",
-      status: "Dating 1 Year",
-      gradient: "from-blue-500 to-cyan-500",
-      borderColor: "blue-500",
-      textColor: "blue-300",
-      quote: "What started as a conversation about favorite Bible verses turned into the most beautiful relationship. Thank you FaithBliss!"
-    },
-    {
-      id: 3,
-      initials: "M&L",
-      names: "Michael & Lisa",
-      status: "Married 2023",
-      gradient: "from-green-500 to-emerald-500",
-      borderColor: "green-500",
-      textColor: "green-300",
-      quote: "We discovered we both volunteer at the same shelter! God's timing is perfect. Now we serve together as husband and wife."
-    },
-    {
-      id: 4,
-      initials: "E&G",
-      names: "Emmanuel & Grace",
-      status: "Married 2024",
-      gradient: "from-yellow-500 to-orange-500",
-      borderColor: "yellow-500",
-      textColor: "yellow-300",
-      quote: "From different countries but same faith! Long distance became short when we realized we were meant to be together."
-    },
-    {
-      id: 5,
-      initials: "P&J",
-      names: "Peter & Joy",
-      status: "Engaged 2024",
-      gradient: "from-indigo-500 to-purple-600",
-      borderColor: "indigo-500",
-      textColor: "indigo-300",
-      quote: "Both youth pastors who found love while serving God. Our shared ministry brought us together in the most beautiful way."
-    },
-    {
-      id: 6,
-      initials: "D&R",
-      names: "Daniel & Ruth",
-      status: "Dating 8 months",
-      gradient: "from-rose-500 to-pink-600",
-      borderColor: "rose-500",
-      textColor: "rose-300",
-      quote: "Two worship leaders from different churches who harmonize perfectly in love and music. God's plan is always perfect!"
-    }
-  ];
 
   // Preload hero background images so transitions are smooth (no black flashes)
   useEffect(() => {
@@ -101,21 +36,10 @@ export default function Home() {
       setCurrentImageIndex((prevIndex) =>
         (prevIndex + 1) % backgroundImages.length
       );
-    }, 5000); // Change image every 1.5 seconds
+    }, 1500); // Change image every 1.5 seconds
 
     return () => clearInterval(interval);
   }, [backgroundImages.length]);
-
-  // Auto-scroll for love stories
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentStoryIndex((prevIndex) => 
-        (prevIndex + 1) % loveStories.length
-      );
-    }, 4000); // Change story every 4 seconds
-
-    return () => clearInterval(interval);
-  }, [loveStories.length]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -377,75 +301,41 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Success Stories Section */}
+      {/* Success Stories Section (Coming Soon) */}
       <section id="stories" className="py-20 px-6 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto relative z-10">
+        <div className="max-w-5xl mx-auto relative z-10">
           <FadeIn>
             <div className="text-center mb-20">
               <h2 className="text-5xl md:text-7xl font-black mb-6 bg-gradient-to-r from-pink-400 via-purple-400 to-blue-400 bg-clip-text text-transparent">
                 Love Stories
               </h2>
               <p className="text-md md:text-xl text-gray-300 max-w-3xl mx-auto leading-relaxed">
-                Real couples who found their forever person through faith, love, and divine timing 
+                We're building something beautiful — real stories from couples who met on FaithBliss.
               </p>
             </div>
           </FadeIn>
 
-          {/* Auto-Scrolling Story Cards - Responsive */}
-          {/* Note: This carousel logic is simple and might be jumpy on resize. */}
-          {/* We can refine this later if needed. */}
-          <div className="relative overflow-hidden">
-            <div 
-              className="flex transition-transform duration-1000 ease-in-out"
-              style={{
-                // This logic seems built for 3 items. Be mindful on mobile.
-                // We'll address full responsiveness later.
-                transform: `translateX(-${currentStoryIndex * (100 / 3)}%)`,
-                width: `${loveStories.length * (100 / 3)}%`
-              }}
-            >
-              {loveStories.map((story, index) => (
-                <div 
-                  key={story.id}
-                  className="w-1/3 flex-shrink-0 px-3" // This forces 3-wide
-                >
-                  <FadeIn delay={300 + (index * 100)}>
-                    <div className={`group bg-gray-800/50 backdrop-blur-sm rounded-2xl p-4 md:p-6 border border-gray-700 hover:border-${story.borderColor}/50 transition-all duration-500 hover:transform hover:scale-105 hover:shadow-2xl hover:shadow-${story.borderColor}/20 h-full`}>
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div className={`w-10 h-10 md:w-12 md:h-12 bg-gradient-to-r ${story.gradient} rounded-full flex items-center justify-center text-white font-bold text-sm md:text-base`}>
-                              {story.initials}
-                            </div>
-                            <div>
-                              <h3 className="text-base md:text-lg font-bold text-white">{story.names}</h3>
-                              <p className={`text-${story.textColor} text-xs md:text-sm`}>{story.status}</p>
-                            </div>
-                          </div>
-                        </div>
-                        <blockquote className="text-gray-300 leading-relaxed text-xs md:text-sm italic">
-                          "{story.quote}"
-                        </blockquote>
-                      </div>
-                    </div>
-                  </FadeIn>
-                </div>
-              ))}
+          <FadeIn delay={200}>
+            <div className="rounded-3xl border border-gray-700 bg-gray-900/40 backdrop-blur-xl p-10 text-center">
+              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-r from-pink-500 to-purple-500">
+                <Heart className="h-10 w-10 text-white animate-pulse" />
+              </div>
+
+              <h3 className="text-3xl md:text-4xl font-bold text-white mb-4">Coming Soon</h3>
+              <p className="text-gray-300 max-w-xl mx-auto">
+                We'll be sharing inspiring stories from FaithBliss couples very soon. Stay tuned and join the waitlist to be the first to hear when they're live.
+              </p>
+
+              <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+                <Link to="/signup" className="inline-flex items-center justify-center rounded-full bg-pink-500 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-pink-500/20 hover:bg-pink-600 transition">
+                  Join the waitlist
+                </Link>
+                <Link to="/about" className="inline-flex items-center justify-center rounded-full border border-gray-700 bg-white/5 px-8 py-3 text-sm font-semibold text-white hover:bg-white/10 transition">
+                  Learn more
+                </Link>
+              </div>
             </div>
-            
-            {/* Indicators */}
-            <div className="flex justify-center mt-6 space-x-2">
-              {loveStories.map((_, index) => (
-                <button
-                  key={index}
-                  className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                    index === currentStoryIndex ? 'bg-pink-500 w-8' : 'bg-gray-600 hover:bg-gray-500'
-                  }`}
-                  onClick={() => setCurrentStoryIndex(index)}
-                />
-              ))}
-            </div>
-          </div>
+          </FadeIn>
         </div>
       </section>
 
