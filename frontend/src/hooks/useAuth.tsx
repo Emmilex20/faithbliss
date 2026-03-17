@@ -461,6 +461,7 @@ const fetchUserDataFromFirestore = async (fbUser: FirebaseAuthUser): Promise<Use
         role: resolveUserRole(backendData.email || fbUser.email, backendData.role),
         roles: normalizeUserRoles(backendData.email || fbUser.email, backendData.roles),
         onboardingCompleted: backendData.onboardingCompleted || false,
+        emailVerified: backendData.emailVerified === false ? false : true,
         
         // Core fields (must exist if registration completed)
         age: backendData.age || 0,
@@ -556,6 +557,7 @@ const ensureUserProfile = async (fbUser: FirebaseAuthUser) => {
             location: "",
             bio: "",
             onboardingCompleted: false,
+            emailVerified: fbUser.emailVerified === true,
             profilePhotoCount: 0,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -645,6 +647,7 @@ export function useAuth() {
             email: fbUser.email!, 
             name: fbUser.displayName || 'New User', 
             onboardingCompleted: false, 
+            emailVerified: fbUser.emailVerified === true,
             age: 0,
             // Default values for required fields
             gender: 'MALE', 
@@ -812,6 +815,7 @@ export function useAuth() {
                     denomination: "",
                     location: "",
                     bio: "",
+                    emailVerified: false,
                     onboardingCompleted: false, // Default value
                     createdAt: serverTimestamp(), 
                     updatedAt: serverTimestamp(),
@@ -824,6 +828,7 @@ export function useAuth() {
                     email: fbUser.email!,
                     name: credentials.name,
                     onboardingCompleted: false,
+                    emailVerified: false,
                     age: 0,
                     gender: credentials.gender,
                     denomination: "",
@@ -835,8 +840,21 @@ export function useAuth() {
                 setAccessToken(token);
                 localStorage.setItem("accessToken", token);
                 localStorage.setItem("user", JSON.stringify(userToStore));
+
+                try {
+                    await API.Auth.sendEmailVerificationCode();
+                } catch (verificationError) {
+                    console.warn("Initial verification code send failed:", verificationError);
+                    showError(
+                        getAuthErrorMessage(
+                            verificationError,
+                            "Account created, but we could not send the verification code yet. You can resend it on the next screen."
+                        ),
+                        "Verification Pending"
+                    );
+                }
                 
-                showSuccess("Account created successfully!", "Registration Successful");
+                showSuccess("Account created. Enter the code we sent to your email to continue.", "Verification Needed");
                 
                 return {
                     accessToken: token,
@@ -867,6 +885,17 @@ export function useAuth() {
         },
         [showSuccess, showError, user]
     );
+
+    const sendEmailVerificationCode = useCallback(async () => {
+        return await API.Auth.sendEmailVerificationCode();
+    }, []);
+
+    const verifyEmailVerificationCode = useCallback(async (code: string) => {
+        const response = await API.Auth.verifyEmailVerificationCode(code);
+        await refetchUser();
+        showSuccess(response.message, "Email Verified");
+        return response;
+    }, [refetchUser, showSuccess]);
 
 
 // -----------------------------------------------------------
@@ -1186,15 +1215,20 @@ export function useAuth() {
     //  NAVIGATION: Use a separate effect to handle navigation once auth is stable
     useEffect(() => {
         if (!isLoading && user) {
-            const target = user.onboardingCompleted ? "/dashboard" : "/onboarding";
+            const target = user.emailVerified === false
+                ? "/verify-email"
+                : user.onboardingCompleted
+                ? "/dashboard"
+                : "/onboarding";
             
             //  FIX: Only force redirect if the user is on a transient route
             // (like '/', '/login', or the opposite of their required route)
-            const isTransientRoute = ['/', '/login', '/register'].includes(location.pathname);
+            const isTransientRoute = ['/', '/login', '/register', '/signup'].includes(location.pathname);
             
             // This checks if the user is on the WRONG core page (e.g., done onboarding but still on /onboarding)
-            const isOnWrongCoreRoute = (location.pathname === "/onboarding" && user.onboardingCompleted) ||
-                                       (location.pathname === "/dashboard" && !user.onboardingCompleted);
+            const isOnWrongCoreRoute = (location.pathname === "/verify-email" && user.emailVerified !== false) ||
+                                       (location.pathname === "/onboarding" && (user.onboardingCompleted || user.emailVerified === false)) ||
+                                       (location.pathname === "/dashboard" && (!user.onboardingCompleted || user.emailVerified === false));
             
             // We only redirect if we are on a known transient or incorrect core route.
             if (isTransientRoute || isOnWrongCoreRoute) {
@@ -1234,6 +1268,7 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
             role: resolveUserRole(data.email, data.role),
             roles: normalizeUserRoles(data.email, data.roles),
             onboardingCompleted: data.onboardingCompleted || false,
+            emailVerified: data.emailVerified === false ? false : true,
             age: data.age || 0,
             gender: data.gender || "MALE",
             denomination: data.denomination || "",
@@ -1333,6 +1368,8 @@ const getUserProfileById = useCallback(async (userId: string): Promise<User | nu
         completeOnboarding,
         getUserProfileById,
         googleSignIn,
+        sendEmailVerificationCode,
+        verifyEmailVerificationCode,
         requestPasswordReset,
         validatePasswordResetCode,
         resetPassword,

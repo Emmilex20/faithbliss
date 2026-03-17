@@ -56,6 +56,12 @@ const ROUTE_SEO: Record<string, SeoRoute> = {
     index: false,
     schemaType: 'WebPage',
   },
+  '/verify-email': {
+    title: `Verify Email | ${SITE_NAME}`,
+    description: `Enter your FaithBliss email verification code to continue setting up your account.`,
+    index: false,
+    schemaType: 'WebPage',
+  },
 };
 
 const ensureMetaByName = (name: string, content: string) => {

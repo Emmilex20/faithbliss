@@ -12,6 +12,7 @@ import { API } from './services/api';
 const authPaths = ['/login', '/signup'];
 // Include the Onboarding path in a list that needs a specific full-screen treatment.
 const fullScreenPaths = ['/onboarding', '/about', '/privacy'];
+const verificationPaths = ['/verify-email'];
 const appShellPaths = [
   '/dashboard',
   '/community',
@@ -62,7 +63,7 @@ function App() {
   const [maintenanceLoaded, setMaintenanceLoaded] = useState(false);
   const isAuthRoute = authPaths.includes(pathname);
   const isAppShellRoute = appShellPaths.some((route) => pathname === route || pathname.startsWith(`${route}/`));
-  const isFullScreenRoute = isAuthRoute || fullScreenPaths.includes(pathname) || isAppShellRoute;
+  const isFullScreenRoute = isAuthRoute || fullScreenPaths.includes(pathname) || verificationPaths.includes(pathname) || isAppShellRoute;
   const isAdminRoute = pathname === '/admin' || pathname.startsWith('/admin/');
   const isDeveloperRoute = pathname === '/developer' || pathname.startsWith('/developer/');
   const shouldShowShutdownGate = maintenanceLoaded && shutdownModeEnabled && !isDeveloperRoute;

@@ -22,14 +22,19 @@ export default function Signup() {
   const [showPopupInstruction, setShowPopupInstruction] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-  const { directRegister, googleSignIn, isRegistering, isAuthenticated, isLoading } = useAuthContext();
+  const { directRegister, googleSignIn, isRegistering, isAuthenticated, isLoading, user } = useAuthContext();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      navigate('/onboarding', { replace: true });
+      const target = user?.emailVerified === false
+        ? '/verify-email'
+        : user?.onboardingCompleted
+        ? '/dashboard'
+        : '/onboarding';
+      navigate(target, { replace: true });
     }
-  }, [isAuthenticated, isLoading, navigate]);
+  }, [isAuthenticated, isLoading, navigate, user?.emailVerified, user?.onboardingCompleted]);
 
   useEffect(() => {
     const fromSignup = typeof window !== 'undefined' ? sessionStorage.getItem('fromSignup') : null;

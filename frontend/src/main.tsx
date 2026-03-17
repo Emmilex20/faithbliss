@@ -8,6 +8,7 @@ import Home from './pages/Home.tsx';
 import './index.css';
 import Login from './pages/Login.tsx';
 import SignUp from './pages/SignUp.tsx';
+import VerifyEmail from './pages/VerifyEmail.tsx';
 import ResetPassword from './pages/ResetPassword.tsx';
 import Dashboard from './pages/Dashboard.tsx';
 // 💡 CORRECTION: Import the ProfilePage component directly, as ProtectedRoute wrapper is removed inside.
@@ -105,6 +106,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route element={<App />}>
 
                 {/* Onboarding Route (requires auth, enforces onboarding completion) */}
+                <Route path="verify-email" element={<VerifyEmail />} />
                 <Route path="onboarding" element={<OnboardingRouteWrapper />} />
 
                 {/* Dashboard and other private routes */}

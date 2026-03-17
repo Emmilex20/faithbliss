@@ -5,6 +5,8 @@ import express from 'express';
 // import passport from 'passport'; 
 import { 
     // REMOVED: registerUser, loginUser, logoutUser 
+    sendEmailVerificationCode,
+    verifyEmailVerificationCode,
     uploadPhotos,      
     completeOnboarding, 
     createProfileAfterFirebaseRegister, 
@@ -23,6 +25,8 @@ const router = express.Router();
  * @access Private (Requires Firebase ID Token via 'protect' middleware)
  */
 router.post('/register-profile', protect, createProfileAfterFirebaseRegister);
+router.post('/email-verification/send', protect, sendEmailVerificationCode);
+router.post('/email-verification/verify', protect, verifyEmailVerificationCode);
 
 // ----------------------------------------
 // 2. 📝 Onboarding Route

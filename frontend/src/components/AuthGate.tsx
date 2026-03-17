@@ -27,6 +27,14 @@ export const AuthGate: React.FC = () => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  if (user && user.emailVerified === false) {
+    if (!path.startsWith('/verify-email')) {
+      return <Navigate to="/verify-email" replace />;
+    }
+
+    return <Outlet />;
+  }
+
   if (user && !user.onboardingCompleted) {
     let allowPausedDashboardAccess = false;
     try {
@@ -67,7 +75,11 @@ export const PublicOnlyRoute: React.FC = () => {
   if (isLoading) return null;
 
   if (isAuthenticated) {
-    const targetPath = user && !user.onboardingCompleted ? '/onboarding' : '/dashboard';
+    const targetPath = user && user.emailVerified === false
+      ? '/verify-email'
+      : user && !user.onboardingCompleted
+      ? '/onboarding'
+      : '/dashboard';
     return <Navigate to={targetPath} replace />;
   }
 

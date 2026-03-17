@@ -381,6 +381,20 @@ export interface UpdateSubscriptionAutoRenewResponse {
   renewalProvider: 'plan' | 'authorization';
 }
 
+export interface EmailVerificationSendResponse {
+  message: string;
+  email?: string;
+  expiresInMinutes?: number;
+  retryAfterSeconds?: number;
+  isVerified?: boolean;
+}
+
+export interface EmailVerificationVerifyResponse {
+  message: string;
+  isVerified: boolean;
+  emailVerifiedAt?: string;
+}
+
 export interface LocalizedPricingQuote {
   tier: 'premium';
   billingCycle: 'monthly' | 'quarterly';
@@ -772,6 +786,19 @@ export const AuthAPI = {
       body: JSON.stringify(onboardingData),
     });
   },
+
+  sendEmailVerificationCode: async (): Promise<EmailVerificationSendResponse> => {
+    return apiRequest('/api/auth/email-verification/send', {
+      method: 'POST',
+    });
+  },
+
+  verifyEmailVerificationCode: async (code: string): Promise<EmailVerificationVerifyResponse> => {
+    return apiRequest('/api/auth/email-verification/verify', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  },
 
   // Google OAuth token exchange - Already correct with /api
   googleAuth: async (googleData: {

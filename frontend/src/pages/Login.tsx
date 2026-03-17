@@ -12,7 +12,7 @@ function LoginForm() {
   const [searchParams] = useSearchParams(); 
 
   // Assuming useAuthContext is imported from the corrected context file
-  const { directLogin, googleSignIn, requestPasswordReset, isLoggingIn, isLoading, isAuthenticated } = useAuthContext();
+  const { directLogin, googleSignIn, requestPasswordReset, isLoggingIn, isLoading, isAuthenticated, user } = useAuthContext();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -34,11 +34,15 @@ function LoginForm() {
   // We keep this check here as a fallback, but the AuthGate/PublicOnlyRoute is primary.
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-        // The PublicOnlyRoute should handle this, but for robustness:
-        console.log("LOGIN_FORM: User is authenticated. Navigating to callbackUrl:", callbackUrl);
-        navigate(callbackUrl, { replace: true });
+        const target = user?.emailVerified === false
+          ? '/verify-email'
+          : user?.onboardingCompleted
+          ? callbackUrl
+          : '/onboarding';
+        console.log("LOGIN_FORM: User is authenticated. Navigating to:", target);
+        navigate(target, { replace: true });
     }
-  }, [isAuthenticated, isLoading, navigate, callbackUrl]);
+  }, [isAuthenticated, isLoading, navigate, callbackUrl, user?.emailVerified, user?.onboardingCompleted]);
 
 
   // Display errors passed from the URL

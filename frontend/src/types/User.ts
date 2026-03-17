@@ -75,6 +75,7 @@ export interface User {
   personalPromptQuestion?: string;
   personalPromptAnswer?: string;
   isVerified?: boolean;
+  emailVerified?: boolean;
   profilePhoto1?: string;
   profilePhoto2?: string;
   profilePhoto3?: string;

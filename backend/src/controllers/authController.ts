@@ -1,10 +1,11 @@
 // src/controllers/authController.ts (FIRESTORE/FIREBASE REWRITE)
 
 import { Request, Response, NextFunction } from 'express';
-import { db } from '../config/firebase-admin'; // Firestore DB instance
+import { admin, db } from '../config/firebase-admin'; // Firestore DB instance
 import { DocumentData, DocumentReference } from 'firebase-admin/firestore';
 import { Types } from 'mongoose'; // Still used for internal logic, but not for DB IDs anymore
 import multer from 'multer';
+import { createHash, randomInt } from 'crypto';
 import { storage } from '../config/cloudinaryConfig'; // Assuming Cloudinary is still used
 import { countProfilePhotos, MIN_REQUIRED_PROFILE_PHOTOS } from '../utils/profilePhotos';
 import { validateOnboardingPayload } from '../utils/validateOnboardingPayload';
@@ -32,6 +33,11 @@ export interface IUserProfile extends DocumentData {
     profilePhotoCount?: number;
     onboardingCompleted: boolean;
     profileFits?: string[];
+    emailVerified?: boolean;
+    emailVerificationCodeHash?: string;
+    emailVerificationExpiresAt?: FirebaseFirestore.Timestamp | string | Date;
+    emailVerificationLastSentAt?: FirebaseFirestore.Timestamp | string | Date;
+    emailVerifiedAt?: FirebaseFirestore.Timestamp | string | Date;
     // Add other fields...
     likes?: string[]; // Array of Firestore UIDs
     passes?: string[];
@@ -79,6 +85,9 @@ const uploadPhotos = upload.fields([
     { name: 'profilePhoto6', maxCount: 1 }, 
 ]);
 
+const EMAIL_VERIFICATION_EXPIRY_MINUTES = 10;
+const EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS = 45;
+
 // Helper types for the file object and request with user
 interface MulterRequest extends Request {
     files: { [fieldname: string]: Express.Multer.File[] };
@@ -103,6 +112,51 @@ const safeParseJSON = (data: any): string[] => {
         }
     }
     return Array.isArray(data) ? data : [];
+};
+
+const hashVerificationCode = (code: string) => createHash('sha256').update(code).digest('hex');
+
+const generateVerificationCode = () => randomInt(0, 1000000).toString().padStart(6, '0');
+
+const maskEmail = (email: string) => {
+    const [localPart, domain] = email.split('@');
+    if (!localPart || !domain) return email;
+    if (localPart.length <= 2) return `${localPart[0] || '*'}*@${domain}`;
+    return `${localPart.slice(0, 2)}${'*'.repeat(Math.max(1, localPart.length - 2))}@${domain}`;
+};
+
+const toMillis = (value: unknown): number | null => {
+    if (!value) return null;
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'string') {
+        const parsed = Date.parse(value);
+        return Number.isNaN(parsed) ? null : parsed;
+    }
+    if (typeof value === 'object' && value !== null && 'toDate' in value && typeof (value as { toDate?: unknown }).toDate === 'function') {
+        return (value as { toDate: () => Date }).toDate().getTime();
+    }
+    return null;
+};
+
+const sendVerificationCodeEmail = async (to: string, code: string, name?: string) => {
+    const webhook = process.env.EMAIL_WEBHOOK_URL;
+    if (!webhook) {
+        throw new Error('Email delivery is not configured.');
+    }
+
+    const firstName = typeof name === 'string' && name.trim() ? name.trim().split(/\s+/)[0] : 'there';
+    const subject = 'Your FaithBliss verification code';
+    const text = `Hi ${firstName},\n\nYour FaithBliss verification code is ${code}.\n\nIt expires in ${EMAIL_VERIFICATION_EXPIRY_MINUTES} minutes.\nIf you did not request this, you can ignore this email.\n\nFaithBliss`;
+
+    const response = await fetch(webhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, subject, text }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Email delivery failed with status ${response.status}.`);
+    }
 };
 
 
@@ -141,6 +195,7 @@ const createProfileAfterFirebaseRegister = async (req: Request, res: Response) =
             email, 
             role: resolveUserRole(email),
             roles: resolveUserRoles(email),
+            emailVerified: false,
             gender, 
             age: parseInt(age), 
             denomination, 
@@ -170,6 +225,152 @@ const createProfileAfterFirebaseRegister = async (req: Request, res: Response) =
         console.error('Registration Profile Error:', error);
         const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred during profile creation';
         res.status(500).json({ message: `Server Error: ${errorMessage}` }); 
+    }
+};
+
+// ----------------------------------------
+// 1b. Email Verification Code
+// ----------------------------------------
+const sendEmailVerificationCode = async (req: Request, res: Response) => {
+    const uid = req.userId;
+
+    if (!uid) {
+        return res.status(401).json({ message: 'Authentication required: Firebase UID missing.' });
+    }
+
+    try {
+        const userRef = db.collection('users').doc(uid);
+        const doc = await userRef.get();
+
+        if (!doc.exists) {
+            return res.status(404).json({ message: 'User profile not found.' });
+        }
+
+        const userData = doc.data() as IUserProfile;
+        const email = typeof userData.email === 'string' ? userData.email.trim().toLowerCase() : '';
+        if (!email) {
+            return res.status(400).json({ message: 'No email address is available for this account.' });
+        }
+
+        if (userData.emailVerified === true) {
+            return res.status(200).json({
+                message: 'Your email is already verified.',
+                isVerified: true,
+                email: maskEmail(email),
+            });
+        }
+
+        const lastSentAtMs = toMillis(userData.emailVerificationLastSentAt);
+        if (lastSentAtMs) {
+            const secondsSinceLastSend = Math.floor((Date.now() - lastSentAtMs) / 1000);
+            if (secondsSinceLastSend < EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS) {
+                const retryAfterSeconds = EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS - secondsSinceLastSend;
+                return res.status(429).json({
+                    message: `Please wait ${retryAfterSeconds} seconds before requesting another code.`,
+                    retryAfterSeconds,
+                });
+            }
+        }
+
+        const code = generateVerificationCode();
+        const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRY_MINUTES * 60 * 1000);
+
+        await userRef.set({
+            emailVerificationCodeHash: hashVerificationCode(code),
+            emailVerificationExpiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+            emailVerificationLastSentAt: admin.firestore.Timestamp.now(),
+            updatedAt: admin.firestore.Timestamp.now(),
+        }, { merge: true });
+
+        await sendVerificationCodeEmail(email, code, userData.name);
+
+        return res.status(200).json({
+            message: `Verification code sent to ${maskEmail(email)}.`,
+            email: maskEmail(email),
+            expiresInMinutes: EMAIL_VERIFICATION_EXPIRY_MINUTES,
+            isVerified: false,
+        });
+    } catch (error: unknown) {
+        console.error('Email verification send error:', error);
+        const errorMessage = isErrorWithMessage(error) ? error.message : 'Unable to send verification code.';
+        return res.status(500).json({ message: errorMessage });
+    }
+};
+
+const verifyEmailVerificationCode = async (req: Request, res: Response) => {
+    const uid = req.userId;
+    const rawCode = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
+
+    if (!uid) {
+        return res.status(401).json({ message: 'Authentication required: Firebase UID missing.' });
+    }
+
+    if (!/^\d{6}$/.test(rawCode)) {
+        return res.status(400).json({ message: 'Enter the 6-digit verification code sent to your email.' });
+    }
+
+    try {
+        const userRef = db.collection('users').doc(uid);
+        const doc = await userRef.get();
+
+        if (!doc.exists) {
+            return res.status(404).json({ message: 'User profile not found.' });
+        }
+
+        const userData = doc.data() as IUserProfile;
+        if (userData.emailVerified === true) {
+            return res.status(200).json({
+                message: 'Your email is already verified.',
+                isVerified: true,
+            });
+        }
+
+        const storedHash = typeof userData.emailVerificationCodeHash === 'string'
+            ? userData.emailVerificationCodeHash.trim()
+            : '';
+        const expiresAtMs = toMillis(userData.emailVerificationExpiresAt);
+
+        if (!storedHash || !expiresAtMs) {
+            return res.status(400).json({ message: 'No verification code is active. Request a new code and try again.' });
+        }
+
+        if (Date.now() > expiresAtMs) {
+            await userRef.set({
+                emailVerificationCodeHash: admin.firestore.FieldValue.delete(),
+                emailVerificationExpiresAt: admin.firestore.FieldValue.delete(),
+                updatedAt: admin.firestore.Timestamp.now(),
+            }, { merge: true });
+
+            return res.status(400).json({ message: 'This verification code has expired. Request a new one and try again.' });
+        }
+
+        if (hashVerificationCode(rawCode) !== storedHash) {
+            return res.status(400).json({ message: 'That verification code is incorrect. Please try again.' });
+        }
+
+        await userRef.set({
+            emailVerified: true,
+            emailVerifiedAt: admin.firestore.Timestamp.now(),
+            emailVerificationCodeHash: admin.firestore.FieldValue.delete(),
+            emailVerificationExpiresAt: admin.firestore.FieldValue.delete(),
+            updatedAt: admin.firestore.Timestamp.now(),
+        }, { merge: true });
+
+        try {
+            await admin.auth().updateUser(uid, { emailVerified: true });
+        } catch (firebaseError) {
+            console.warn('Unable to update Firebase emailVerified flag:', firebaseError);
+        }
+
+        return res.status(200).json({
+            message: 'Email verified successfully.',
+            isVerified: true,
+            emailVerifiedAt: new Date().toISOString(),
+        });
+    } catch (error: unknown) {
+        console.error('Email verification confirm error:', error);
+        const errorMessage = isErrorWithMessage(error) ? error.message : 'Unable to verify email right now.';
+        return res.status(500).json({ message: errorMessage });
     }
 };
 
@@ -320,6 +521,8 @@ const completeOnboarding = async (req: Request, res: Response) => {
 // FINAL EXPORTS 
 // ----------------------------------------
 export { 
+    sendEmailVerificationCode,
+    verifyEmailVerificationCode,
     uploadPhotos, 
     completeOnboarding,
     createProfileAfterFirebaseRegister 
