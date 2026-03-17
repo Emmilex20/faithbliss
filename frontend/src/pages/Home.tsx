@@ -10,6 +10,8 @@ import { SeoMetaManager } from "../components/SeoMetaManager";
 export default function Home() {
   const [scrollY, setScrollY] = useState(0);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  const currentYear = new Date().getFullYear();
   
   // Array of background images
   // IMPORTANT: Place these images in the 'frontend/public' folder
@@ -360,7 +362,7 @@ export default function Home() {
           
           <div className="border-t border-gray-800 mt-8 pt-8 text-center space-y-3">
             <p className="text-gray-400">
-              2025 FaithBliss. Built with faith.
+              {currentYear} FaithBliss. Built with faith.
             </p>
             <p className="text-gray-500 text-sm">
               Powered by <span className="text-blue-400 font-semibold">FutureGRIN</span>
