@@ -38,7 +38,7 @@ export default function Home() {
       setCurrentImageIndex((prevIndex) =>
         (prevIndex + 1) % backgroundImages.length
       );
-    }, 1500); // Change image every 1.5 seconds
+    }, 4000); // Change image every 4 seconds
 
     return () => clearInterval(interval);
   }, [backgroundImages.length]);
