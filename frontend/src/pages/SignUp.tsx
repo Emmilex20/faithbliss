@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FcGoogle } from 'react-icons/fc';
-import { Eye, EyeOff, Heart, Lock, Mail, Sparkles, User } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Heart, Lock, Mail, Sparkles, User } from 'lucide-react';
 import { PopupInstruction } from '@/components/auth/PopupInstruction';
 import { SuccessModal } from '@/components/SuccessModal';
 import { HeartBeatIcon } from '@/components/HeartBeatIcon';
@@ -107,6 +107,17 @@ export default function Signup() {
   return (
     <div className="max-w-md w-full">
       <div className="bg-gray-800/50 backdrop-blur-xl rounded-2xl p-6 sm:p-8 border border-gray-700/50">
+        <div className="mb-5 flex justify-start">
+          <Link
+            to="/"
+            aria-label="Back to home"
+            title="Back to home"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-gray-600/50 bg-gray-700/40 text-gray-200 transition-all hover:border-pink-500/40 hover:bg-gray-700/70 hover:text-white"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+        </div>
+
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-4">
             <Heart className="h-8 w-8 text-pink-500" />
