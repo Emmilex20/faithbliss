@@ -6,6 +6,7 @@ import { DocumentData, DocumentReference } from 'firebase-admin/firestore';
 import { Types } from 'mongoose'; // Still used for internal logic, but not for DB IDs anymore
 import multer from 'multer';
 import { createHash, randomInt } from 'crypto';
+import sgMail from '@sendgrid/mail';
 import { storage } from '../config/cloudinaryConfig'; // Assuming Cloudinary is still used
 import { countProfilePhotos, MIN_REQUIRED_PROFILE_PHOTOS } from '../utils/profilePhotos';
 import { validateOnboardingPayload } from '../utils/validateOnboardingPayload';
@@ -139,14 +140,79 @@ const toMillis = (value: unknown): number | null => {
 };
 
 const sendVerificationCodeEmail = async (to: string, code: string, name?: string) => {
-    const webhook = process.env.EMAIL_WEBHOOK_URL;
-    if (!webhook) {
-        throw new Error('Email delivery is not configured.');
-    }
-
     const firstName = typeof name === 'string' && name.trim() ? name.trim().split(/\s+/)[0] : 'there';
     const subject = 'Your FaithBliss verification code';
-    const text = `Hi ${firstName},\n\nYour FaithBliss verification code is ${code}.\n\nIt expires in ${EMAIL_VERIFICATION_EXPIRY_MINUTES} minutes.\nIf you did not request this, you can ignore this email.\n\nFaithBliss`;
+
+    const text = `Hi ${firstName},\n\nYour FaithBliss verification code is ${code}.\n\nIt expires in ${EMAIL_VERIFICATION_EXPIRY_MINUTES} minutes.\nIf you did not request this, you can ignore this email.\n\nThanks,\nThe FaithBliss team`;
+
+    const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto;">
+            <h2 style="color: #1F2937;">Your FaithBliss verification code</h2>
+            <p style="color: #374151;">Hi ${firstName},</p>
+            <p style="color: #374151;">Use the code below to verify your email address. It expires in <strong>${EMAIL_VERIFICATION_EXPIRY_MINUTES} minutes</strong>.</p>
+            <p style="font-size: 26px; font-weight: 700; letter-spacing: 2px; color: #111827;">${code}</p>
+            <p style="color: #6B7280;">If you did not request this, you can safely ignore this message.</p>
+            <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;" />
+            <p style="color: #6B7280; font-size: 13px;">Need help? Reply to this email or visit <a href="https://faithbliss.com" style="color: #2563EB; text-decoration: none;">faithbliss.com</a>.</p>
+        </div>
+    `;
+
+    // Prefer SendGrid if API key is configured
+    const sendgridKey = process.env.SENDGRID_API_KEY;
+    const sendgridFrom = process.env.SENDGRID_FROM || 'no-reply@faithbliss.com';
+
+    if (sendgridKey) {
+        sgMail.setApiKey(sendgridKey);
+        const msg = {
+            to,
+            from: {
+                email: sendgridFrom,
+                name: 'FaithBliss',
+            },
+            subject,
+            text,
+            html,
+            replyTo: {
+                email: sendgridFrom,
+                name: 'FaithBliss Support',
+            },
+        };
+
+        try {
+            await sgMail.send(msg);
+            return;
+        } catch (error: unknown) {
+            console.error('SendGrid send error:', error);
+
+            // SendGrid errors can include structured response data. Include it when available.
+            let sendGridDetails = '';
+            if (typeof error === 'object' && error !== null) {
+                const anyErr = error as any;
+                if (anyErr.response?.body) {
+                    console.error('SendGrid response body:', anyErr.response.body);
+                    try {
+                        sendGridDetails = JSON.stringify(anyErr.response.body);
+                    } catch {
+                        sendGridDetails = String(anyErr.response.body);
+                    }
+                }
+            }
+
+            throw new Error(
+                `SendGrid send failure (check API key / sender permissions)${
+                    sendGridDetails ? ` — details: ${sendGridDetails}` : ''
+                }`
+            );
+        }
+    }
+
+    // Fallback: existing webhook method (for legacy setups)
+    const webhook = process.env.EMAIL_WEBHOOK_URL;
+    if (!webhook || webhook.includes('localhost:5173')) {
+        console.warn('Email delivery is currently mocked; set SENDGRID_API_KEY or EMAIL_WEBHOOK_URL to send real emails.');
+        console.log(`Mock send email to ${to}:`, { subject, text });
+        return;
+    }
 
     const response = await fetch(webhook, {
         method: 'POST',

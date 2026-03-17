@@ -341,6 +341,32 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="bg-gray-900/70 text-white py-14 px-6">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div>
+            <h2 className="text-2xl font-bold">Need help or have a question?</h2>
+            <p className="text-gray-300 mt-2 max-w-xl">
+              Our Trust & Safety team is here to help — whether you have a question about getting started, a report to make, or feedback to share.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <a
+              href="mailto:faithbliss@futuregrin.com"
+              className="inline-flex items-center justify-center rounded-full bg-pink-500 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-pink-500/20 hover:bg-pink-600 transition"
+            >
+              Email Support
+            </a>
+            <Link
+              to="/contact"
+              className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/10 px-7 py-3 text-sm font-semibold text-white hover:bg-white/15 transition"
+            >
+              Contact Page
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Simple Footer */}
       <footer className="bg-gray-900 text-white py-12 px-6">
         <div className="max-w-6xl mx-auto">

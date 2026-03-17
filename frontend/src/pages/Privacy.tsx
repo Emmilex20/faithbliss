@@ -143,7 +143,7 @@ export default function Privacy() {
                       <h3 className="text-lg font-semibold text-white">Contact us</h3>
                       <p className="text-gray-300 text-sm">
                         Questions? Reach the Trust & Safety team at
-                        <span className="text-pink-300"> support@faithbliss.com</span>.
+                        <span className="text-pink-300"> faithbliss@futuregrin.com</span>.
                       </p>
                     </div>
                   </div>
