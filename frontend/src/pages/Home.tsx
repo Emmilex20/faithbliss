@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom"; // <-- CHANGED from 'next/link'
 import { Heart, Globe, Users, Target, Shield, Handshake, BookOpen } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import FadeIn from "../components/FadeIn"; // <-- IMPORTED our component
 import { SeoMetaManager } from "../components/SeoMetaManager";
 
@@ -10,19 +10,18 @@ import { SeoMetaManager } from "../components/SeoMetaManager";
 export default function Home() {
   const [scrollY, setScrollY] = useState(0);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [isTransitioning, setIsTransitioning] = useState(false);
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
   
   // Array of background images
   // IMPORTANT: Place these images in the 'frontend/public' folder
-  const backgroundImages = [
-    '/bg2.jpg',
-    '/bg3.jpg',
-    '/bg4.jpg',
-    '/bg5.jpg',
-    '/bg6.jpg',
-    '/bg.jpg'
-  ];
+  const backgroundImages = useMemo(
+    () => [
+      '/bg.jpg',
+      '/bg2.jpg',
+      '/bg3.jpg',
+    ],
+    []
+  );
 
   // Love stories data
   const loveStories = [
@@ -88,19 +87,21 @@ export default function Home() {
     }
   ];
 
-  // Image rotation effect with fade out/in transition
+  // Preload hero background images so transitions are smooth (no black flashes)
+  useEffect(() => {
+    backgroundImages.forEach((src) => {
+      const img = new Image();
+      img.src = src;
+    });
+  }, [backgroundImages]);
+
+  // Image rotation effect with crossfade
   useEffect(() => {
     const interval = setInterval(() => {
-      setIsTransitioning(true); // Start fade out
-      
-      setTimeout(() => {
-        setCurrentImageIndex((prevIndex) => 
-          (prevIndex + 1) % backgroundImages.length
-        );
-        setIsTransitioning(false); // Start fade in
-      }, 500); // Wait 500ms for fade out before changing image
-
-    }, 6000); // Change image every 6 seconds
+      setCurrentImageIndex((prevIndex) =>
+        (prevIndex + 1) % backgroundImages.length
+      );
+    }, 5000); // Change image every 1.5 seconds
 
     return () => clearInterval(interval);
   }, [backgroundImages.length]);
@@ -202,8 +203,9 @@ export default function Home() {
             className="absolute inset-0 bg-cover bg-center bg-no-repeat scale-110 will-change-transform transition-opacity duration-700 ease-in-out"
             style={{
               backgroundImage: `url('${image}')`,
+              backgroundColor: '#0f172a',
               transform: `translate3d(0, ${bgTransform}px, 0) scale(1.1)`,
-              opacity: index === currentImageIndex ? (isTransitioning ? 0.7 : 1) : 0,
+              opacity: index === currentImageIndex ? 1 : 0,
             }}
           />
         ))}

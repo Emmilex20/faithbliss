@@ -890,6 +890,27 @@ export function useAuth() {
         return await API.Auth.sendEmailVerificationCode();
     }, []);
 
+    //  5. Refetch User (Now uses Firestore)
+    const refetchUser = useCallback(async () => {
+        try {
+            const fbUser = auth.currentUser;
+            if (!fbUser) throw new Error("No current Firebase user to refresh token.");
+            
+            // Use the new Firestore helper for refetching
+            const userToStore = await fetchUserDataFromFirestore(fbUser);
+            if (!userToStore) throw new Error("User profile not found in Firestore during refetch.");
+
+            const freshToken = await fbUser.getIdToken();
+
+            setUser(userToStore);
+            setAccessToken(freshToken);
+            localStorage.setItem("accessToken", freshToken);
+            localStorage.setItem("user", JSON.stringify(userToStore));
+        } catch (err) {
+            console.error("Refetch user failed:", err);
+        }
+    }, []);
+
     const verifyEmailVerificationCode = useCallback(async (code: string) => {
         const response = await API.Auth.verifyEmailVerificationCode(code);
         await refetchUser();
@@ -978,27 +999,6 @@ export function useAuth() {
             setIsLoggingOut(false);
         }
     }, [showSuccess, navigate, clearAppStorage]);
-
-    //  5. Refetch User (Now uses Firestore)
-    const refetchUser = useCallback(async () => {
-        try {
-            const fbUser = auth.currentUser;
-            if (!fbUser) throw new Error("No current Firebase user to refresh token.");
-            
-            // Use the new Firestore helper for refetching
-            const userToStore = await fetchUserDataFromFirestore(fbUser);
-            if (!userToStore) throw new Error("User profile not found in Firestore during refetch.");
-
-            const freshToken = await fbUser.getIdToken();
-
-            setUser(userToStore);
-            setAccessToken(freshToken);
-            localStorage.setItem("accessToken", freshToken);
-            localStorage.setItem("user", JSON.stringify(userToStore));
-        } catch (err) {
-            console.error("Refetch user failed:", err);
-        }
-    }, []);
 
 
 // -----------------------------------------------------------
