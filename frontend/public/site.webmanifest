@@ -1,7 +1,8 @@
 {
   "name": "FaithBliss",
   "short_name": "FaithBliss",
-  "description": "Christian dating app for meaningful, faith-centered relationships.",
+  "description": "Christian dating app for meaningful, faith-centered relationships across Africa.",
+  "categories": ["dating", "lifestyle", "social"],
   "id": "/",
   "start_url": "/",
   "scope": "/",
