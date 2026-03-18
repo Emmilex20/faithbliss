@@ -423,7 +423,7 @@ export interface UpdateUserRoleResponse {
 export interface AdminUpdateUserPayload {
   name?: string;
   email?: string;
-  role?: 'user' | 'admin';
+  role?: 'user' | 'admin' | 'marketer';
   roles?: string[];
   hasDeveloperAccess?: boolean;
   age?: number;
@@ -972,36 +972,61 @@ export const UserAPI = {
     return apiRequest(`/api/users${query}`);
   },
 
-  getAdminPlatformStats: async (): Promise<AdminPlatformStatsResponse> => {
-    return apiRequest('/api/users/admin/platform-stats');
-  },
-
-  updateUserRole: async (userId: string, role: 'user' | 'admin'): Promise<UpdateUserRoleResponse> => {
+  updateUserRole: async (userId: string, role: 'user' | 'admin' | 'marketer'): Promise<UpdateUserRoleResponse> => {
     return apiRequest(`/api/users/${userId}/role`, {
       method: 'PATCH',
       body: JSON.stringify({ role }),
     });
   },
-  getDeveloperOverview: async (): Promise<DeveloperOverviewResponse> => {
-    return apiRequest('/api/users/developer/overview');
+
+  getMarketers: async (): Promise<{
+    marketers: Array<{
+      id: string;
+      name: string;
+      email: string;
+      profilePhoto1?: string;
+      marketedCount?: number;
+    }>;
+  }> => {
+    return apiRequest('/api/users/marketers');
+  },
+
+  getMarketerCustomers: async (marketerId: string): Promise<{
+    users: Array<{
+      id: string;
+      name: string;
+      email: string;
+      subscriptionStatus?: string;
+      location?: string;
+      postPaymentSurvey?: {
+        contacted: boolean;
+        marketerId?: string;
+        marketerName?: string;
+        submittedAt?: string;
+      };
+    }>;
+  }> => {
+    return apiRequest(`/api/users/marketers/${encodeURIComponent(marketerId)}/customers`);
+  },
+
+  submitPostPaymentSurvey: async (payload: {
+    contacted: boolean;
+    marketerId?: string;
+  }): Promise<{ message: string }> => {
+    return apiRequest('/api/users/me/post-payment-survey', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getAdminPlatformStats: async (): Promise<AdminPlatformStatsResponse> => {
+    return apiRequest('/api/users/admin/platform-stats');
   },
 
   adminUpdateUser: async (userId: string, payload: AdminUpdateUserPayload): Promise<AdminUpdateUserResponse> => {
     return apiRequest(`/api/users/${userId}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
-    });
-  },
-
-  adminResetPassword: async (userId: string): Promise<AdminResetPasswordResponse> => {
-    return apiRequest(`/api/users/${userId}/reset-password`, {
-      method: 'POST',
-    });
-  },
-
-  adminDeleteUser: async (userId: string): Promise<{ message: string }> => {
-    return apiRequest(`/api/users/${userId}`, {
-      method: 'DELETE',
     });
   },
 

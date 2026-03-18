@@ -116,6 +116,12 @@ export interface User {
     nextPaymentDate?: string;
     updatedAt?: string;
   };
+  postPaymentSurvey?: {
+    contacted: boolean;
+    marketerId?: string;
+    marketerName?: string;
+    submittedAt?: string;
+  };
   settings?: Record<string, any>;
   createdAt?: string;
 

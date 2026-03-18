@@ -51,6 +51,12 @@ interface IFirestoreUser {
   profileBoosterLastUsedAt?: unknown;
   countryCode?: string;
   passportCountry?: string | null;
+  postPaymentSurvey?: {
+    contacted: boolean;
+    marketerId?: string;
+    marketerName?: string;
+    submittedAt?: unknown;
+  };
 }
 
 interface CustomRequest extends Request {
@@ -270,6 +276,24 @@ const getAllUsers = async (req: CustomRequest, res: Response) => {
     const totalPages = Math.max(1, Math.ceil(total / limit));
     const users = filteredUsers.slice(skip, skip + limit);
 
+    // Build a lookup map for marketer names (if survey includes marketerId)
+    const marketerIds = Array.from(
+      new Set(
+        users
+          .map((u) => u.postPaymentSurvey?.marketerId)
+          .filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+      )
+    );
+
+    const marketerNames: Record<string, string> = {};
+    if (marketerIds.length > 0) {
+      const marketerDocs = await usersCollection.where(admin.firestore.FieldPath.documentId(), 'in', marketerIds).get();
+      marketerDocs.forEach((doc) => {
+        const data = doc.data() as IFirestoreUser;
+        if (data?.name) marketerNames[doc.id] = data.name;
+      });
+    }
+
     return res.status(200).json({
       users: users.map((user) => ({
         id: user.id,
@@ -288,6 +312,14 @@ const getAllUsers = async (req: CustomRequest, res: Response) => {
         location: user.location,
         bio: user.bio,
         denomination: user.denomination,
+        postPaymentSurvey: user.postPaymentSurvey
+          ? {
+              ...user.postPaymentSurvey,
+              marketerName: user.postPaymentSurvey.marketerId
+                ? marketerNames[user.postPaymentSurvey.marketerId] || undefined
+                : undefined,
+            }
+          : undefined,
         subscriptionBillingCycle:
           typeof user.subscription?.billingCycle === 'string' ? user.subscription.billingCycle : undefined,
         createdAt: normalizeFirestoreTimestamp((user as Record<string, unknown>).createdAt),
@@ -302,6 +334,147 @@ const getAllUsers = async (req: CustomRequest, res: Response) => {
     const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
     console.error('Error fetching users:', error);
     return res.status(500).json({ message: `Failed to retrieve user list: ${errorMessage}` });
+  }
+};
+
+const getMarketers = async (req: CustomRequest, res: Response) => {
+  const firebaseUid = req.userId;
+  if (!firebaseUid) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  try {
+    const [roleSnapshot, rolesSnapshot] = await Promise.all([
+      usersCollection.where('role', '==', 'marketer').get(),
+      usersCollection.where('roles', 'array-contains', 'marketer').get(),
+    ]);
+
+    const marketersMap = new Map<string, IFirestoreUser & { id: string }>();
+
+    roleSnapshot.forEach((doc) => {
+      const data = doc.data() as IFirestoreUser;
+      marketersMap.set(doc.id, { ...data, id: doc.id });
+    });
+
+    rolesSnapshot.forEach((doc) => {
+      const data = doc.data() as IFirestoreUser;
+      marketersMap.set(doc.id, { ...data, id: doc.id });
+    });
+
+    const allUsersSnapshot = await usersCollection.get();
+    const marketerCounts = new Map<string, number>();
+
+    allUsersSnapshot.forEach((doc) => {
+      const user = doc.data() as IFirestoreUser;
+      const survey = user.postPaymentSurvey;
+      if (survey?.contacted === true && typeof survey.marketerId === 'string' && survey.marketerId.trim().length > 0) {
+        const id = survey.marketerId.trim();
+        marketerCounts.set(id, (marketerCounts.get(id) ?? 0) + 1);
+      }
+    });
+
+    const marketers = Array.from(marketersMap.values()).map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      profilePhoto1: user.profilePhoto1,
+      marketedCount: marketerCounts.get(user.id) ?? 0,
+    }));
+
+    return res.status(200).json({ marketers });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error fetching marketers:', error);
+    return res.status(500).json({ message: `Failed to retrieve marketers: ${errorMessage}` });
+  }
+};
+
+const getMarketerCustomers = async (req: CustomRequest, res: Response) => {
+  const firebaseUid = req.userId;
+  const currentUser = await requireAdmin(firebaseUid, res);
+  if (!currentUser) return;
+
+  const marketerId = req.params.id;
+  if (!marketerId || typeof marketerId !== 'string') {
+    return res.status(400).json({ message: 'Invalid marketer ID.' });
+  }
+
+  try {
+    const marketerDoc = await usersCollection.doc(marketerId).get();
+    if (!marketerDoc.exists) {
+      return res.status(404).json({ message: 'Marketer not found.' });
+    }
+
+    const customersSnapshot = await usersCollection
+      .where('postPaymentSurvey.marketerId', '==', marketerId)
+      .where('postPaymentSurvey.contacted', '==', true)
+      .get();
+
+    const customers = customersSnapshot.docs.map((doc) => {
+      const user = doc.data() as IFirestoreUser;
+      return {
+        id: doc.id,
+        name: user.name,
+        email: user.email,
+        subscriptionStatus: user.subscriptionStatus,
+        location: user.location,
+        postPaymentSurvey: user.postPaymentSurvey,
+      };
+    });
+
+    return res.status(200).json({ users: customers });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error fetching marketer customers:', error);
+    return res.status(500).json({ message: `Failed to retrieve marketer customers: ${errorMessage}` });
+  }
+};
+
+const submitPostPaymentSurvey = async (req: CustomRequest, res: Response) => {
+  const firebaseUid = req.userId;
+  if (!firebaseUid) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  const body = req.body as {
+    contacted?: unknown;
+    marketerId?: unknown;
+  };
+
+  const contacted = body.contacted === true;
+  const marketerId = typeof body.marketerId === 'string' && body.marketerId.trim() ? body.marketerId.trim() : undefined;
+
+  try {
+    const surveyUpdate: Record<string, unknown> = {
+      contacted,
+      submittedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    if (marketerId) {
+      const marketerDoc = await usersCollection.doc(marketerId).get();
+      if (marketerDoc.exists) {
+        const marketerData = marketerDoc.data() as IFirestoreUser;
+        surveyUpdate.marketerId = marketerId;
+        surveyUpdate.marketerName = marketerData.name;
+      } else {
+        surveyUpdate.marketerId = marketerId;
+      }
+    }
+
+    const update: Record<string, unknown> = {
+      postPaymentSurvey: surveyUpdate,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    await usersCollection.doc(firebaseUid).set(update, { merge: true });
+
+    return res.status(200).json({
+      message: 'Survey saved successfully.',
+    });
+  } catch (error) {
+    const errorMessage = isErrorWithMessage(error) ? error.message : 'An unknown error occurred';
+    console.error('Error saving post-payment survey:', error);
+    return res.status(500).json({ message: `Failed to save survey: ${errorMessage}` });
   }
 };
 
@@ -873,8 +1046,8 @@ const updateUserRole = async (req: CustomRequest, res: Response) => {
     return res.status(400).json({ message: 'Target user ID is required.' });
   }
 
-  if (!['user', 'admin'].includes(nextRole)) {
-    return res.status(400).json({ message: 'Role must be user or admin.' });
+  if (!['user', 'admin', 'marketer'].includes(nextRole)) {
+    return res.status(400).json({ message: 'Role must be user, marketer, or admin.' });
   }
 
   try {
@@ -983,8 +1156,8 @@ const updateUserByAdmin = async (req: CustomRequest, res: Response) => {
 
     const nextRole = typeof body.role === 'string' ? body.role.trim().toLowerCase() : '';
     if (nextRole) {
-      if (!['user', 'admin'].includes(nextRole)) {
-        return res.status(400).json({ message: 'Role must be user or admin.' });
+      if (!['user', 'admin', 'marketer'].includes(nextRole)) {
+        return res.status(400).json({ message: 'Role must be user, marketer, or admin.' });
       }
       if (isAdminUser(targetUser)) {
         return res.status(403).json({ message: 'Admin roles cannot be changed from the admin console.' });
@@ -1223,9 +1396,12 @@ export {
   getMe,
   getUserById,
   getAllUsers,
+  getMarketers,
+  getMarketerCustomers,
   getAdminPlatformStats,
   getDeveloperOverview,
   getOnboardingDebug,
+  submitPostPaymentSurvey,
   updateUserProfile,
   updateUserSettings,
   updatePassportSettings,

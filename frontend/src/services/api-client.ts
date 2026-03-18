@@ -132,7 +132,7 @@ export const getApiClient = (accessToken: string | null) => ({
       );
     },
 
-    updateUserRole: (userId: string, role: 'user' | 'admin') =>
+    updateUserRole: (userId: string, role: 'user' | 'admin' | 'marketer') =>
       apiClientRequest<UpdateUserRoleResponse>(
         `/api/users/${userId}/role`,
         { method: 'PATCH', body: JSON.stringify({ role }) },

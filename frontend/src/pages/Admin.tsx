@@ -59,8 +59,14 @@ const getNormalizedRoles = (roles: unknown): string[] =>
     : [];
 
 const getRoleSummaryLabel = (user: { role?: string; roles?: string[] }) => {
-  const baseRole = isAdminRole(user.role) ? 'Admin' : 'User';
-  return getNormalizedRoles(user.roles).includes('developer') ? `${baseRole} + Developer` : baseRole;
+  const normalizedRoles = getNormalizedRoles(user.roles);
+  const lowerRole = (user.role || '').trim().toLowerCase();
+  const baseRole = isAdminRole(user.role)
+    ? 'Admin'
+    : lowerRole === 'marketer' || normalizedRoles.includes('marketer')
+    ? 'Marketer'
+    : 'User';
+  return normalizedRoles.includes('developer') ? `${baseRole} + Developer` : baseRole;
 };
 
 const isAdminDeveloperUser = (user: { role?: string; roles?: string[] }) =>
@@ -70,7 +76,7 @@ const toEditableUser = (user: EditableSource): EditableUser => ({
   id: user.id,
   name: user.name || '',
   email: user.email || '',
-  role: (user.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin' | string,
+  role: (typeof user.role === 'string' && user.role ? user.role : 'user') as 'user' | 'admin' | string,
   roles: getNormalizedRoles(user.roles),
   hasDeveloperAccess: getNormalizedRoles(user.roles).includes('developer'),
   age: typeof user.age === 'number' ? user.age : 18,
@@ -392,9 +398,30 @@ const csvEscape = (value: unknown): string => {
   return `"${text.replace(/"/g, '""')}"`;
 };
 
+const parseTimestamp = (value: unknown): Date | null => {
+  if (!value) return null;
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  if (typeof value === 'object' && value !== null && 'toDate' in value && typeof (value as any).toDate === 'function') {
+    const parsed = (value as any).toDate();
+    return parsed instanceof Date && !Number.isNaN(parsed.getTime()) ? parsed : null;
+  }
+  return null;
+};
+
+const formatTimestamp = (value: unknown): string | null => {
+  const date = parseTimestamp(value);
+  return date ? date.toLocaleString() : null;
+};
+
 const AdminPage = () => {
   const { showError, showSuccess, showInfo } = useToast();
-  const [activeSection, setActiveSection] = useState<'overview' | 'users' | 'payments' | 'reports' | 'features'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'users' | 'marketers' | 'payments' | 'reports' | 'features'>('overview');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<EditableUser | null>(null);
@@ -409,6 +436,32 @@ const AdminPage = () => {
   const [issuesLoading, setIssuesLoading] = useState(true);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [replyingTicketId, setReplyingTicketId] = useState<string | null>(null);
+
+  const [marketers, setMarketers] = useState<Array<{
+    id: string;
+    name: string;
+    email: string;
+    profilePhoto1?: string;
+    marketedCount?: number;
+  }>>([]);
+  const [marketersLoading, setMarketersLoading] = useState(true);
+  const [selectedMarketerId, setSelectedMarketerId] = useState<string | null>(null);
+  const [marketerCustomers, setMarketerCustomers] = useState<Array<{
+    id: string;
+    name: string;
+    email: string;
+    subscriptionStatus?: string;
+    location?: string;
+    postPaymentSurvey?: {
+      contacted: boolean;
+      marketerId?: string;
+      marketerName?: string;
+      submittedAt?: string;
+    };
+  }>>([]);
+  const [marketerCustomersLoading, setMarketerCustomersLoading] = useState(false);
+  const [marketerCustomersModalOpen, setMarketerCustomersModalOpen] = useState(false);
+
   const [paymentAnalytics, setPaymentAnalytics] = useState<Awaited<ReturnType<typeof API.Payment.getAdminAnalytics>> | null>(null);
   const [paymentsLoading, setPaymentsLoading] = useState(true);
   const [platformStats, setPlatformStats] = useState<Awaited<ReturnType<typeof API.User.getAdminPlatformStats>> | null>(null);
@@ -483,6 +536,32 @@ const AdminPage = () => {
       isMounted = false;
     };
   }, [showError]);
+
+  useEffect(() => {
+    if (activeSection !== 'marketers') return;
+
+    let isMounted = true;
+
+    const loadMarketers = async () => {
+      setMarketersLoading(true);
+      try {
+        const response = await API.User.getMarketers();
+        if (!isMounted) return;
+        setMarketers(response.marketers || []);
+      } catch (error) {
+        console.error('Failed to load marketers', error);
+        showError('Unable to load marketers right now.');
+      } finally {
+        if (isMounted) setMarketersLoading(false);
+      }
+    };
+
+    void loadMarketers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeSection, showError]);
 
   const { data, loading, error, refetch } = useAllUsers({ page: 1, limit: 200, search: debouncedSearch });
 
@@ -567,6 +646,11 @@ const AdminPage = () => {
     [overviewRangeDays, users]
   );
   const activeUsersInRange = activePresenceSignals;
+
+  const selectedMarketer = useMemo(
+    () => (selectedMarketerId ? marketers.find((m) => m.id === selectedMarketerId) : null),
+    [marketers, selectedMarketerId]
+  );
 
   const downloadCsv = (filename: string, rows: string[][]) => {
     const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\n');
@@ -682,6 +766,23 @@ const AdminPage = () => {
     setEditingUser(editable);
   };
 
+  const openMarketerCustomers = async (marketerId: string) => {
+    setSelectedMarketerId(marketerId);
+    setMarketerCustomersLoading(true);
+    setMarketerCustomersModalOpen(true);
+
+    try {
+      const response = await API.User.getMarketerCustomers(marketerId);
+      setMarketerCustomers(response.users || []);
+    } catch (err) {
+      console.error('Failed to load marketer customers', err);
+      showError('Unable to load marketer customers right now.');
+      setMarketerCustomers([]);
+    } finally {
+      setMarketerCustomersLoading(false);
+    }
+  };
+
   const closeEditor = () => {
     if (saving || deletingUser || resettingPassword) return;
     setSelectedUser(null);
@@ -698,11 +799,7 @@ const AdminPage = () => {
     const payload: AdminUpdateUserPayload = {
       name: editingUser.name.trim(),
       email: editingUser.email.trim().toLowerCase(),
-      role: isAdminRole(selectedUser.role)
-        ? undefined
-        : editingUser.role === 'admin'
-          ? 'admin'
-          : 'user',
+      role: isAdminRole(selectedUser.role) ? undefined : (editingUser.role || 'user'),
       roles: editingUser.hasDeveloperAccess ? ['developer'] : [],
       hasDeveloperAccess: editingUser.hasDeveloperAccess,
       age: Number(editingUser.age),
@@ -987,6 +1084,21 @@ const AdminPage = () => {
                   <span className="font-medium">User directory</span>
                 </span>
                 <span className="text-xs text-gray-400">{stats.total}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection('marketers')}
+                className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition ${
+                  activeSection === 'marketers' ? 'bg-purple-500/15 text-purple-200' : 'bg-black/20 text-gray-200 hover:bg-white/10'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <Crown className="h-4 w-4" />
+                  <span className="font-medium">Marketers</span>
+                </span>
+                <span className="text-xs text-gray-400">
+                  {marketersLoading ? '...' : marketers.length}
+                </span>
               </button>
               <button
                 type="button"
@@ -1436,6 +1548,16 @@ const AdminPage = () => {
                                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Location</p>
                                 <p className="mt-1 line-clamp-2 text-sm text-white">{user.location || 'Unknown'}</p>
                               </div>
+                              <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Survey status</p>
+                                <p className="mt-1 line-clamp-2 text-sm text-white">
+                                  {user.postPaymentSurvey
+                                    ? user.postPaymentSurvey.contacted
+                                      ? user.postPaymentSurvey.marketerName || 'Yes (unknown)'
+                                      : 'No'
+                                    : 'Not answered'}
+                                </p>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1443,19 +1565,20 @@ const AdminPage = () => {
                     </div>
                     <div className="hidden overflow-x-auto rounded-2xl border border-white/10 lg:block">
                     <div className="min-w-[980px]">
-                      <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_auto] gap-4 bg-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-300">
+                      <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-4 bg-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-300">
                         <span>User</span>
                         <span>Role</span>
                         <span>Status</span>
                         <span>Plan</span>
                         <span>Location</span>
+                        <span>Survey status</span>
                         <span>Action</span>
                       </div>
                       <div className="divide-y divide-white/10">
                         {users.map((user) => (
                           <div
                             key={user.id}
-                            className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_auto] gap-4 px-4 py-4 text-sm text-gray-200"
+                            className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-4 px-4 py-4 text-sm text-gray-200"
                           >
                             <div className="min-w-0">
                               <p className="truncate font-semibold text-white">{user.name}</p>
@@ -1483,6 +1606,13 @@ const AdminPage = () => {
                               </span>
                             </div>
                             <div className="truncate text-gray-300">{user.location || 'Unknown'}</div>
+                            <div className="truncate text-gray-300">
+                              {user.postPaymentSurvey
+                                ? user.postPaymentSurvey.contacted
+                                  ? user.postPaymentSurvey.marketerName || 'Yes (unknown)'
+                                  : 'No'
+                                : 'Not answered'}
+                            </div>
                             <div className="flex justify-end">
                               <button
                                 onClick={() => openEditor(user)}
@@ -1497,6 +1627,87 @@ const AdminPage = () => {
                       </div>
                     </div>
                   </div>
+                  </>
+                )}
+              </div>
+            ) : null}
+
+            {activeSection === 'marketers' ? (
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
+                <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-white">Marketers</h2>
+                    <p className="mt-1 text-sm text-gray-400">View which marketers have contacted users and how many leads they’ve referred.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-white/10 px-3 py-2 text-xs text-gray-300">
+                      {marketersLoading ? 'Loading…' : `${marketers.length} marketers`}
+                    </span>
+                  </div>
+                </div>
+
+                {marketersLoading ? (
+                  <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-6 text-sm text-gray-300">
+                    Loading marketers...
+                  </div>
+                ) : marketers.length === 0 ? (
+                  <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-6 text-sm text-gray-300">
+                    No marketers found.
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-3 lg:hidden">
+                      {marketers.map((marketer) => (
+                        <div key={marketer.id} className="rounded-[1.75rem] border border-white/10 bg-black/20 p-4 shadow-[0_12px_30px_rgba(2,6,23,0.32)]">
+                          <div className="flex flex-col gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-base font-semibold text-white">{marketer.name}</p>
+                              <p className="truncate text-xs text-gray-400">{marketer.email}</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-gray-300">
+                                {marketer.marketedCount ?? 0} leads
+                              </span>
+                              <button
+                                onClick={() => openMarketerCustomers(marketer.id)}
+                                className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-500/20"
+                              >
+                                See all
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="hidden overflow-x-auto rounded-2xl border border-white/10 lg:block">
+                      <div className="min-w-[860px]">
+                        <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto] gap-4 bg-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-300">
+                          <span>Marketer</span>
+                          <span>Leads referred</span>
+                          <span>Action</span>
+                        </div>
+                        <div className="divide-y divide-white/10">
+                          {marketers.map((marketer) => (
+                            <div key={marketer.id} className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto] gap-4 px-4 py-4 text-sm text-gray-200">
+                              <div className="min-w-0">
+                                <p className="truncate font-semibold text-white">{marketer.name}</p>
+                                <p className="truncate text-xs text-gray-400">{marketer.email}</p>
+                              </div>
+                              <div className="truncate text-gray-200">{marketer.marketedCount ?? 0}</div>
+                              <div className="flex justify-end">
+                                <button
+                                  onClick={() => openMarketerCustomers(marketer.id)}
+                                  className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-500/20"
+                                >
+                                  See all
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </>
                 )}
               </div>
@@ -1937,8 +2148,13 @@ const AdminPage = () => {
                         </span>
                       </div>
                     ) : (
-                      <select value={editingUser.role === 'admin' ? 'admin' : 'user'} onChange={(e) => updateEditingField('role', e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none">
+                      <select
+                        value={editingUser.role || 'user'}
+                        onChange={(e) => updateEditingField('role', e.target.value)}
+                        className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none"
+                      >
                         <option value="user">User</option>
+                        <option value="marketer">Marketer</option>
                         <option value="admin">Admin</option>
                       </select>
                     )}
@@ -2057,6 +2273,67 @@ const AdminPage = () => {
                   <p className="text-xs text-gray-400">Password reset generates a Firebase reset link and copies it to your clipboard. Delete permanently removes the auth account and Firestore user record.</p>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {marketerCustomersModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-gray-950/95 shadow-xl">
+            <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-gray-900/80 px-6 py-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Customers referred</h2>
+                <p className="mt-1 text-sm text-gray-400">
+                  {selectedMarketer ? selectedMarketer.name : 'Marketer'} — {marketerCustomers.length} customer{marketerCustomers.length === 1 ? '' : 's'}
+                </p>
+              </div>
+              <button
+                onClick={() => setMarketerCustomersModalOpen(false)}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-gray-200 transition hover:bg-white/10"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto px-6 py-5">
+              {marketerCustomersLoading ? (
+                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-6 text-sm text-gray-300">
+                  Loading customers…
+                </div>
+              ) : marketerCustomers.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-6 text-sm text-gray-300">
+                  No customers recorded for this marketer yet.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {marketerCustomers.map((customer) => (
+                    <div key={customer.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="truncate text-base font-semibold text-white">{customer.name}</p>
+                          <p className="truncate text-xs text-gray-400">{customer.email}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-gray-300">
+                            {customer.subscriptionStatus ? customer.subscriptionStatus : 'No subscription'}
+                          </span>
+                          {customer.location ? (
+                            <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-gray-300">
+                              {customer.location}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      {customer.postPaymentSurvey?.submittedAt ? (
+                        <p className="mt-3 text-xs text-gray-400">
+                          Survey submitted: {formatTimestamp(customer.postPaymentSurvey.submittedAt) ?? 'Invalid date'}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

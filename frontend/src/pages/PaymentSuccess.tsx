@@ -6,6 +6,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { TopBar } from '@/components/dashboard/TopBar';
 import { SidePanel } from '@/components/dashboard/SidePanel';
+import { PostPaymentSurveyModal } from '@/components/PostPaymentSurveyModal';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { API } from '@/services/api';
@@ -19,6 +20,8 @@ const PaymentSuccessContent = () => {
   const [loading, setLoading] = useState(true);
   const [successMessage, setSuccessMessage] = useState('Your purchase is ready.');
   const [purchaseType, setPurchaseType] = useState<'subscription' | 'profile_booster'>('subscription');
+  const [showSurvey, setShowSurvey] = useState(false);
+  const [surveyCompleted, setSurveyCompleted] = useState(false);
 
   const layoutName = user?.name || 'User';
   const layoutImage = user?.profilePhoto1 || undefined;
@@ -38,6 +41,7 @@ const PaymentSuccessContent = () => {
         setSuccessMessage(response.message || 'Your purchase is ready.');
         setPurchaseType(response.purchaseType || 'subscription');
         showSuccess(response.message || 'Payment completed successfully.');
+        setShowSurvey(true);
       } catch (error: any) {
         showError(error?.message || 'Payment verification failed.');
       } finally {
@@ -128,6 +132,19 @@ const PaymentSuccessContent = () => {
           </div>
         </div>
       )}
+
+      <PostPaymentSurveyModal
+        isOpen={showSurvey && !surveyCompleted}
+        onClose={() => {
+          setShowSurvey(false);
+          setSurveyCompleted(true);
+        }}
+        onCompleted={() => {
+          setSurveyCompleted(true);
+          setShowSurvey(false);
+          showSuccess('Thank you for your feedback!');
+        }}
+      />
     </div>
   );
 };

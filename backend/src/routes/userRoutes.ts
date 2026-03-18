@@ -7,6 +7,8 @@ import {
   getDeveloperOverview,
   getUserById,
   getOnboardingDebug,
+  getMarketers,
+  getMarketerCustomers,
   updateUserProfile,
   updateUserSettings,
   updatePassportSettings,
@@ -21,6 +23,7 @@ import {
   deleteUserByAdmin,
   deactivateAccount,
   reactivateAccount,
+  submitPostPaymentSurvey,
 } from '../controllers/userController';
 import { protect } from '../middleware/authMiddleware';
 
@@ -52,8 +55,15 @@ router.delete('/:id', protect, deleteUserByAdmin);
 router.post('/me/deactivate', protect, deactivateAccount);
 router.post('/me/reactivate', protect, reactivateAccount);
 
+// Submit post-payment survey (asks who reached out)
+router.post('/me/post-payment-survey', protect, submitPostPaymentSurvey);
+
 // Get all users
 router.get('/', protect, getAllUsers);
+
+// Get marketers list (for sales follow-up)
+router.get('/marketers', protect, getMarketers);
+router.get('/marketers/:id/customers', protect, getMarketerCustomers);
 
 // Debug onboarding document
 router.get('/:id/onboarding-debug', protect, getOnboardingDebug);
