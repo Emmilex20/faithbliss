@@ -899,6 +899,10 @@ export const UserAPI = {
     });
   },
 
+  getDeveloperOverview: async (): Promise<DeveloperOverviewResponse> => {
+    return apiRequest('/api/users/developer/overview');
+  },
+
   // Get user preferences
   getPreferences: async (): Promise<UserPreferences> => {
     // FIX: Added /api prefix
@@ -1027,6 +1031,18 @@ export const UserAPI = {
     return apiRequest(`/api/users/${userId}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
+    });
+  },
+
+  adminResetPassword: async (userId: string): Promise<AdminResetPasswordResponse> => {
+    return apiRequest(`/api/users/${userId}/reset-password`, {
+      method: 'POST',
+    });
+  },
+
+  adminDeleteUser: async (userId: string): Promise<{ message: string }> => {
+    return apiRequest(`/api/users/${userId}`, {
+      method: 'DELETE',
     });
   },
 

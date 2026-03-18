@@ -10,7 +10,7 @@ type EditableUser = {
   id: string;
   name: string;
   email: string;
-  role: 'user' | 'admin' | string;
+  role: NonNullable<AdminUpdateUserPayload['role']>;
   roles: string[];
   hasDeveloperAccess: boolean;
   age: number;
@@ -48,6 +48,12 @@ const normalizeEditableGender = (value: unknown): 'MALE' | 'FEMALE' => {
   return normalized === 'FEMALE' ? 'FEMALE' : 'MALE';
 };
 
+const normalizeEditableRole = (value: unknown): NonNullable<AdminUpdateUserPayload['role']> => {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (normalized === 'admin' || normalized === 'marketer') return normalized;
+  return 'user';
+};
+
 const FEATURE_SETTINGS_SYNC_KEY = 'faithbliss:feature-settings-updated-at';
 const FEATURE_SETTINGS_SYNC_EVENT = 'faithbliss:feature-settings-updated';
 const FEATURE_SETTINGS_CACHE_KEY = 'faithbliss:feature-settings-cache';
@@ -76,7 +82,7 @@ const toEditableUser = (user: EditableSource): EditableUser => ({
   id: user.id,
   name: user.name || '',
   email: user.email || '',
-  role: (typeof user.role === 'string' && user.role ? user.role : 'user') as 'user' | 'admin' | string,
+  role: normalizeEditableRole(user.role),
   roles: getNormalizedRoles(user.roles),
   hasDeveloperAccess: getNormalizedRoles(user.roles).includes('developer'),
   age: typeof user.age === 'number' ? user.age : 18,
@@ -799,7 +805,7 @@ const AdminPage = () => {
     const payload: AdminUpdateUserPayload = {
       name: editingUser.name.trim(),
       email: editingUser.email.trim().toLowerCase(),
-      role: isAdminRole(selectedUser.role) ? undefined : (editingUser.role || 'user'),
+      role: isAdminRole(selectedUser.role) ? undefined : normalizeEditableRole(editingUser.role),
       roles: editingUser.hasDeveloperAccess ? ['developer'] : [],
       hasDeveloperAccess: editingUser.hasDeveloperAccess,
       age: Number(editingUser.age),
@@ -2150,7 +2156,7 @@ const AdminPage = () => {
                     ) : (
                       <select
                         value={editingUser.role || 'user'}
-                        onChange={(e) => updateEditingField('role', e.target.value)}
+                        onChange={(e) => updateEditingField('role', normalizeEditableRole(e.target.value))}
                         className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none"
                       >
                         <option value="user">User</option>
