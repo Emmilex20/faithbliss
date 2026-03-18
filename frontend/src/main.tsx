@@ -69,9 +69,30 @@ if (typeof window !== 'undefined') {
 
   if ('serviceWorker' in navigator && import.meta.env.PROD) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch((error) => {
-        console.warn('Service worker registration failed:', error);
-      });
+      void (async () => {
+        try {
+          const response = await fetch('/sw.js', {
+            cache: 'no-store',
+            headers: {
+              Accept: 'application/javascript,text/javascript,*/*',
+            },
+          });
+
+          const contentType = response.headers.get('content-type') || '';
+          const looksLikeScript =
+            response.ok
+            && !contentType.toLowerCase().includes('text/html');
+
+          if (!looksLikeScript) {
+            console.warn('Skipping service worker registration because /sw.js did not resolve to a JavaScript file.');
+            return;
+          }
+
+          await navigator.serviceWorker.register('/sw.js');
+        } catch (error) {
+          console.warn('Service worker registration failed:', error);
+        }
+      })();
     });
   }
 }

@@ -1,16 +1,19 @@
 {
-  "rewrites": [
+  "routes": [
     {
-      "source": "/__/auth/(.*)",
-      "destination": "https://faithbliss-ade26.firebaseapp.com/__/auth/$1"
+      "src": "/__/auth/(.*)",
+      "dest": "https://faithbliss-ade26.firebaseapp.com/__/auth/$1"
     },
     {
-      "source": "/__/firebase/init.json",
-      "destination": "https://faithbliss-ade26.firebaseapp.com/__/firebase/init.json"
+      "src": "/__/firebase/init.json",
+      "dest": "https://faithbliss-ade26.firebaseapp.com/__/firebase/init.json"
     },
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "handle": "filesystem"
+    },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
     }
   ]
 }
