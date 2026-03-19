@@ -15,6 +15,13 @@ const communityCards = [
     status: 'Coming soon',
   },
   {
+    title: 'The Spotlight',
+    description: 'Meet the singles standing out right now. Keep showing up, and you could be next.',
+    icon: Users,
+    accent: 'from-amber-500/20 to-orange-500/20 border-amber-400/30',
+    status: 'Coming soon',
+  },
+  {
     title: 'The Hangout',
     description: 'From digital mixers, to high-vibe concerts and planned group dates. Discover where the community is meeting up in real life.',
     icon: CalendarDays,

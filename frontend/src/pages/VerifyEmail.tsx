@@ -3,6 +3,11 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, MailCheck, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 
+const extractRetryAfterSeconds = (message: string) => {
+  const match = message.match(/Please wait (\d+) second/);
+  return match ? Number(match[1]) : null;
+};
+
 export default function VerifyEmail() {
   const {
     user,
@@ -58,6 +63,10 @@ export default function VerifyEmail() {
       setCountdown(typeof response.retryAfterSeconds === 'number' ? response.retryAfterSeconds : 45);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to resend the verification code right now.';
+      const retryAfterSeconds = extractRetryAfterSeconds(message);
+      if (typeof retryAfterSeconds === 'number' && retryAfterSeconds > 0) {
+        setCountdown(retryAfterSeconds);
+      }
       setStatusMessage(message);
     } finally {
       setIsResending(false);

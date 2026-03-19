@@ -39,6 +39,7 @@ export interface IUserProfile extends DocumentData {
     emailVerificationExpiresAt?: FirebaseFirestore.Timestamp | string | Date;
     emailVerificationLastSentAt?: FirebaseFirestore.Timestamp | string | Date;
     emailVerifiedAt?: FirebaseFirestore.Timestamp | string | Date;
+    welcomeEmailSentAt?: FirebaseFirestore.Timestamp | string | Date;
     // Add other fields...
     likes?: string[]; // Array of Firestore UIDs
     passes?: string[];
@@ -88,6 +89,7 @@ const uploadPhotos = upload.fields([
 
 const EMAIL_VERIFICATION_EXPIRY_MINUTES = 10;
 const EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS = 45;
+const formatSecondsLabel = (seconds: number) => `${seconds} second${seconds === 1 ? '' : 's'}`;
 
 // Helper types for the file object and request with user
 interface MulterRequest extends Request {
@@ -141,27 +143,36 @@ const toMillis = (value: unknown): number | null => {
 
 const sendVerificationCodeEmail = async (to: string, code: string, name?: string) => {
     const firstName = typeof name === 'string' && name.trim() ? name.trim().split(/\s+/)[0] : 'there';
+    const siteUrl = (process.env.PUBLIC_APP_URL || process.env.CLIENT_URL || 'https://faithblissafrica.com').replace(/\/$/, '');
+    const sendgridFrom = process.env.SENDGRID_FROM?.trim();
+    const supportEmail =
+        process.env.SENDGRID_REPLY_TO?.trim() ||
+        process.env.SUPPORT_EMAIL?.trim() ||
+        sendgridFrom ||
+        'faithbliss@futuregrin.com';
     const subject = 'Your FaithBliss verification code';
 
-    const text = `Hi ${firstName},\n\nYour FaithBliss verification code is ${code}.\n\nIt expires in ${EMAIL_VERIFICATION_EXPIRY_MINUTES} minutes.\nIf you did not request this, you can ignore this email.\n\nThanks,\nThe FaithBliss team`;
+    const text = `Hi ${firstName},\n\nUse this FaithBliss verification code to confirm your email address:\n\n${code}\n\nThis code expires in ${EMAIL_VERIFICATION_EXPIRY_MINUTES} minutes.\n\nIf you did not create a FaithBliss account, you can ignore this email.\n\nNeed help? Contact ${supportEmail} or visit ${siteUrl}/contact.\n\nFaithBliss Africa`;
 
     const html = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto;">
-            <h2 style="color: #1F2937;">Your FaithBliss verification code</h2>
-            <p style="color: #374151;">Hi ${firstName},</p>
-            <p style="color: #374151;">Use the code below to verify your email address. It expires in <strong>${EMAIL_VERIFICATION_EXPIRY_MINUTES} minutes</strong>.</p>
-            <p style="font-size: 26px; font-weight: 700; letter-spacing: 2px; color: #111827;">${code}</p>
-            <p style="color: #6B7280;">If you did not request this, you can safely ignore this message.</p>
-            <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;" />
-            <p style="color: #6B7280; font-size: 13px;">Need help? Reply to this email or visit <a href="https://faithbliss.com" style="color: #2563EB; text-decoration: none;">faithbliss.com</a>.</p>
+        <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; background: #ffffff; color: #111827;">
+            <p style="margin: 0 0 16px; font-size: 14px; color: #6B7280;">FaithBliss Africa email verification</p>
+            <h1 style="margin: 0 0 16px; font-size: 24px; line-height: 1.3; color: #111827;">Verify your email address</h1>
+            <p style="margin: 0 0 16px; color: #374151;">Hi ${firstName},</p>
+            <p style="margin: 0 0 20px; color: #374151;">Use the verification code below to confirm your FaithBliss account. This code expires in <strong>${EMAIL_VERIFICATION_EXPIRY_MINUTES} minutes</strong>.</p>
+            <div style="margin: 0 0 24px; padding: 18px 20px; border-radius: 16px; background: #F3F4F6; border: 1px solid #E5E7EB; text-align: center;">
+                <p style="margin: 0; font-size: 30px; font-weight: 700; letter-spacing: 6px; color: #111827;">${code}</p>
+            </div>
+            <p style="margin: 0 0 16px; color: #4B5563;">If you did not create a FaithBliss account, you can ignore this email.</p>
+            <p style="margin: 0 0 8px; color: #6B7280; font-size: 13px;">Need help? Contact <a href="mailto:${supportEmail}" style="color: #2563EB; text-decoration: none;">${supportEmail}</a> or visit <a href="${siteUrl}/contact" style="color: #2563EB; text-decoration: none;">${siteUrl}/contact</a>.</p>
+            <p style="margin: 0; color: #9CA3AF; font-size: 12px;">This is a transactional security email from FaithBliss Africa.</p>
         </div>
     `;
 
     // Prefer SendGrid if API key is configured
     const sendgridKey = process.env.SENDGRID_API_KEY;
-    const sendgridFrom = process.env.SENDGRID_FROM || 'no-reply@faithbliss.com';
 
-    if (sendgridKey) {
+    if (sendgridKey && sendgridFrom) {
         sgMail.setApiKey(sendgridKey);
         const msg = {
             to,
@@ -173,9 +184,25 @@ const sendVerificationCodeEmail = async (to: string, code: string, name?: string
             text,
             html,
             replyTo: {
-                email: sendgridFrom,
+                email: supportEmail,
                 name: 'FaithBliss Support',
             },
+            trackingSettings: {
+                clickTracking: {
+                    enable: false,
+                    enableText: false,
+                },
+                openTracking: {
+                    enable: false,
+                },
+                subscriptionTracking: {
+                    enable: false,
+                },
+            },
+            headers: {
+                'X-Entity-Ref-ID': `email-verification-${Date.now()}`,
+            },
+            categories: ['transactional', 'email_verification'],
         };
 
         try {
@@ -196,6 +223,14 @@ const sendVerificationCodeEmail = async (to: string, code: string, name?: string
                         sendGridDetails = String(anyErr.response.body);
                     }
                 }
+            }
+
+            const normalizedDetails = sendGridDetails.toLowerCase();
+            if (
+                normalizedDetails.includes('verified sender identity') ||
+                normalizedDetails.includes('from address does not match')
+            ) {
+                throw new Error('Verification email is not configured correctly yet. Please contact support and try again later.');
             }
 
             throw new Error(
@@ -222,6 +257,80 @@ const sendVerificationCodeEmail = async (to: string, code: string, name?: string
 
     if (!response.ok) {
         throw new Error(`Email delivery failed with status ${response.status}.`);
+    }
+};
+
+const sendWelcomeEmail = async (to: string, name?: string) => {
+    const firstName = typeof name === 'string' && name.trim() ? name.trim().split(/\s+/)[0] : 'there';
+    const siteUrl = (process.env.PUBLIC_APP_URL || process.env.CLIENT_URL || 'https://faithblissafrica.com').replace(/\/$/, '');
+    const sendgridFrom = process.env.SENDGRID_FROM?.trim();
+    const supportEmail =
+        process.env.SENDGRID_REPLY_TO?.trim() ||
+        process.env.SUPPORT_EMAIL?.trim() ||
+        sendgridFrom ||
+        'faithbliss@futuregrin.com';
+    const subject = 'Welcome to FaithBliss';
+    const text = `Hi ${firstName},\n\nWelcome to FaithBliss. We are glad you are here.\n\nYou can finish verifying your email and then continue setting up your profile to start meeting intentional Christian singles.\n\nIf you need help at any point, contact ${supportEmail} or visit ${siteUrl}/contact.\n\nFaithBliss Africa`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; background: #ffffff; color: #111827;">
+            <p style="margin: 0 0 16px; font-size: 14px; color: #6B7280;">FaithBliss Africa</p>
+            <h1 style="margin: 0 0 16px; font-size: 24px; line-height: 1.3; color: #111827;">Welcome to FaithBliss</h1>
+            <p style="margin: 0 0 16px; color: #374151;">Hi ${firstName},</p>
+            <p style="margin: 0 0 16px; color: #374151;">We are glad you joined FaithBliss.</p>
+            <p style="margin: 0 0 20px; color: #374151;">Once you verify your email, you can continue setting up your profile and start meeting intentional Christian singles.</p>
+            <p style="margin: 0 0 8px; color: #6B7280; font-size: 13px;">Need help? Contact <a href="mailto:${supportEmail}" style="color: #2563EB; text-decoration: none;">${supportEmail}</a> or visit <a href="${siteUrl}/contact" style="color: #2563EB; text-decoration: none;">${siteUrl}/contact</a>.</p>
+            <p style="margin: 0; color: #9CA3AF; font-size: 12px;">This is a transactional welcome email from FaithBliss Africa.</p>
+        </div>
+    `;
+
+    const sendgridKey = process.env.SENDGRID_API_KEY;
+    if (sendgridKey && sendgridFrom) {
+        sgMail.setApiKey(sendgridKey);
+        await sgMail.send({
+            to,
+            from: {
+                email: sendgridFrom,
+                name: 'FaithBliss',
+            },
+            subject,
+            text,
+            html,
+            replyTo: {
+                email: supportEmail,
+                name: 'FaithBliss Support',
+            },
+            trackingSettings: {
+                clickTracking: {
+                    enable: false,
+                    enableText: false,
+                },
+                openTracking: {
+                    enable: false,
+                },
+                subscriptionTracking: {
+                    enable: false,
+                },
+            },
+            categories: ['transactional', 'welcome_email'],
+        });
+        return;
+    }
+
+    const webhook = process.env.EMAIL_WEBHOOK_URL;
+    if (!webhook || webhook.includes('localhost:5173')) {
+        console.warn('Welcome email delivery is currently mocked; set SENDGRID_API_KEY or EMAIL_WEBHOOK_URL to send real emails.');
+        console.log(`Mock send welcome email to ${to}:`, { subject, text });
+        return;
+    }
+
+    const response = await fetch(webhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, subject, text }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Welcome email delivery failed with status ${response.status}.`);
     }
 };
 
@@ -332,7 +441,7 @@ const sendEmailVerificationCode = async (req: Request, res: Response) => {
             if (secondsSinceLastSend < EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS) {
                 const retryAfterSeconds = EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS - secondsSinceLastSend;
                 return res.status(429).json({
-                    message: `Please wait ${retryAfterSeconds} seconds before requesting another code.`,
+                    message: `Please wait ${formatSecondsLabel(retryAfterSeconds)} before requesting another code.`,
                     retryAfterSeconds,
                 });
             }
@@ -349,6 +458,18 @@ const sendEmailVerificationCode = async (req: Request, res: Response) => {
         }, { merge: true });
 
         await sendVerificationCodeEmail(email, code, userData.name);
+
+        if (!userData.welcomeEmailSentAt) {
+            try {
+                await sendWelcomeEmail(email, userData.name);
+                await userRef.set({
+                    welcomeEmailSentAt: admin.firestore.Timestamp.now(),
+                    updatedAt: admin.firestore.Timestamp.now(),
+                }, { merge: true });
+            } catch (welcomeError) {
+                console.warn('Welcome email send failed:', welcomeError);
+            }
+        }
 
         return res.status(200).json({
             message: `Verification code sent to ${maskEmail(email)}.`,
