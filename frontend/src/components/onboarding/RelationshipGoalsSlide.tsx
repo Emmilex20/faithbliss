@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import type { OnboardingData } from './types';
+import type { OnboardingData, RelationshipGoals } from './types';
 import SelectableCard from './SelectableCard';
 
 interface RelationshipGoalsSlideProps {
@@ -10,7 +10,7 @@ interface RelationshipGoalsSlideProps {
   showValidationErrors?: boolean;
 }
 
-const goalsOptions = [
+const goalsOptions: Array<{ value: RelationshipGoals; label: string; emoji: string }> = [
   { value: 'MARRIAGE_MINDED', label: 'Marriage Minded', emoji: '💍' },
   { value: 'RELATIONSHIP', label: 'Relationship', emoji: '❤️' },
   { value: 'FRIENDSHIP', label: 'Friendship', emoji: '🤝' },
@@ -27,7 +27,7 @@ const RelationshipGoalsSlide: React.FC<RelationshipGoalsSlideProps> = ({
   const currentGoals = Array.isArray(onboardingData.relationshipGoals) ? onboardingData.relationshipGoals : [];
   const hasGoal = currentGoals.length > 0;
 
-  const handleSelect = (value: string) => {
+  const handleSelect = (value: RelationshipGoals) => {
     setOnboardingData((prev) => {
       const existing = Array.isArray(prev.relationshipGoals) ? prev.relationshipGoals : [];
       const nextGoals = existing.includes(value)
@@ -36,7 +36,7 @@ const RelationshipGoalsSlide: React.FC<RelationshipGoalsSlideProps> = ({
 
       return {
         ...prev,
-        relationshipGoals: nextGoals as OnboardingData['relationshipGoals'],
+        relationshipGoals: nextGoals,
       };
     });
   };
@@ -68,7 +68,7 @@ const RelationshipGoalsSlide: React.FC<RelationshipGoalsSlideProps> = ({
               key={option.value}
               label={option.label}
               emoji={option.emoji}
-              isSelected={currentGoals.includes(option.value as OnboardingData['relationshipGoals'][number])}
+              isSelected={currentGoals.includes(option.value)}
               onClick={() => handleSelect(option.value)}
             />
           ))}
