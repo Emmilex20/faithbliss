@@ -806,8 +806,6 @@ const AdminPage = () => {
       name: editingUser.name.trim(),
       email: editingUser.email.trim().toLowerCase(),
       role: isAdminRole(selectedUser.role) ? undefined : normalizeEditableRole(editingUser.role),
-      roles: editingUser.hasDeveloperAccess ? ['developer'] : [],
-      hasDeveloperAccess: editingUser.hasDeveloperAccess,
       age: Number(editingUser.age),
       gender: editingUser.gender,
       location: editingUser.location.trim(),
@@ -2191,13 +2189,6 @@ const AdminPage = () => {
                 </div>
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <label className="flex items-center justify-between rounded-2xl border border-violet-400/15 bg-violet-500/5 px-4 py-3">
-                    <div>
-                      <span className="text-sm text-white">Developer hub access</span>
-                      <p className="mt-1 text-xs text-violet-200/80">Allows entry into the developer hub without changing the base role.</p>
-                    </div>
-                    <input type="checkbox" checked={editingUser.hasDeveloperAccess} onChange={(e) => updateEditingField('hasDeveloperAccess', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
-                  </label>
                   <label className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
                     <span className="text-sm text-white">Onboarding completed</span>
                     <input type="checkbox" checked={editingUser.onboardingCompleted} onChange={(e) => updateEditingField('onboardingCompleted', e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
