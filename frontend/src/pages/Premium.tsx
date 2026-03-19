@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -64,6 +64,26 @@ const badges = [
   'Zero ads',
   'Cancel anytime',
 ];
+
+const EXPLORE_FEATURE_PREFIX = 'Full access to the Explore page:';
+
+const renderPlanFeature = (feature: string): ReactNode => {
+  if (!feature.startsWith(EXPLORE_FEATURE_PREFIX)) {
+    return feature;
+  }
+
+  const suffix = feature.slice(EXPLORE_FEATURE_PREFIX.length).trim();
+
+  return (
+    <span className="leading-6 text-gray-200">
+      Full access to the{' '}
+      <span className="inline-flex items-center rounded-full border border-fuchsia-400/40 bg-gradient-to-r from-pink-500/20 via-fuchsia-500/20 to-violet-500/20 px-2.5 py-0.5 text-[0.7rem] font-semibold tracking-[0.16em] text-pink-100 shadow-[0_0_18px_rgba(236,72,153,0.22)] backdrop-blur-sm">
+        Explore
+      </span>{' '}
+      page: {suffix}
+    </span>
+  );
+};
 
 const fallbackQuote: LocalizedPricingQuoteResponse = {
   countryCode: null,
@@ -692,9 +712,9 @@ const PremiumContent = () => {
 
                 <ul className="mt-6 space-y-3 text-sm text-gray-300">
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-pink-300" />
-                      {feature}
+                    <li key={feature} className="flex items-start gap-3">
+                      <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-pink-300" />
+                      <span>{renderPlanFeature(feature)}</span>
                     </li>
                   ))}
                 </ul>
