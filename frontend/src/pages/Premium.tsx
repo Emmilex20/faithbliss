@@ -51,7 +51,7 @@ const FREE_PLAN: DisplayPlan = {
   features: [
     'Sign in and create your account',
     '10 likes or swipes per day',
-    'Chat after matching',
+    '1 active chat at a time',
     'Gender filtering',
     'View user profiles',
   ],

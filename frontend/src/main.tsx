@@ -25,6 +25,7 @@ import MatchPage from './pages/MatchesPage.tsx';
 import Community from './pages/Community.tsx';
 import Explore from './pages/Explore.tsx';
 import About from './pages/About.tsx';
+import Contact from './pages/Contact.tsx';
 import Privacy from './pages/Privacy.tsx';
 import Settings from './pages/Settings.tsx';
 import Help from './pages/Help.tsx';
@@ -110,6 +111,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             {/* Public Marketing Routes */}
             <Route element={<App />}>
               <Route path="about" element={<About />} />
+              <Route path="contact" element={<Contact />} />
               <Route path="privacy" element={<Privacy />} />
               <Route path="reset-password" element={<ResetPassword />} />
             </Route>

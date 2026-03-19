@@ -160,14 +160,14 @@ export default function Home() {
               }}
             >
               <h1 className="text-3xl md:text-6xl font-bold mb-6 leading-tight text-center">
-                Believers Across
+                African Christians Across the Globe
                 <span className="block bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
-                  Africa Are Finding Love
+                  Are Finding Love
                 </span>
                 <span className="block text-white" style={{ fontFamily: "'Dancing Script', cursive" }}>on FaithBliss</span>
               </h1>
               <p className="text-sm md:text-xl mb-8 md:mb-12 text-gray-200 max-w-3xl mx-auto text-center">
-                Built specifically for African Christians - connecting believers across all 54 countries with shared faith, values, and marriage intentions.
+                Built for African Christians worldwide—connecting believers across the continent and the diaspora through shared faith, values, and marriage intentions.
               </p>
               
               {/* CTA Button - Simple & Responsive */}
@@ -236,7 +236,7 @@ export default function Home() {
                   </div>
                   <h3 className="text-lg md:text-xl font-bold text-white">Diverse & Interdenominational</h3>
                   <p className="text-sm md:text-base text-gray-300 leading-relaxed">
-                    Connecting believers across all African 54 countries and 20+ denominations. Your chances of finding love are high.
+                    From Pentecostal to Catholic and every church family in between. Connect with high-value believers across the continent and the diaspora who share your faith and your roots
                   </p>
                 </div>
               </div>
@@ -249,9 +249,9 @@ export default function Home() {
                   <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-violet-500 rounded-full flex items-center justify-center">
                     <Target className="h-8 w-8 text-white" />
                   </div>
-                  <h3 className="text-lg md:text-xl font-bold text-white">Smart Filters for Selective Search</h3>
+                  <h3 className="text-lg md:text-xl font-bold text-white">Intentional Filters for Your Specific Type</h3>
                   <p className="text-sm md:text-base text-gray-300 leading-relaxed">
-                    Find exactly what you're looking for. Narrow by country, denomination, or church family — so Nigerians can meet Nigerians, Pentecostals can meet Pentecostals.
+                    Find exactly what you’re looking for. Narrow your search by country, denomination, or faith journey to find a partner who truly aligns with your vision.
                   </p>
                 </div>
               </div>

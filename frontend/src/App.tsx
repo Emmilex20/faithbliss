@@ -11,7 +11,7 @@ import { API } from './services/api';
 // Define the paths that should use the special "Auth Layout"
 const authPaths = ['/login', '/signup'];
 // Include the Onboarding path in a list that needs a specific full-screen treatment.
-const fullScreenPaths = ['/onboarding', '/about', '/privacy'];
+const fullScreenPaths = ['/onboarding', '/about', '/contact', '/privacy'];
 const verificationPaths = ['/verify-email'];
 const appShellPaths = [
   '/dashboard',

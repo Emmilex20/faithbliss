@@ -31,6 +31,13 @@ const ROUTE_SEO: Record<string, SeoRoute> = {
     index: true,
     schemaType: 'AboutPage',
   },
+  '/contact': {
+    title: `Contact ${SITE_NAME} | Support and Help`,
+    description:
+      'Contact the FaithBliss team for support, safety concerns, account help, and general questions about the platform.',
+    index: true,
+    schemaType: 'WebPage',
+  },
   '/privacy': {
     title: `Privacy Policy | ${SITE_NAME}`,
     description:

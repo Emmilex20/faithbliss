@@ -28,8 +28,9 @@ export const PREMIUM_PLAN_CONTENT: Record<
     features: [
       'Unlimited likes and swipes',
       'Filter by age, distance, height, and faith',
+      'Unlimited active chats',
       'Connect safely with in-app voice and video calls',
-      'Bond over shared interests on the Explore page',
+      'Full access to the EXPLORE page: match on shared interests (e.g., Professionals, Travel Lovers)',
       'Instantly undo accidental skips',
       'Change location to match anywhere in the world',
       'Monthly profile booster to increase visibility',

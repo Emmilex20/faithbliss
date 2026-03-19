@@ -8,22 +8,22 @@ import { useAuthContext } from '@/contexts/AuthContext';
 
 const communityCards = [
   {
-    title: 'Prayer Wall',
-    description: 'Share prayer requests and stand in faith with other believers.',
+    title: 'The Atmosphere',
+    description: 'Post a goal, a win, or insights.',
     icon: HeartHandshake,
     accent: 'from-pink-500/20 to-rose-500/20 border-pink-400/30',
     status: 'Coming soon',
   },
   {
-    title: 'Faith Events',
-    description: 'Discover online and local Christian meetups from the community.',
+    title: 'The Hangout',
+    description: 'From digital mixers, to high-vibe concerts and planned group dates. Discover where the community is meeting up in real life.',
     icon: CalendarDays,
     accent: 'from-blue-500/20 to-cyan-500/20 border-blue-400/30',
     status: 'Coming soon',
   },
   {
-    title: 'Testimonies',
-    description: 'Celebrate wins, growth stories, and encouragement from members.',
+    title: 'The Polls',
+    description: 'Your voice, our community. Join the debate on faith, life, and the little things that make love work',
     icon: Sparkles,
     accent: 'from-purple-500/20 to-indigo-500/20 border-purple-400/30',
     status: 'Coming soon',
