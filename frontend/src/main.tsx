@@ -95,6 +95,14 @@ if (typeof window !== 'undefined') {
 }
 
 const rootElement = document.getElementById('root')!;
+const normalizePathname = (pathname: string) => {
+  if (!pathname) return '/';
+  return pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+};
+const prerenderedRoute = normalizePathname(rootElement.dataset.seoRoute || '/');
+const currentPathname = normalizePathname(window.location.pathname);
+const shouldHydratePrerenderedMarkup =
+  rootElement.dataset.seoPrerendered === 'true' && prerenderedRoute === currentPathname;
 
 const app = (
   <React.StrictMode>
@@ -159,8 +167,9 @@ const app = (
   </React.StrictMode>
 );
 
-if (rootElement.dataset.seoPrerendered === 'true') {
+if (shouldHydratePrerenderedMarkup) {
   hydrateRoot(rootElement, app);
 } else {
+  rootElement.innerHTML = '';
   createRoot(rootElement).render(app);
 }

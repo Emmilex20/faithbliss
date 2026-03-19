@@ -9,6 +9,10 @@
       "dest": "https://faithbliss-ade26.firebaseapp.com/__/firebase/init.json"
     },
     {
+      "src": "/$",
+      "dest": "/index.html"
+    },
+    {
       "src": "/about/?$",
       "dest": "/about/index.html"
     },
@@ -37,7 +41,7 @@
     },
     {
       "src": "/.*",
-      "dest": "/index.html"
+      "dest": "/app-shell.html"
     }
   ]
 }

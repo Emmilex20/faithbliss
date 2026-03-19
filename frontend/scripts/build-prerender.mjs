@@ -7,6 +7,7 @@ const rootDir = process.cwd();
 const distDir = path.join(rootDir, 'dist');
 const ssrDir = path.join(rootDir, 'dist-ssr');
 const templatePath = path.join(distDir, 'index.html');
+const appShellPath = path.join(distDir, 'app-shell.html');
 const rootPlaceholderPattern = /<div id="root"><\/div>/;
 const seoBlockPattern = /<!--seo-start-->[\s\S]*?<!--seo-end-->/;
 
@@ -40,6 +41,8 @@ await build({
 
 const { PRERENDER_ROUTES, renderRoute } = await import(pathToFileURL(path.join(ssrDir, 'entry-server.mjs')).href);
 const clientTemplate = await readFile(templatePath, 'utf8');
+
+await writeFile(appShellPath, clientTemplate, 'utf8');
 
 for (const route of PRERENDER_ROUTES) {
   const { appHtml, headHtml } = renderRoute(route);
