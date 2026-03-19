@@ -9,6 +9,30 @@
       "dest": "https://faithbliss-ade26.firebaseapp.com/__/firebase/init.json"
     },
     {
+      "src": "/about/?$",
+      "dest": "/about/index.html"
+    },
+    {
+      "src": "/contact/?$",
+      "dest": "/contact/index.html"
+    },
+    {
+      "src": "/privacy/?$",
+      "dest": "/privacy/index.html"
+    },
+    {
+      "src": "/terms/?$",
+      "dest": "/terms/index.html"
+    },
+    {
+      "src": "/help/?$",
+      "dest": "/help/index.html"
+    },
+    {
+      "src": "/premium/?$",
+      "dest": "/premium/index.html"
+    },
+    {
       "handle": "filesystem"
     },
     {
