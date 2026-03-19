@@ -22,8 +22,23 @@ export const uploadPhotosToCloudinary = async (files: File[]) => {
   });
 
   if (!res.ok) {
-    const errorData = await res.json();
-    throw new Error(errorData.error || 'Upload failed');
+    let errorMessage = 'Upload failed';
+
+    try {
+      const errorData = await res.json();
+      errorMessage = errorData.error || errorData.message || errorMessage;
+    } catch {
+      try {
+        const errorText = await res.text();
+        if (errorText.trim()) {
+          errorMessage = errorText.trim();
+        }
+      } catch {
+        // Fall back to the default message.
+      }
+    }
+
+    throw new Error(errorMessage);
   }
 
   const data = await res.json();

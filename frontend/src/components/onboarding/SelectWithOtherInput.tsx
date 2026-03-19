@@ -8,6 +8,7 @@ interface SelectWithOtherInputProps {
   selectedValue: string;
   onChange: (name: string, value: string) => void;
   placeholder?: string;
+  invalid?: boolean;
 }
 
 const formatOptionLabel = (value: string) =>
@@ -23,7 +24,9 @@ const SelectWithOtherInput: React.FC<SelectWithOtherInputProps> = ({
   selectedValue,
   onChange,
   placeholder,
+  invalid = false,
 }) => {
+  const fieldLabel = label.trim() || placeholder || 'option';
   const [isOtherSelected, setIsOtherSelected] = useState(Boolean(selectedValue && !options.includes(selectedValue)));
   const [customValue, setCustomValue] = useState(isOtherSelected ? selectedValue : '');
 
@@ -36,9 +39,9 @@ const SelectWithOtherInput: React.FC<SelectWithOtherInputProps> = ({
   const dropdownOptions = useMemo(
     () => [
       ...options.map((option) => ({ value: option, label: formatOptionLabel(option) })),
-      { value: 'OTHER', label: 'Other' },
+      { value: 'OTHER', label: customValue.trim() ? `Other: ${customValue.trim()}` : 'Other' },
     ],
-    [options]
+    [customValue, options]
   );
 
   const selectedDropdownValue = isOtherSelected ? 'OTHER' : selectedValue || '';
@@ -77,6 +80,7 @@ const SelectWithOtherInput: React.FC<SelectWithOtherInputProps> = ({
         searchPlaceholder="Search options..."
         emptyText="No matching options."
         triggerClassName="input-style flex w-full items-center justify-between gap-3 text-left"
+        invalid={invalid}
       />
 
       {isOtherSelected && (
@@ -84,9 +88,9 @@ const SelectWithOtherInput: React.FC<SelectWithOtherInputProps> = ({
           type="text"
           name={`${name}-other`}
           value={customValue}
-          onChange={handleCustomInputChange}
-          placeholder={`Enter your ${label.toLowerCase()}`}
-          className="input-style mt-2 w-full"
+        onChange={handleCustomInputChange}
+          placeholder={`Enter your ${fieldLabel.toLowerCase()}`}
+          className={`input-style mt-2 w-full ${invalid && !customValue.trim() ? 'border-red-400/70' : ''}`}
         />
       )}
     </div>

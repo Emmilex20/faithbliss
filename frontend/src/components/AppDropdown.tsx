@@ -24,6 +24,8 @@ interface AppDropdownProps {
   optionClassName?: string;
   selectedOptionClassName?: string;
   maxMenuHeightClassName?: string;
+  invalid?: boolean;
+  mobileSheetOnSmallScreens?: boolean;
 }
 
 const cx = (...values: Array<string | false | null | undefined>) => values.filter(Boolean).join(' ');
@@ -45,6 +47,8 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
   optionClassName,
   selectedOptionClassName,
   maxMenuHeightClassName,
+  invalid = false,
+  mobileSheetOnSmallScreens = false,
 }) => {
   const wrapperRef = React.useRef<HTMLDivElement>(null);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
@@ -62,6 +66,7 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
     maxHeight: 320,
     openAbove: false,
   });
+  const useMobileSheetOnSmallScreens = searchable || mobileSheetOnSmallScreens;
 
   const updateMenuPosition = React.useCallback(() => {
     if (!triggerRef.current || typeof window === 'undefined') return;
@@ -91,7 +96,7 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
     if (typeof window === 'undefined') return;
 
     const updateResponsiveMode = () => {
-      setIsMobileSheet(window.innerWidth < 640 && searchable);
+      setIsMobileSheet(window.innerWidth < 640 && useMobileSheetOnSmallScreens);
     };
 
     updateResponsiveMode();
@@ -100,7 +105,7 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
     return () => {
       window.removeEventListener('resize', updateResponsiveMode);
     };
-  }, [searchable]);
+  }, [useMobileSheetOnSmallScreens]);
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -252,7 +257,10 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
         className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
         onClick={() => setIsOpen(false)}
       />
-      <div className="absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-hidden rounded-t-[28px] border-t border-white/10 bg-slate-950 shadow-[0_-20px_60px_rgba(0,0,0,0.45)]">
+      <div
+        ref={menuRef}
+        className="absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-hidden rounded-t-[28px] border-t border-white/10 bg-slate-950 shadow-[0_-20px_60px_rgba(0,0,0,0.45)]"
+      >
         <div className="flex items-center justify-center px-4 pb-2 pt-3">
           <div className="h-1.5 w-12 rounded-full bg-white/15" />
         </div>
@@ -303,6 +311,7 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
                     setDraftValue(option.value);
                     setLocalValue(option.value);
                     onChange(option.value);
+                    setIsOpen(false);
                   }}
                   className={cx(
                     'mb-1 flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-left text-base leading-snug transition',
@@ -332,6 +341,7 @@ export const AppDropdown: React.FC<AppDropdownProps> = ({
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
         className={cx(
           'flex w-full items-center justify-between gap-3 rounded-xl border border-white/20 bg-slate-950/75 px-3 py-2.5 text-left text-base text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-400/40 disabled:cursor-not-allowed disabled:opacity-60 sm:py-2.5 sm:text-sm',
+          invalid && 'border-red-400/70 focus-visible:ring-red-400/30',
           triggerClassName
         )}
         aria-haspopup="listbox"

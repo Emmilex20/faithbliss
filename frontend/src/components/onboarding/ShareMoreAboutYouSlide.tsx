@@ -8,16 +8,19 @@ interface ShareMoreAboutYouSlideProps {
   onboardingData: OnboardingData;
   setOnboardingData: React.Dispatch<React.SetStateAction<OnboardingData>>;
   isVisible: boolean;
+  showValidationErrors?: boolean;
 }
 
 const PromptDropdown = ({
   value,
   options,
   onSelect,
+  invalid = false,
 }: {
   value?: string;
   options: string[];
   onSelect: (next: string) => void;
+  invalid?: boolean;
 }) => (
   <AppDropdown
     value={value || ''}
@@ -28,6 +31,7 @@ const PromptDropdown = ({
     searchPlaceholder="Search prompts..."
     emptyText="No matching prompts."
     triggerClassName="w-full rounded-xl border border-white/15 bg-slate-950/60 p-4 text-left text-white transition focus:border-pink-400"
+    invalid={invalid}
   />
 );
 
@@ -35,11 +39,15 @@ const ShareMoreAboutYouSlide: React.FC<ShareMoreAboutYouSlideProps> = ({
   onboardingData,
   setOnboardingData,
   isVisible,
+  showValidationErrors = false,
 }) => {
   if (!isVisible) return null;
 
   const bioLength = onboardingData.bio?.length || 0;
   const promptLength = onboardingData.personalPromptAnswer?.length || 0;
+  const isBioMissing = !onboardingData.bio?.trim();
+  const isPromptMissing = !onboardingData.personalPromptQuestion?.trim();
+  const isAnswerMissing = !onboardingData.personalPromptAnswer?.trim();
 
   return (
     <motion.div
@@ -57,7 +65,7 @@ const ShareMoreAboutYouSlide: React.FC<ShareMoreAboutYouSlideProps> = ({
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
-        <label className="mb-2 block text-lg font-semibold text-white">About me</label>
+        <label className="mb-2 block text-lg font-semibold text-white">About me <span className="text-red-400">*</span></label>
         <textarea
           value={onboardingData.bio || ''}
           onChange={(e) =>
@@ -68,15 +76,20 @@ const ShareMoreAboutYouSlide: React.FC<ShareMoreAboutYouSlideProps> = ({
           }
           rows={5}
           placeholder="Introduce yourself to make a strong impression."
-          className="w-full rounded-xl border border-white/15 bg-slate-950/60 p-4 text-white placeholder-slate-400 focus:border-pink-400 focus:outline-none"
+          className={`w-full rounded-xl border bg-slate-950/60 p-4 text-white placeholder-slate-400 focus:border-pink-400 focus:outline-none ${
+            showValidationErrors && isBioMissing ? 'border-red-400/70' : 'border-white/15'
+          }`}
         />
+        {showValidationErrors && isBioMissing ? (
+          <p className="mt-2 text-sm text-red-400">Add a short bio before continuing.</p>
+        ) : null}
         <p className="mt-2 text-right text-sm text-slate-400">
           <span className={bioLength > BIO_MAX_LENGTH * 0.9 ? 'text-pink-300' : ''}>{bioLength}</span>/{BIO_MAX_LENGTH}
         </p>
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
-        <label className="mb-2 block text-lg font-semibold text-white">Select a prompt</label>
+        <label className="mb-2 block text-lg font-semibold text-white">Select a prompt <span className="text-red-400">*</span></label>
         <PromptDropdown
           value={onboardingData.personalPromptQuestion}
           options={PROFILE_PROMPT_OPTIONS}
@@ -86,9 +99,13 @@ const ShareMoreAboutYouSlide: React.FC<ShareMoreAboutYouSlideProps> = ({
               personalPromptQuestion: prompt,
             }))
           }
+          invalid={showValidationErrors && isPromptMissing}
         />
+        {showValidationErrors && isPromptMissing ? (
+          <p className="mt-2 text-sm text-red-400">Choose one prompt before continuing.</p>
+        ) : null}
 
-        <label className="mb-2 mt-4 block text-base font-semibold text-white">Your answer</label>
+        <label className="mb-2 mt-4 block text-base font-semibold text-white">Your answer <span className="text-red-400">*</span></label>
         <textarea
           value={onboardingData.personalPromptAnswer || ''}
           onChange={(e) =>
@@ -99,8 +116,13 @@ const ShareMoreAboutYouSlide: React.FC<ShareMoreAboutYouSlideProps> = ({
           }
           rows={3}
           placeholder="Write something fun..."
-          className="w-full rounded-xl border border-white/15 bg-slate-950/60 p-4 text-white placeholder-slate-400 focus:border-pink-400 focus:outline-none"
+          className={`w-full rounded-xl border bg-slate-950/60 p-4 text-white placeholder-slate-400 focus:border-pink-400 focus:outline-none ${
+            showValidationErrors && isAnswerMissing ? 'border-red-400/70' : 'border-white/15'
+          }`}
         />
+        {showValidationErrors && isAnswerMissing ? (
+          <p className="mt-2 text-sm text-red-400">Write an answer to your selected prompt.</p>
+        ) : null}
         <p className="mt-2 text-right text-sm text-slate-400">
           <span className={promptLength > PROMPT_ANSWER_MAX_LENGTH * 0.9 ? 'text-pink-300' : ''}>{promptLength}</span>/{PROMPT_ANSWER_MAX_LENGTH}
         </p>

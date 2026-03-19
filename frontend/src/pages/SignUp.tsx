@@ -9,12 +9,19 @@ import { HeartBeatIcon } from '@/components/HeartBeatIcon';
 import AppDropdown from '@/components/AppDropdown';
 import { useAuthContext } from '../contexts/AuthContext';
 
+type SignupGender = 'MALE' | 'FEMALE';
+
+const GENDER_OPTIONS: Array<{ value: SignupGender; label: string }> = [
+  { value: 'MALE', label: 'Male' },
+  { value: 'FEMALE', label: 'Female' },
+];
+
 export default function Signup() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
-    gender: 'MALE',
+    gender: 'MALE' as SignupGender,
   });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -72,6 +79,9 @@ export default function Signup() {
     if (!formData.email.trim()) return setError('Please enter your email address');
     if (!formData.password.trim()) return setError('Please enter a password');
     if (formData.password.length < 6) return setError('Password must be at least 6 characters long');
+    if (!GENDER_OPTIONS.some((option) => option.value === formData.gender)) {
+      return setError('Please select a valid gender');
+    }
 
     setError('');
 
@@ -80,7 +90,7 @@ export default function Signup() {
         name: formData.name,
         email: formData.email,
         password: formData.password,
-        gender: formData.gender as 'MALE' | 'FEMALE',
+        gender: formData.gender,
       });
     } catch (registerError: any) {
       setError(registerError.message || 'An unexpected error occurred during signup.');
@@ -95,9 +105,13 @@ export default function Signup() {
   };
 
   const handleGenderChange = (nextGender: string) => {
+    if (!GENDER_OPTIONS.some((option) => option.value === nextGender)) {
+      return;
+    }
+
     setFormData((prev) => ({
       ...prev,
-      gender: nextGender,
+      gender: nextGender as SignupGender,
     }));
   };
 
@@ -231,14 +245,12 @@ export default function Signup() {
               id="gender"
               value={formData.gender}
               onChange={handleGenderChange}
-              options={[
-                { value: 'MALE', label: 'Male' },
-                { value: 'FEMALE', label: 'Female' },
-              ]}
+              options={GENDER_OPTIONS}
               triggerClassName="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 text-white rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500/50 transition-all"
               menuClassName="border-gray-600/70 bg-slate-900/98"
               optionClassName="text-sm"
               ariaLabel="Gender"
+              mobileSheetOnSmallScreens
             />
           </div>
 

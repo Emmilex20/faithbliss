@@ -12,6 +12,7 @@ interface ProfileBuilderSlideProps {
   onboardingData: OnboardingData;
   setOnboardingData: React.Dispatch<React.SetStateAction<OnboardingData>>;
   isVisible: boolean;
+  showValidationErrors?: boolean;
 }
 
 const faithJourneyOptions = [
@@ -189,12 +190,14 @@ const SingleSelectDropdown = ({
   options,
   onChange,
   placeholder,
+  invalid = false,
 }: {
   id: string;
   value?: string;
   options: Array<{ value: string; label: string }>;
   onChange: (next: string) => void;
   placeholder: string;
+  invalid?: boolean;
 }) => (
   <AppDropdown
     id={id}
@@ -206,10 +209,16 @@ const SingleSelectDropdown = ({
     searchPlaceholder="Search status..."
     emptyText="No matching status."
     triggerClassName="input-style flex w-full items-center justify-between gap-3 text-left"
+    invalid={invalid}
   />
 );
 
-const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: ProfileBuilderSlideProps) => {
+const ProfileBuilderSlide = ({
+  onboardingData,
+  setOnboardingData,
+  isVisible,
+  showValidationErrors = false,
+}: ProfileBuilderSlideProps) => {
   const [selectedCountry, setSelectedCountry] = React.useState<Country>(defaultCountry);
 
   React.useEffect(() => {
@@ -278,6 +287,23 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
     return Math.min(220, Math.max(120, numeric));
   }, [onboardingData.height]);
   const heightProgress = ((parsedHeight - 120) / (220 - 120)) * 100;
+  const hasFaithJourney = Boolean(onboardingData.faithJourney);
+  const hasChurchAttendance = Boolean(onboardingData.churchAttendance);
+  const hasDenomination = Boolean(onboardingData.denomination?.trim());
+  const hasBaptismStatus = Boolean(onboardingData.baptismStatus?.trim());
+  const hasOccupation = Boolean(onboardingData.occupation?.trim());
+  const hasBirthday = Boolean(onboardingData.birthday?.trim()) && typeof onboardingData.age === 'number' && onboardingData.age >= 18;
+  const hasEducation = Boolean(onboardingData.education?.trim());
+  const hasFavoriteVerse = Boolean(onboardingData.favoriteVerse?.trim());
+  const hasHeight = Boolean(onboardingData.height?.trim());
+  const hasLanguages = Array.isArray(onboardingData.languageSpoken) && onboardingData.languageSpoken.length > 0;
+  const hasPhoneNumber = onboardingData.phoneNumber.replace(/\D/g, '').length >= 6;
+  const hasCountryCode = Boolean(onboardingData.countryCode?.trim());
+  const hasProfileFits = Array.isArray(onboardingData.profileFits) && onboardingData.profileFits.length >= MIN_PROFILE_FITS;
+  const hasPersonality = Array.isArray(onboardingData.personality) && onboardingData.personality.length > 0;
+  const hasHobbies = Array.isArray(onboardingData.hobbies) && onboardingData.hobbies.length > 0;
+  const hasValues = Array.isArray(onboardingData.values) && onboardingData.values.length > 0;
+  const hasSpiritualGifts = Array.isArray(onboardingData.spiritualGifts) && onboardingData.spiritualGifts.length > 0;
 
   const handleHeightChange = (value: number) => {
     const inches = Math.round(value / 2.54);
@@ -320,7 +346,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
 
       <div className="space-y-4">
         <RequiredLabel>How would you describe your faith journey?</RequiredLabel>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className={`grid grid-cols-2 gap-4 rounded-2xl p-2 sm:grid-cols-4 ${showValidationErrors && !hasFaithJourney ? 'border border-red-400/40 bg-red-500/5' : ''}`}>
           {faithJourneyOptions.map((option) => (
             <SelectableCard
               key={option.value}
@@ -331,11 +357,12 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
             />
           ))}
         </div>
+        {showValidationErrors && !hasFaithJourney ? <p className="text-sm text-red-400">Choose your current faith journey.</p> : null}
       </div>
 
       <div className="space-y-4">
         <RequiredLabel>How often do you attend church?</RequiredLabel>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className={`grid grid-cols-2 gap-4 rounded-2xl p-2 sm:grid-cols-4 ${showValidationErrors && !hasChurchAttendance ? 'border border-red-400/40 bg-red-500/5' : ''}`}>
           {churchAttendanceOptions.map((option) => (
             <SelectableCard
               key={option.value}
@@ -346,6 +373,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
             />
           ))}
         </div>
+        {showValidationErrors && !hasChurchAttendance ? <p className="text-sm text-red-400">Choose how often you attend church.</p> : null}
       </div>
 
       <div className="space-y-6">
@@ -362,6 +390,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
               selectedValue={onboardingData.denomination}
               onChange={handleSelectWithOtherChange}
               placeholder="Select your denomination"
+              invalid={showValidationErrors && !hasDenomination}
             />
           </div>
 
@@ -375,6 +404,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
               options={baptismStatusOptions}
               onChange={(next) => setOnboardingData((prev) => ({ ...prev, baptismStatus: next }))}
               placeholder="Baptism Status"
+              invalid={showValidationErrors && !hasBaptismStatus}
             />
           </div>
 
@@ -389,6 +419,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
               selectedValue={onboardingData.occupation}
               onChange={handleSelectWithOtherChange}
               placeholder="Select your profession"
+              invalid={showValidationErrors && !hasOccupation}
             />
           </div>
 
@@ -396,7 +427,13 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
             <label className="mb-2 block text-sm font-medium text-gray-300">
               Birthday <span className="text-red-400">*</span>
             </label>
-            <input type="date" name="birthday" value={onboardingData.birthday} onChange={handleChange} className="input-style" />
+            <input
+              type="date"
+              name="birthday"
+              value={onboardingData.birthday}
+              onChange={handleChange}
+              className={`input-style ${showValidationErrors && !hasBirthday ? 'border-red-400/70' : ''}`}
+            />
           </div>
 
           <div>
@@ -421,6 +458,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
               selectedValue={onboardingData.education}
               onChange={handleSelectWithOtherChange}
               placeholder="Select your field of study"
+              invalid={showValidationErrors && !hasEducation}
             />
           </div>
 
@@ -434,13 +472,13 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
               value={onboardingData.favoriteVerse}
               onChange={handleChange}
               placeholder="Favorite Bible verse"
-              className="input-style"
+              className={`input-style ${showValidationErrors && !hasFavoriteVerse ? 'border-red-400/70' : ''}`}
             />
           </div>
 
           <div className="sm:col-span-2">
-            <label className="mb-2 block text-sm font-medium text-gray-300">Height</label>
-            <div className="rounded-xl border border-white/15 bg-slate-900/40 px-4 py-4">
+            <label className="mb-2 block text-sm font-medium text-gray-300">Height <span className="text-red-400">*</span></label>
+            <div className={`rounded-xl border bg-slate-900/40 px-4 py-4 ${showValidationErrors && !hasHeight ? 'border-red-400/70' : 'border-white/15'}`}>
               <div className="mb-3 flex items-center justify-between text-sm text-slate-300">
                 <span>120 cm</span>
                 <span className="font-semibold text-white">{onboardingData.height || `${parsedHeight} cm`}</span>
@@ -461,12 +499,13 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
                 }
               />
             </div>
+            {showValidationErrors && !hasHeight ? <p className="mt-2 text-sm text-red-400">Set your height before continuing.</p> : null}
           </div>
 
           <div className="sm:col-span-2">
-            <label className="mb-2 block text-sm font-medium text-gray-300">Languages spoken</label>
+            <label className="mb-2 block text-sm font-medium text-gray-300">Languages spoken <span className="text-red-400">*</span></label>
             <p className="mb-3 text-xs text-slate-400">Select all that apply.</p>
-            <div className="flex flex-wrap gap-2">
+            <div className={`flex flex-wrap gap-2 rounded-2xl p-2 ${showValidationErrors && !hasLanguages ? 'border border-red-400/40 bg-red-500/5' : ''}`}>
               {languageOptions.map((option) => {
                 const isSelected = onboardingData.languageSpoken?.includes(option);
                 return (
@@ -481,6 +520,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
                 );
               })}
             </div>
+            {showValidationErrors && !hasLanguages ? <p className="mt-2 text-sm text-red-400">Select at least one language you speak.</p> : null}
           </div>
         </div>
 
@@ -493,7 +533,10 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
             onCountryChange={handleCountryChange}
             phoneNumber={onboardingData.phoneNumber}
             onPhoneChange={handlePhoneChange}
+            invalidCountryCode={showValidationErrors && !hasCountryCode}
+            invalidPhoneNumber={showValidationErrors && !hasPhoneNumber}
           />
+          {showValidationErrors && !hasPhoneNumber ? <p className="mt-2 text-sm text-red-400">Enter a valid phone number.</p> : null}
         </div>
 
         <div className="space-y-4">
@@ -501,7 +544,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
           <p className="text-sm text-slate-400">
             Pick at least {MIN_PROFILE_FITS}. These will be shown on your profile.
           </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className={`grid grid-cols-1 gap-3 rounded-2xl p-2 sm:grid-cols-2 ${showValidationErrors && !hasProfileFits ? 'border border-red-400/40 bg-red-500/5' : ''}`}>
             {PROFILE_FIT_OPTIONS.map((option) => {
               const isSelected = onboardingData.profileFits?.includes(option.title);
               return (
@@ -537,11 +580,14 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
           <p className="text-xs text-slate-400">
             Selected: {onboardingData.profileFits?.length || 0}/{PROFILE_FIT_OPTIONS.length}
           </p>
+          {showValidationErrors && !hasProfileFits ? (
+            <p className="text-sm text-red-400">Select at least {MIN_PROFILE_FITS} profile fits.</p>
+          ) : null}
         </div>
 
         <div className="space-y-4">
           <RequiredLabel>Describe your personality</RequiredLabel>
-          <div className="flex flex-wrap gap-2">
+          <div className={`flex flex-wrap gap-2 rounded-2xl p-2 ${showValidationErrors && !hasPersonality ? 'border border-red-400/40 bg-red-500/5' : ''}`}>
             {personalityOptions.map((option) => (
               <button
                 key={option}
@@ -553,11 +599,12 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
               </button>
             ))}
           </div>
+          {showValidationErrors && !hasPersonality ? <p className="text-sm text-red-400">Select at least one personality trait.</p> : null}
         </div>
 
         <div className="space-y-4">
           <RequiredLabel>What are your hobbies?</RequiredLabel>
-          <div className="flex flex-wrap gap-2">
+          <div className={`flex flex-wrap gap-2 rounded-2xl p-2 ${showValidationErrors && !hasHobbies ? 'border border-red-400/40 bg-red-500/5' : ''}`}>
             {hobbiesOptions.map((option) => (
               <button
                 key={option}
@@ -569,11 +616,12 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
               </button>
             ))}
           </div>
+          {showValidationErrors && !hasHobbies ? <p className="text-sm text-red-400">Select at least one hobby.</p> : null}
         </div>
 
         <div className="space-y-4">
           <RequiredLabel>What are your values?</RequiredLabel>
-          <div className="flex flex-wrap gap-2">
+          <div className={`flex flex-wrap gap-2 rounded-2xl p-2 ${showValidationErrors && !hasValues ? 'border border-red-400/40 bg-red-500/5' : ''}`}>
             {valuesOptions.map((option) => (
               <button
                 key={option}
@@ -585,11 +633,12 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
               </button>
             ))}
           </div>
+          {showValidationErrors && !hasValues ? <p className="text-sm text-red-400">Select at least one value.</p> : null}
         </div>
 
         <div className="space-y-4">
           <RequiredLabel>What are your spiritual gifts?</RequiredLabel>
-          <div className="flex flex-wrap gap-2">
+          <div className={`flex flex-wrap gap-2 rounded-2xl p-2 ${showValidationErrors && !hasSpiritualGifts ? 'border border-red-400/40 bg-red-500/5' : ''}`}>
             {spiritualGiftsOptions.map((option) => (
               <button
                 key={option}
@@ -601,6 +650,7 @@ const ProfileBuilderSlide = ({ onboardingData, setOnboardingData, isVisible }: P
               </button>
             ))}
           </div>
+          {showValidationErrors && !hasSpiritualGifts ? <p className="text-sm text-red-400">Select at least one spiritual gift.</p> : null}
         </div>
 
       </div>

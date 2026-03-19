@@ -7,6 +7,8 @@ interface CountryCodeSelectProps {
   onCountryChange: (country: Country) => void;
   phoneNumber: string;
   onPhoneChange: (phone: string) => void;
+  invalidCountryCode?: boolean;
+  invalidPhoneNumber?: boolean;
 }
 
 const getFlag = (countryCode: string) =>
@@ -19,6 +21,8 @@ export const CountryCodeSelect = ({
   onCountryChange,
   phoneNumber,
   onPhoneChange,
+  invalidCountryCode = false,
+  invalidPhoneNumber = false,
 }: CountryCodeSelectProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -68,7 +72,9 @@ export const CountryCodeSelect = ({
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 text-white transition-all flex items-center justify-between text-sm md:text-base"
+          className={`w-full p-3 bg-gray-800 border rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 text-white transition-all flex items-center justify-between text-sm md:text-base ${
+            invalidCountryCode ? 'border-red-400/70' : 'border-gray-700'
+          }`}
         >
           <div className="flex items-center space-x-2 overflow-hidden">
             <span className="text-lg">{getFlag(selectedCountry.code)}</span>
@@ -124,7 +130,9 @@ export const CountryCodeSelect = ({
             type="tel"
             value={phoneNumber}
             onChange={(e) => onPhoneChange(e.target.value)}
-            className="w-full p-3 pl-12 bg-gray-800 border border-gray-700 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 text-white placeholder-gray-500 transition-all text-sm md:text-base"
+            className={`w-full p-3 pl-12 bg-gray-800 border rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 text-white placeholder-gray-500 transition-all text-sm md:text-base ${
+              invalidPhoneNumber ? 'border-red-400/70' : 'border-gray-700'
+            }`}
             placeholder="Enter your phone number"
           />
         </div>

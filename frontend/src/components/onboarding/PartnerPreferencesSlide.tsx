@@ -8,6 +8,7 @@ interface PartnerPreferencesSlideProps {
   onboardingData: OnboardingData;
   setOnboardingData: React.Dispatch<React.SetStateAction<OnboardingData>>;
   isVisible: boolean;
+  showValidationErrors?: boolean;
 }
 
 const faithJourneyOptions = [
@@ -55,7 +56,12 @@ const chipClass = (selected: boolean) =>
     selected ? 'bg-pink-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
   }`;
 
-const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({ onboardingData, setOnboardingData, isVisible }) => {
+const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({
+  onboardingData,
+  setOnboardingData,
+  isVisible,
+  showValidationErrors = false,
+}) => {
   if (!isVisible) return null;
 
   const handleRangeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,6 +92,12 @@ const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({ onboa
   const preferredHeightInches = Math.round(preferredMinHeight / 2.54);
   const preferredHeightFeet = Math.floor(preferredHeightInches / 12);
   const preferredHeightRemainder = preferredHeightInches % 12;
+  const invalidAgeRange =
+    onboardingData.minAge === null ||
+    onboardingData.minAge === undefined ||
+    onboardingData.maxAge === null ||
+    onboardingData.maxAge === undefined ||
+    onboardingData.minAge > onboardingData.maxAge;
 
   return (
     <motion.div
@@ -107,9 +119,9 @@ const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({ onboa
       <div className="space-y-4">
         <h3 className="flex items-center gap-2 text-xl font-semibold text-white">
           <Heart className="h-5 w-5 text-pink-400" />
-          I&apos;m interested in...
+          I&apos;m interested in... <span className="text-red-400">*</span>
         </h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className={`grid grid-cols-2 gap-4 rounded-2xl p-2 ${showValidationErrors && !onboardingData.preferredGender ? 'border border-red-400/40 bg-red-500/5' : ''}`}>
           {genderOptions.map((option) => (
             <SelectableCard
               key={option.value}
@@ -120,17 +132,20 @@ const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({ onboa
             />
           ))}
         </div>
+        {showValidationErrors && !onboardingData.preferredGender ? (
+          <p className="text-sm text-red-400">Select who you want to match with.</p>
+        ) : null}
       </div>
 
       <div className="space-y-4">
-        <h3 className="text-xl font-semibold text-white">Age Range</h3>
+        <h3 className="text-xl font-semibold text-white">Age Range <span className="text-red-400">*</span></h3>
         <div className="flex items-center justify-center space-x-4">
           <input
             type="number"
             name="minAge"
             value={onboardingData.minAge === null || onboardingData.minAge === undefined ? '' : onboardingData.minAge}
             onChange={handleRangeChange}
-            className="input-style w-24 text-center"
+            className={`input-style w-24 text-center ${showValidationErrors && invalidAgeRange ? 'border-red-400/70' : ''}`}
             min="18"
             max="99"
           />
@@ -140,19 +155,22 @@ const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({ onboa
             name="maxAge"
             value={onboardingData.maxAge === null || onboardingData.maxAge === undefined ? '' : onboardingData.maxAge}
             onChange={handleRangeChange}
-            className="input-style w-24 text-center"
+            className={`input-style w-24 text-center ${showValidationErrors && invalidAgeRange ? 'border-red-400/70' : ''}`}
             min="18"
             max="99"
           />
         </div>
+        {showValidationErrors && invalidAgeRange ? (
+          <p className="text-sm text-red-400">Enter a valid age range and make sure minimum age is not above maximum age.</p>
+        ) : null}
       </div>
 
       <div className="space-y-4">
         <h3 className="flex items-center gap-2 text-xl font-semibold text-white">
           <MapPin className="h-5 w-5 text-pink-400" />
-          Maximum Distance
+          Maximum Distance <span className="text-red-400">*</span>
         </h3>
-        <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+        <div className={`rounded-xl border bg-slate-900/40 p-4 ${showValidationErrors && !onboardingData.maxDistance ? 'border-red-400/70' : 'border-white/10'}`}>
           <input
             type="range"
             id="maxDistance"
@@ -170,9 +188,9 @@ const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({ onboa
       <div className="space-y-4">
         <h3 className="flex items-center gap-2 text-xl font-semibold text-white">
           <Ruler className="h-5 w-5 text-pink-400" />
-          Preferred minimum height
+          Preferred minimum height <span className="text-red-400">*</span>
         </h3>
-        <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+        <div className={`rounded-xl border bg-slate-900/40 p-4 ${showValidationErrors && !onboardingData.preferredMinHeight ? 'border-red-400/70' : 'border-white/10'}`}>
           <div className="mb-2 flex items-center justify-between text-sm text-slate-300">
             <span>120 cm</span>
             <span className="font-semibold text-white">
@@ -193,8 +211,8 @@ const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({ onboa
       </div>
 
       <div className="space-y-4">
-        <h3 className="text-xl font-semibold text-white">Their ideal faith journey?</h3>
-        <div className="flex flex-wrap gap-2">
+        <h3 className="text-xl font-semibold text-white">Their ideal faith journey? <span className="text-red-400">*</span></h3>
+        <div className={`flex flex-wrap gap-2 rounded-2xl p-2 ${showValidationErrors && !onboardingData.preferredFaithJourney?.length ? 'border border-red-400/40 bg-red-500/5' : ''}`}>
           {faithJourneyOptions.map((option) => (
             <button
               key={option.value}
@@ -206,11 +224,14 @@ const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({ onboa
             </button>
           ))}
         </div>
+        {showValidationErrors && !onboardingData.preferredFaithJourney?.length ? (
+          <p className="text-sm text-red-400">Pick at least one preferred faith journey.</p>
+        ) : null}
       </div>
 
       <div className="space-y-4">
-        <h3 className="text-xl font-semibold text-white">How often should they attend church?</h3>
-        <div className="flex flex-wrap gap-2">
+        <h3 className="text-xl font-semibold text-white">How often should they attend church? <span className="text-red-400">*</span></h3>
+        <div className={`flex flex-wrap gap-2 rounded-2xl p-2 ${showValidationErrors && !onboardingData.preferredChurchAttendance?.length ? 'border border-red-400/40 bg-red-500/5' : ''}`}>
           {churchAttendanceOptions.map((option) => (
             <button
               key={option.value}
@@ -222,11 +243,14 @@ const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({ onboa
             </button>
           ))}
         </div>
+        {showValidationErrors && !onboardingData.preferredChurchAttendance?.length ? (
+          <p className="text-sm text-red-400">Pick at least one church attendance preference.</p>
+        ) : null}
       </div>
 
       <div className="space-y-4">
-        <h3 className="text-xl font-semibold text-white">What kind of relationship are they seeking?</h3>
-        <div className="flex flex-wrap gap-2">
+        <h3 className="text-xl font-semibold text-white">What kind of relationship are they seeking? <span className="text-red-400">*</span></h3>
+        <div className={`flex flex-wrap gap-2 rounded-2xl p-2 ${showValidationErrors && !onboardingData.preferredRelationshipGoals?.length ? 'border border-red-400/40 bg-red-500/5' : ''}`}>
           {relationshipGoalsOptions.map((option) => (
             <button
               key={option.value}
@@ -238,11 +262,14 @@ const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({ onboa
             </button>
           ))}
         </div>
+        {showValidationErrors && !onboardingData.preferredRelationshipGoals?.length ? (
+          <p className="text-sm text-red-400">Pick at least one preferred relationship goal.</p>
+        ) : null}
       </div>
 
       <div className="space-y-4">
-        <h3 className="text-xl font-semibold text-white">Any denomination preferences?</h3>
-        <div className="flex flex-wrap gap-2">
+        <h3 className="text-xl font-semibold text-white">Any denomination preferences? <span className="text-red-400">*</span></h3>
+        <div className={`flex flex-wrap gap-2 rounded-2xl p-2 ${showValidationErrors && !onboardingData.preferredDenomination ? 'border border-red-400/40 bg-red-500/5' : ''}`}>
           {denominationOptions.map((option) => (
             <button
               key={option}
@@ -254,6 +281,9 @@ const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({ onboa
             </button>
           ))}
         </div>
+        {showValidationErrors && !onboardingData.preferredDenomination ? (
+          <p className="text-sm text-red-400">Choose a denomination preference before continuing.</p>
+        ) : null}
       </div>
     </motion.div>
   );

@@ -36,9 +36,52 @@ type OnboardingUpdateData = Partial<Omit<OnboardingData, 'photos' | 'customDenom
   profilePhotoCount?: number;
 };
 
+const waitForNextPaint = () =>
+  new Promise<void>((resolve) => {
+    if (typeof window === 'undefined') {
+      resolve();
+      return;
+    }
+
+    window.requestAnimationFrame(() => resolve());
+  });
+
+const getSubmissionErrorMessage = (error: unknown): string => {
+  const rawMessage =
+    error instanceof Error ? error.message : typeof error === 'string' ? error : 'Something went wrong.';
+  const normalizedMessage = rawMessage.toLowerCase();
+
+  if (normalizedMessage.includes('user not authenticated')) {
+    return 'Your session has expired. Please sign in again and continue onboarding.';
+  }
+
+  if (
+    normalizedMessage.includes('upload failed') ||
+    normalizedMessage.includes('upload-photos') ||
+    normalizedMessage.includes('cloudinary') ||
+    normalizedMessage.includes('500')
+  ) {
+    return 'We could not upload your photos just now. Please check your connection and try again.';
+  }
+
+  if (normalizedMessage.includes('network') || normalizedMessage.includes('fetch')) {
+    return 'We could not reach the server. Please check your internet connection and try again.';
+  }
+
+  if (normalizedMessage.includes('please upload at least')) {
+    return rawMessage;
+  }
+
+  return 'We could not complete onboarding right now. Please try again.';
+};
+
 const getStepValidationError = (step: number, data: OnboardingData): string | null => {
   const hasText = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
   const hasSelections = (value: unknown, minimum = 1): boolean => Array.isArray(value) && value.length >= minimum;
+  const hasPhoneNumber = (value: unknown): boolean =>
+    typeof value === 'string' && value.replace(/\D/g, '').length >= 6;
+  const hasValidBirthday = (): boolean =>
+    hasText(data.birthday) && typeof data.age === 'number' && data.age >= 18 && data.age <= 99;
 
   if (step === 0 && data.photos.length < MIN_ONBOARDING_PHOTOS) {
     return `Please upload at least ${MIN_ONBOARDING_PHOTOS} photos.`;
@@ -52,8 +95,7 @@ const getStepValidationError = (step: number, data: OnboardingData): string | nu
     step === 2 &&
     (
       !hasText(data.location) ||
-      !hasText(data.birthday) ||
-      typeof data.age !== 'number' ||
+      !hasValidBirthday() ||
       !data.faithJourney ||
       !data.churchAttendance ||
       !hasText(data.denomination) ||
@@ -63,7 +105,7 @@ const getStepValidationError = (step: number, data: OnboardingData): string | nu
       !hasText(data.favoriteVerse) ||
       !hasText(data.height) ||
       !hasSelections(data.languageSpoken) ||
-      !hasText(data.phoneNumber) ||
+      !hasPhoneNumber(data.phoneNumber) ||
       !hasText(data.countryCode) ||
       !hasSelections(data.profileFits, MIN_PROFILE_FITS) ||
       !hasSelections(data.personality) ||
@@ -91,6 +133,7 @@ const getStepValidationError = (step: number, data: OnboardingData): string | nu
       data.minAge === undefined ||
       data.maxAge === null ||
       data.maxAge === undefined ||
+      data.minAge > data.maxAge ||
       data.maxDistance === null ||
       data.maxDistance === undefined ||
       data.preferredMinHeight === null ||
@@ -135,6 +178,8 @@ const OnboardingPage = () => {
 
   const [currentStep, setCurrentStep] = useState(0);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [isSubmittingFinalStep, setIsSubmittingFinalStep] = useState(false);
+  const [submissionStage, setSubmissionStage] = useState<'idle' | 'uploading' | 'saving'>('idle');
   const totalSteps = 8;
 
   const [onboardingData, setOnboardingData] = useState<OnboardingData>({
@@ -214,7 +259,12 @@ const OnboardingPage = () => {
     }
 
     // --- Final Submission ---
+    setIsSubmittingFinalStep(true);
+    setSubmissionStage('uploading');
+
     try {
+      await waitForNextPaint();
+
       const userId = user?.uid || user?.id;
       if (!userId) throw new Error('User not authenticated.');
       if (onboardingData.photos.length < MIN_ONBOARDING_PHOTOS) {
@@ -252,6 +302,8 @@ const OnboardingPage = () => {
         }
       });
 
+      setSubmissionStage('saving');
+
       const success = await completeOnboarding({
         ...dataToSubmit,
         birthday: dataToSubmit.birthday ? new Date(dataToSubmit.birthday) : undefined,
@@ -268,8 +320,11 @@ const OnboardingPage = () => {
         throw new Error('Onboarding failed. Please try again.');
       }
     } catch (err: any) {
-      setValidationError(err.message || 'An error occurred.');
+      setValidationError(getSubmissionErrorMessage(err));
       console.error('❌ Onboarding error:', err);
+    } finally {
+      setIsSubmittingFinalStep(false);
+      setSubmissionStage('idle');
     }
   };
 
@@ -297,11 +352,13 @@ const OnboardingPage = () => {
             isVisible={currentStep === 2}
             onboardingData={onboardingData}
             setOnboardingData={setOnboardingData}
+            showValidationErrors={Boolean(validationError) && currentStep === 2}
           />
           <LocationPermissionSlide
             isVisible={currentStep === 1}
             onboardingData={onboardingData}
             setOnboardingData={setOnboardingData}
+            showValidationErrors={Boolean(validationError) && currentStep === 1}
             onLocationResolved={() => {
               void nextStep();
             }}
@@ -310,11 +367,13 @@ const OnboardingPage = () => {
             isVisible={currentStep === 3}
             onboardingData={onboardingData}
             setOnboardingData={setOnboardingData}
+            showValidationErrors={Boolean(validationError) && currentStep === 3}
           />
           <PersonalEssenceSlide
             isVisible={currentStep === 5}
             onboardingData={onboardingData}
             setOnboardingData={setOnboardingData}
+            showValidationErrors={Boolean(validationError) && currentStep === 5}
           />
           <InterestsSelectionSlide
             isVisible={currentStep === 7}
@@ -325,11 +384,13 @@ const OnboardingPage = () => {
             isVisible={currentStep === 6}
             onboardingData={onboardingData}
             setOnboardingData={setOnboardingData}
+            showValidationErrors={Boolean(validationError) && currentStep === 6}
           />
           <PartnerPreferencesSlide
             isVisible={currentStep === 4}
             onboardingData={onboardingData}
             setOnboardingData={setOnboardingData}
+            showValidationErrors={Boolean(validationError) && currentStep === 4}
           />
         </div>
       </main>
@@ -339,7 +400,8 @@ const OnboardingPage = () => {
         totalSlides={totalSteps}
         canGoBack={currentStep > 0}
         canProceed={canProceedToNext}
-        submitting={isCompletingOnboarding}
+        submitting={isCompletingOnboarding || isSubmittingFinalStep}
+        submittingLabel={submissionStage === 'uploading' ? 'Uploading photos...' : 'Saving profile...'}
         validationError={validationError}
         onPrevious={prevStep}
         onNext={nextStep}

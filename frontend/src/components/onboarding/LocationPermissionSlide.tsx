@@ -8,6 +8,7 @@ interface LocationPermissionSlideProps {
   setOnboardingData: React.Dispatch<React.SetStateAction<OnboardingData>>;
   isVisible: boolean;
   onLocationResolved?: () => void;
+  showValidationErrors?: boolean;
 }
 
 const reverseGeocode = async (latitude: number, longitude: number): Promise<string> => {
@@ -26,10 +27,12 @@ const LocationPermissionSlide: React.FC<LocationPermissionSlideProps> = ({
   setOnboardingData,
   isVisible,
   onLocationResolved,
+  showValidationErrors = false,
 }) => {
   const [isRequesting, setIsRequesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showHowUsed, setShowHowUsed] = useState(false);
+  const isLocationMissing = !onboardingData.location?.trim();
 
   if (!isVisible) return null;
 
@@ -131,8 +134,13 @@ const LocationPermissionSlide: React.FC<LocationPermissionSlideProps> = ({
           value={onboardingData.location || ''}
           onChange={(e) => setOnboardingData((prev) => ({ ...prev, location: e.target.value }))}
           placeholder="City, State / Country"
-          className="w-full rounded-xl border border-white/15 bg-slate-900/50 p-4 text-white placeholder-slate-400 focus:border-pink-400 focus:outline-none"
+          className={`w-full rounded-xl border bg-slate-900/50 p-4 text-white placeholder-slate-400 focus:border-pink-400 focus:outline-none ${
+            showValidationErrors && isLocationMissing ? 'border-red-400/70' : 'border-white/15'
+          }`}
         />
+        {showValidationErrors && isLocationMissing ? (
+          <p className="mt-2 text-sm text-red-400">Please allow location access or type your location manually.</p>
+        ) : null}
         {error && <p className="mt-2 text-sm text-amber-300">{error}</p>}
         {onboardingData.location && (
           <p className="mt-2 text-sm text-emerald-300">Location set: {onboardingData.location}</p>

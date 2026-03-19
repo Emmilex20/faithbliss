@@ -7,6 +7,7 @@ interface PersonalEssenceSlideProps {
   onboardingData: OnboardingData;
   setOnboardingData: React.Dispatch<React.SetStateAction<OnboardingData>>;
   isVisible: boolean;
+  showValidationErrors?: boolean;
 }
 
 const communicationOptions = ['Big time texter', 'Phone caller', 'Video chatter', 'Bad texter', 'Better in person'];
@@ -43,8 +44,16 @@ const MultiSelectChips = ({
   </div>
 );
 
-const PersonalEssenceSlide: React.FC<PersonalEssenceSlideProps> = ({ onboardingData, setOnboardingData, isVisible }) => {
+const PersonalEssenceSlide: React.FC<PersonalEssenceSlideProps> = ({
+  onboardingData,
+  setOnboardingData,
+  isVisible,
+  showValidationErrors = false,
+}) => {
   if (!isVisible) return null;
+  const hasCommunicationStyle = Array.isArray(onboardingData.communicationStyle) && onboardingData.communicationStyle.length > 0;
+  const hasLoveStyle = Array.isArray(onboardingData.loveStyle) && onboardingData.loveStyle.length > 0;
+  const hasEducationLevel = Boolean(onboardingData.educationLevel?.trim());
 
   const toggleMulti = (field: 'communicationStyle' | 'loveStyle', value: string) => {
     setOnboardingData((prev) => {
@@ -73,37 +82,52 @@ const PersonalEssenceSlide: React.FC<PersonalEssenceSlideProps> = ({ onboardingD
       <div className="space-y-4 border-b border-white/10 pb-7">
         <h3 className="flex items-center gap-2 text-xl font-semibold text-white">
           <MessageCircleHeart className="h-5 w-5 text-pink-300" />
-          What is your communication style?
+          What is your communication style? <span className="text-red-400">*</span>
         </h3>
-        <MultiSelectChips
-          options={communicationOptions}
-          selected={onboardingData.communicationStyle}
-          onSelect={(value) => toggleMulti('communicationStyle', value)}
-        />
+        <div className={showValidationErrors && !hasCommunicationStyle ? 'rounded-2xl border border-red-400/40 bg-red-500/5 p-3' : ''}>
+          <MultiSelectChips
+            options={communicationOptions}
+            selected={onboardingData.communicationStyle}
+            onSelect={(value) => toggleMulti('communicationStyle', value)}
+          />
+        </div>
+        {showValidationErrors && !hasCommunicationStyle ? (
+          <p className="text-sm text-red-400">Select at least one communication style.</p>
+        ) : null}
       </div>
 
       <div className="space-y-4 border-b border-white/10 pb-7">
         <h3 className="flex items-center gap-2 text-xl font-semibold text-white">
           <HeartHandshake className="h-5 w-5 text-pink-300" />
-          How do you receive love?
+          How do you receive love? <span className="text-red-400">*</span>
         </h3>
-        <MultiSelectChips
-          options={loveStyleOptions}
-          selected={onboardingData.loveStyle}
-          onSelect={(value) => toggleMulti('loveStyle', value)}
-        />
+        <div className={showValidationErrors && !hasLoveStyle ? 'rounded-2xl border border-red-400/40 bg-red-500/5 p-3' : ''}>
+          <MultiSelectChips
+            options={loveStyleOptions}
+            selected={onboardingData.loveStyle}
+            onSelect={(value) => toggleMulti('loveStyle', value)}
+          />
+        </div>
+        {showValidationErrors && !hasLoveStyle ? (
+          <p className="text-sm text-red-400">Select at least one love style.</p>
+        ) : null}
       </div>
 
       <div className="space-y-4 pb-10">
         <h3 className="flex items-center gap-2 text-xl font-semibold text-white">
           <GraduationCap className="h-5 w-5 text-pink-300" />
-          What is your education level?
+          What is your education level? <span className="text-red-400">*</span>
         </h3>
-        <MultiSelectChips
-          options={educationLevelOptions}
-          selected={onboardingData.educationLevel ? [onboardingData.educationLevel] : []}
-          onSelect={(value) => setOnboardingData((prev) => ({ ...prev, educationLevel: value }))}
-        />
+        <div className={showValidationErrors && !hasEducationLevel ? 'rounded-2xl border border-red-400/40 bg-red-500/5 p-3' : ''}>
+          <MultiSelectChips
+            options={educationLevelOptions}
+            selected={onboardingData.educationLevel ? [onboardingData.educationLevel] : []}
+            onSelect={(value) => setOnboardingData((prev) => ({ ...prev, educationLevel: value }))}
+          />
+        </div>
+        {showValidationErrors && !hasEducationLevel ? (
+          <p className="text-sm text-red-400">Select your education level.</p>
+        ) : null}
       </div>
     </motion.div>
   );
