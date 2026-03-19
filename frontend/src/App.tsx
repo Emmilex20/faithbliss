@@ -1,5 +1,4 @@
-﻿/* eslint-disable no-irregular-whitespace */
-// src/App.tsx
+﻿// src/App.tsx
 
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
@@ -11,7 +10,7 @@ import { API } from './services/api';
 // Define the paths that should use the special "Auth Layout"
 const authPaths = ['/login', '/signup'];
 // Include the Onboarding path in a list that needs a specific full-screen treatment.
-const fullScreenPaths = ['/onboarding', '/about', '/contact', '/privacy'];
+const fullScreenPaths = ['/onboarding'];
 const verificationPaths = ['/verify-email'];
 const appShellPaths = [
   '/dashboard',
@@ -19,10 +18,8 @@ const appShellPaths = [
   '/messages',
   '/notifications',
   '/matches',
-  '/premium',
   '/payment-success',
   '/settings',
-  '/help',
   '/report',
   '/deactivate',
   '/profile',

@@ -2,7 +2,6 @@ import { Link } from "react-router-dom"; // <-- CHANGED from 'next/link'
 import { Heart, Globe, Users, Target, Shield, Handshake, BookOpen } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import FadeIn from "../components/FadeIn"; // <-- IMPORTED our component
-import { SeoMetaManager } from "../components/SeoMetaManager";
 
 // All &apos; have been replaced with '
 // All &quot; have been replaced with "
@@ -83,7 +82,6 @@ export default function Home() {
 
   return (
     <main className="bg-gray-900 no-horizontal-scroll dashboard-main" style={{ scrollBehavior: 'smooth' }}>
-      <SeoMetaManager />
       {/* Navigation */}
       <nav 
         className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
