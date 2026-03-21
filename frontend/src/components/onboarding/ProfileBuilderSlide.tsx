@@ -219,6 +219,19 @@ const ProfileBuilderSlide = ({
   isVisible,
   showValidationErrors = false,
 }: ProfileBuilderSlideProps) => {
+  React.useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const existingStyle = document.getElementById(PROFILE_BUILDER_STYLE_ID);
+    if (existingStyle) return;
+
+    const styleSheet = document.createElement('style');
+    styleSheet.id = PROFILE_BUILDER_STYLE_ID;
+    styleSheet.type = 'text/css';
+    styleSheet.textContent = styles;
+    document.head.appendChild(styleSheet);
+  }, []);
+
   const [selectedCountry, setSelectedCountry] = React.useState<Country>(defaultCountry);
 
   React.useEffect(() => {
@@ -777,11 +790,6 @@ const styles = `
   }
 `;
 
-if (typeof window !== 'undefined') {
-  const styleSheet = document.createElement('style');
-  styleSheet.type = 'text/css';
-  styleSheet.innerText = styles;
-  document.head.appendChild(styleSheet);
-}
+const PROFILE_BUILDER_STYLE_ID = 'profile-builder-slide-styles';
 
 export default ProfileBuilderSlide;
