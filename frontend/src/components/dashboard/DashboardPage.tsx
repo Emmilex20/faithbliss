@@ -26,6 +26,15 @@ const PASS_REVIEW_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 type PersistedPassedProfilesMap = Record<string, number>;
 
+const normalizeBinaryGender = (value: unknown): 'MALE' | 'FEMALE' | null => {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toUpperCase();
+  if (normalized === 'MALE' || normalized === 'FEMALE') {
+    return normalized;
+  }
+  return null;
+};
+
 const normalizePassedProfilesMap = (raw: string | null): PersistedPassedProfilesMap => {
   if (!raw) return {};
 
@@ -175,6 +184,13 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
         const hasValidId = (p: User) => p && (p.id || (p as any)._id);
         const hasDisplayName = (p: User) => typeof p.name === 'string' && p.name.trim().length > 0;
         const currentUserId = currentUserData?.id ? String(currentUserData.id) : null;
+        const currentUserGender = normalizeBinaryGender(currentUserData?.gender);
+        const defaultVisibleGender =
+            currentUserGender === 'MALE'
+                ? 'FEMALE'
+                : currentUserGender === 'FEMALE'
+                    ? 'MALE'
+                    : null;
         const recentPassedIdSet = new Set(Object.keys(persistedPassedProfileMap));
 
         const sourceProfiles =
@@ -188,14 +204,21 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
             .filter((profile) => profile.onboardingCompleted === true)
             .filter((profile) => !currentUserId || String(profile.id || (profile as any)._id) !== currentUserId);
 
+        const genderScopedProfiles =
+            filteredProfiles === null && !isReviewingPassedProfiles && defaultVisibleGender
+                ? baseProfiles.filter(
+                    (profile) => normalizeBinaryGender(profile.gender) === defaultVisibleGender
+                  )
+                : baseProfiles;
+
         if (isReviewingPassedProfiles) {
-            return baseProfiles;
+            return genderScopedProfiles;
         }
 
-        return baseProfiles.filter(
+        return genderScopedProfiles.filter(
             (profile) => !recentPassedIdSet.has(String(profile.id || (profile as any)._id))
         );
-    }, [profiles, filteredProfiles, currentUserData?.id, isReviewingPassedProfiles, persistedPassedProfileMap]);
+    }, [profiles, filteredProfiles, currentUserData?.gender, currentUserData?.id, isReviewingPassedProfiles, persistedPassedProfileMap]);
 
     const {
       queue: profileQueue,
@@ -520,7 +543,7 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
             setIsReviewingPassedProfiles(false);
             reset();
             await refetch();
-            showInfo('Filters cleared. Showing all profiles.');
+            showInfo('Filters cleared. Showing your default match feed.');
             return;
         }
 

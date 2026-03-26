@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FcGoogle } from 'react-icons/fc';
-import { ArrowLeft, Eye, EyeOff, Heart, Lock, Mail, Sparkles, User } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Lock, Mail, Sparkles, User } from 'lucide-react';
 import { PopupInstruction } from '@/components/auth/PopupInstruction';
 import { SuccessModal } from '@/components/SuccessModal';
 import { HeartBeatIcon } from '@/components/HeartBeatIcon';
@@ -139,7 +139,11 @@ export default function Signup() {
 
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <Heart className="h-8 w-8 text-pink-500" />
+            <img
+              src="/favicon.svg"
+              alt="FaithBliss logo"
+              className="h-10 w-10 sm:h-12 sm:w-12 md:h-14 md:w-14 object-contain rounded-sm"
+            />
             <span className="text-2xl font-bold text-white">FaithBliss</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent mb-2">

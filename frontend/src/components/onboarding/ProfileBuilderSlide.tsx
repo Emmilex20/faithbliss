@@ -29,6 +29,11 @@ const churchAttendanceOptions = [
   { value: 'OCCASIONALLY', label: 'Occasionally', emoji: '⛪' },
 ];
 
+const genderOptions = [
+  { value: 'MALE', label: 'Male', emoji: '👨' },
+  { value: 'FEMALE', label: 'Female', emoji: '👩' },
+];
+
 const denominationOptions = [
   'BAPTIST',
   'METHODIST',
@@ -302,6 +307,7 @@ const ProfileBuilderSlide = ({
   const heightProgress = ((parsedHeight - 120) / (220 - 120)) * 100;
   const hasFaithJourney = Boolean(onboardingData.faithJourney);
   const hasChurchAttendance = Boolean(onboardingData.churchAttendance);
+  const hasGender = Boolean(onboardingData.gender);
   const hasDenomination = Boolean(onboardingData.denomination?.trim());
   const hasBaptismStatus = Boolean(onboardingData.baptismStatus?.trim());
   const hasOccupation = Boolean(onboardingData.occupation?.trim());
@@ -387,6 +393,22 @@ const ProfileBuilderSlide = ({
           ))}
         </div>
         {showValidationErrors && !hasChurchAttendance ? <p className="text-sm text-red-400">Choose how often you attend church.</p> : null}
+      </div>
+
+      <div className="space-y-4">
+        <RequiredLabel>What is your gender?</RequiredLabel>
+        <div className={`grid grid-cols-2 gap-4 rounded-2xl p-2 ${showValidationErrors && !hasGender ? 'border border-red-400/40 bg-red-500/5' : ''}`}>
+          {genderOptions.map((option) => (
+            <SelectableCard
+              key={option.value}
+              label={option.label}
+              emoji={option.emoji}
+              isSelected={onboardingData.gender === option.value}
+              onClick={() => handleCardSelect('gender', option.value)}
+            />
+          ))}
+        </div>
+        {showValidationErrors && !hasGender ? <p className="text-sm text-red-400">Please select your gender.</p> : null}
       </div>
 
       <div className="space-y-6">

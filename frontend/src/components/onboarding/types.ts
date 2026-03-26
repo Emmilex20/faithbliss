@@ -5,6 +5,7 @@ export type Gender = 'MAN' | 'WOMAN' | 'OTHER';
 
 export interface OnboardingData {
   age?: number;
+  gender?: 'MALE' | 'FEMALE';
   faithJourney: FaithJourney;
   churchAttendance: ChurchAttendance;
   relationshipGoals: RelationshipGoals[];

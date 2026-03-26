@@ -11,6 +11,7 @@ interface IUserProfile extends DocumentData {
     id: string; // The Firestore Document ID (which is the Firebase UID)
     name: string;
     email: string;
+    gender?: 'MALE' | 'FEMALE';
     profilePhoto1?: string;
     profilePhoto2?: string;
     profilePhoto3?: string;
@@ -101,6 +102,7 @@ export const completeOnboarding = async (req: Request, res: Response) => {
             churchAttendance, denomination, occupation, education, baptismStatus,
             spiritualGifts, lifestyle, favoriteVerse, phoneNumber, countryCode,
             preferredFaithJourney, preferredChurchAttendance, preferredRelationshipGoals, preferredDenomination,
+            gender,
             profileFits,
             ...otherFields
         } = req.body;
@@ -116,6 +118,7 @@ export const completeOnboarding = async (req: Request, res: Response) => {
             ...otherFields,
             bio, occupation, education, baptismStatus, favoriteVerse,
             phoneNumber, countryCode, lifestyle, denomination,
+            gender,
             
             // Date parsing
             birthday: birthday && typeof birthday === 'string' ? new Date(birthday).toISOString() : undefined,

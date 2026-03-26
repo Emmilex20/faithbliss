@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Heart, MapPin, Ruler, UserRoundSearch } from 'lucide-react';
-import type { OnboardingData } from './types';
+import type { OnboardingData, FaithJourney, ChurchAttendance, RelationshipGoals } from './types';
 import SelectableCard from './SelectableCard';
 
 interface PartnerPreferencesSlideProps {
@@ -128,7 +128,7 @@ const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({
               label={option.label}
               emoji={option.emoji}
               isSelected={onboardingData.preferredGender === option.value}
-              onClick={() => setOnboardingData((prev) => ({ ...prev, preferredGender: option.value as any }))}
+              onClick={() => setOnboardingData((prev) => ({ ...prev, preferredGender: option.value as 'MALE' | 'FEMALE' }))}
             />
           ))}
         </div>
@@ -218,7 +218,7 @@ const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({
               key={option.value}
               type="button"
               onClick={() => handleMultiSelect('preferredFaithJourney', option.value)}
-              className={chipClass(!!onboardingData.preferredFaithJourney?.includes(option.value as any))}
+              className={chipClass(!!onboardingData.preferredFaithJourney?.includes(option.value as FaithJourney))}
             >
               {option.emoji} {option.label}
             </button>
@@ -237,7 +237,7 @@ const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({
               key={option.value}
               type="button"
               onClick={() => handleMultiSelect('preferredChurchAttendance', option.value)}
-              className={chipClass(!!onboardingData.preferredChurchAttendance?.includes(option.value as any))}
+              className={chipClass(!!onboardingData.preferredChurchAttendance?.includes(option.value as ChurchAttendance))}
             >
               {option.emoji} {option.label}
             </button>
@@ -256,7 +256,7 @@ const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({
               key={option.value}
               type="button"
               onClick={() => handleMultiSelect('preferredRelationshipGoals', option.value)}
-              className={chipClass(!!onboardingData.preferredRelationshipGoals?.includes(option.value as any))}
+              className={chipClass(!!onboardingData.preferredRelationshipGoals?.includes(option.value as RelationshipGoals))}
             >
               {option.emoji} {option.label}
             </button>
@@ -268,8 +268,8 @@ const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({
       </div>
 
       <div className="space-y-4">
-        <h3 className="text-xl font-semibold text-white">Any denomination preferences? <span className="text-red-400">*</span></h3>
-        <div className={`flex flex-wrap gap-2 rounded-2xl p-2 ${showValidationErrors && !onboardingData.preferredDenomination ? 'border border-red-400/40 bg-red-500/5' : ''}`}>
+        <h3 className="text-xl font-semibold text-white">Any denomination preferences?</h3>
+        <div className="flex flex-wrap gap-2 rounded-2xl p-2">
           {denominationOptions.map((option) => (
             <button
               key={option}
@@ -281,9 +281,6 @@ const PartnerPreferencesSlide: React.FC<PartnerPreferencesSlideProps> = ({
             </button>
           ))}
         </div>
-        {showValidationErrors && !onboardingData.preferredDenomination ? (
-          <p className="text-sm text-red-400">Choose a denomination preference before continuing.</p>
-        ) : null}
       </div>
     </motion.div>
   );

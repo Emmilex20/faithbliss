@@ -1,5 +1,5 @@
 // src/components/Header.tsx
-import { Heart, User } from 'lucide-react';
+import { User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const Header = () => {
@@ -8,8 +8,8 @@ const Header = () => {
       <div className="container mx-auto p-4 flex justify-between items-center max-w-lg">
         {/* Logo/App Name */}
         <Link to="/" className="text-2xl font-bold text-pink-600 flex items-center">
-          <Heart className="w-6 h-6 mr-1" />
-          Faithbliss
+          <img src="/favicon.svg" alt="FaithBliss logo" className="w-6 h-6 mr-2" />
+          <span>Faithbliss</span>
         </Link>
 
         {/* Navigation/User Icon */}

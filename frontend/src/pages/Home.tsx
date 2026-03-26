@@ -93,8 +93,12 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-2">
-              <Heart className="h-8 w-8 text-pink-500" />
-              <div className="flex flex-col">
+              <img
+                src="/favicon.svg"
+                alt="FaithBliss logo"
+                className="h-10 w-10 md:h-12 md:w-12 lg:h-14 lg:w-14 object-contain rounded-sm"
+              />
+              <div className="flex flex-col leading-tight">
                 <span className="text-2xl font-bold text-white">FaithBliss</span>
                 <span className="text-xs text-pink-300 font-medium">Africa's Trusted Platform for<br />Christian Singles</span>
               </div>

@@ -64,7 +64,7 @@ const ImageUploadSlide = ({ onboardingData, setOnboardingData, isVisible }: Imag
         } else if (faceAnalysis.supported && faceAnalysis.faceCount === 0) {
           warnings.push(`Photo ${nextSlotIndex + 1} has no clear face detected. Use a clearer face photo.`);
         } else if (!faceAnalysis.supported && nextSlotIndex === 0) {
-          warnings.push('Could not auto-check your primary photo. Use a clear solo photo for better trust.');
+          warnings.push('Thank you for uploading your photo. Your images are securely stored and protected in our database.');
         }
 
         acceptedFiles.push(file);

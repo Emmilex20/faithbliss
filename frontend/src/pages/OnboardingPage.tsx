@@ -111,7 +111,8 @@ const getStepValidationError = (step: number, data: OnboardingData): string | nu
       !hasSelections(data.personality) ||
       !hasSelections(data.hobbies) ||
       !hasSelections(data.values) ||
-      !hasSelections(data.spiritualGifts)
+      !hasSelections(data.spiritualGifts) ||
+      !data.gender
     )
   ) {
     return `Please complete every profile field on this step and pick at least ${MIN_PROFILE_FITS} profile fit options.`;
@@ -128,7 +129,6 @@ const getStepValidationError = (step: number, data: OnboardingData): string | nu
       !data.preferredGender ||
       !hasSelections(data.preferredChurchAttendance) ||
       !hasSelections(data.preferredRelationshipGoals) ||
-      !hasText(data.preferredDenomination) ||
       data.minAge === null ||
       data.minAge === undefined ||
       data.maxAge === null ||
@@ -184,6 +184,7 @@ const OnboardingPage = () => {
 
   const [onboardingData, setOnboardingData] = useState<OnboardingData>({
     age: undefined,
+    gender: undefined,
     photos: [],
     birthday: '',
     location: '',
