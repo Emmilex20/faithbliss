@@ -9,6 +9,11 @@ import { createNotification } from '../services/notificationService';
 import { cloudinaryUploader } from '../config/cloudinaryConfig';
 import { canViewerSeeCandidate, getPassportFeatureSettings } from '../utils/passportMode';
 import { isProfileBoosterActive } from '../utils/profileBooster';
+import {
+  FREE_CHAT_LIMIT_MESSAGE,
+  getChatAccessStateForUser,
+  isChatLockedForMatch,
+} from '../utils/chatAccess';
 
 // --- FIRESTORE DATA STRUCTURES ---
 
@@ -902,6 +907,11 @@ const getMatchConversations = async (req: Request, res: Response) => {
     const allMatches: IMatch[] = matchDocs
       .filter((doc) => doc.exists)
       .map((doc) => ({ id: doc.id, ...doc.data() } as IMatch));
+    const chatAccessState = await getChatAccessStateForUser({
+      matches: currentUser.matches,
+      subscriptionStatus: currentUser.subscriptionStatus,
+      subscriptionTier: currentUser.subscriptionTier,
+    });
 
     // Keep first payload small to improve page load time.
     const sortedMatches = allMatches
@@ -960,6 +970,7 @@ const getMatchConversations = async (req: Request, res: Response) => {
         const updatedAt =
           lastMsg?.createdAt.toDate().toISOString() ||
           match.createdAt.toDate().toISOString();
+        const chatLocked = isChatLockedForMatch(chatAccessState, match.id);
 
         return {
           id: match.id,
@@ -974,6 +985,9 @@ const getMatchConversations = async (req: Request, res: Response) => {
             : null,
           unreadCount: unreadCountByMatch.get(match.id) || 0,
           updatedAt,
+          chatLocked,
+          chatAccessMessage: chatLocked ? FREE_CHAT_LIMIT_MESSAGE : null,
+          activeChatMatchId: chatAccessState.activeMatchId,
         };
       })
     );
@@ -1019,6 +1033,12 @@ const getMatchMessages = async (req: Request, res: Response) => {
     if (!match.users.includes(currentUid)) {
       return res.status(403).json({ message: 'You are not part of this match.' });
     }
+    const chatAccessState = await getChatAccessStateForUser({
+      matches: currentUser.matches,
+      subscriptionStatus: currentUser.subscriptionStatus,
+      subscriptionTier: currentUser.subscriptionTier,
+    });
+    const chatLocked = isChatLockedForMatch(chatAccessState, match.id);
 
     const otherUid = match.users.find((u) => u !== currentUid)!;
 
@@ -1078,6 +1098,9 @@ const getMatchMessages = async (req: Request, res: Response) => {
           { id: currentUser.id, name: currentUser.name, profilePhoto1: currentUser.profilePhoto1 },
           { id: otherUser.id, name: otherUser.name, profilePhoto1: otherUser.profilePhoto1 },
         ],
+        chatLocked,
+        chatAccessMessage: chatLocked ? FREE_CHAT_LIMIT_MESSAGE : null,
+        activeChatMatchId: chatAccessState.activeMatchId,
       },
       messages: responseMessages,
     });

@@ -32,7 +32,7 @@ import type {
 } from '@/services/WebSocketService';
 import {
   MessageCircle, ArrowLeft, Search, Send, Phone, Video,
-  Smile, Paperclip, Info, Check, CheckCheck, Download, FileText, Loader2, Eye, X, Mic, Square, Play, Pause, Image as ImageIcon, Sticker, Reply, PhoneOff, MicOff, VideoOff, Minimize2, Maximize2, RefreshCcw, Wand2
+  Smile, Paperclip, Info, Check, CheckCheck, Download, FileText, Loader2, Eye, X, Mic, Square, Play, Pause, Image as ImageIcon, Sticker, Reply, PhoneOff, MicOff, VideoOff, Minimize2, Maximize2, RefreshCcw, Wand2, Lock
 } from 'lucide-react';
 
 // Assuming these imports are correct for your Vite project structure
@@ -2045,7 +2045,9 @@ const MessagesContent = () => {
           if (
             a.id !== b.id ||
             a.updatedAt !== b.updatedAt ||
-            (a.lastMessage?.content || '') !== (b.lastMessage?.content || '')
+            (a.lastMessage?.content || '') !== (b.lastMessage?.content || '') ||
+            Boolean(a.chatLocked) !== Boolean(b.chatLocked) ||
+            (a.chatAccessMessage || '') !== (b.chatAccessMessage || '')
           ) {
             same = false;
             break;
@@ -2082,6 +2084,28 @@ const MessagesContent = () => {
   useEffect(() => {
     currentConversationRef.current = currentConversation;
   }, [currentConversation]);
+
+  const isCurrentConversationLocked = useMemo(() => {
+    if (!currentConversation) return false;
+    const fetchedLockState =
+      localMessagesData?.match?.id === currentConversation.id
+        ? Boolean(localMessagesData?.match?.chatLocked)
+        : false;
+    return Boolean(currentConversation.chatLocked) || fetchedLockState;
+  }, [currentConversation, localMessagesData?.match?.chatLocked, localMessagesData?.match?.id]);
+
+  const currentConversationLockMessage = useMemo(() => {
+    if (!currentConversation) return '';
+    const fetchedLockMessage =
+      localMessagesData?.match?.id === currentConversation.id
+        ? localMessagesData?.match?.chatAccessMessage
+        : null;
+    return (
+      currentConversation.chatAccessMessage ||
+      fetchedLockMessage ||
+      'Free plan allows 1 active chat at a time. Upgrade to premium or unmatch your current active chat to unlock another conversation.'
+    );
+  }, [currentConversation, localMessagesData?.match?.chatAccessMessage, localMessagesData?.match?.id]);
 
   useEffect(() => {
     setReplyingTo(null);
@@ -2558,6 +2582,11 @@ const MessagesContent = () => {
 
     if (!messageContent.trim() && !attachment) return false;
 
+    if (isCurrentConversationLocked) {
+      showError(currentConversationLockMessage, 'Chat Locked');
+      return false;
+    }
+
     if (profileIdParam && currentConversation.id === profileIdParam) {
       console.warn('Cannot send message: no mutual match exists for this user yet.');
       return false;
@@ -2834,6 +2863,7 @@ const MessagesContent = () => {
 
   const handleTypingChange = (value: string) => {
     setNewMessage(value);
+    if (isCurrentConversationLocked) return;
     if (!currentConversation || !webSocketService || !currentConversation.otherUser?.id) return;
     const receiverId = currentConversation.otherUser.id;
     webSocketService.sendTyping(receiverId, true);
@@ -3808,7 +3838,11 @@ const MessagesContent = () => {
 
   const hasComposerPayload = Boolean(newMessage.trim() || pendingAttachment);
   const isComposerConnected = Boolean(webSocketService?.connected);
-  const primaryActionDisabled = isRecordingVoice ? false : (isUploadingAttachment || !isComposerConnected);
+  const primaryActionDisabled = isCurrentConversationLocked
+    ? true
+    : isRecordingVoice
+      ? false
+      : (isUploadingAttachment || !isComposerConnected);
 
   const handlePrimaryComposerAction = () => {
     if (isRecordingVoice) {
@@ -3900,7 +3934,15 @@ const MessagesContent = () => {
 
                     <div className="flex-1 text-left min-w-0 overflow-hidden">
                       <div className="flex items-center justify-between">
-                        <h3 className="font-semibold text-white truncate hover:text-pink-300 transition-colors cursor-pointer">{matchedUser?.name}</h3>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <h3 className="font-semibold text-white truncate hover:text-pink-300 transition-colors cursor-pointer">{matchedUser?.name}</h3>
+                          {conversation.chatLocked ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-100">
+                              <Lock className="h-3 w-3" />
+                              Locked
+                            </span>
+                          ) : null}
+                        </div>
                         <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
                           {conversation.lastMessage ? new Date(conversation.lastMessage.createdAt).toLocaleDateString() : 'New'}
                         </span>
@@ -3983,7 +4025,15 @@ const MessagesContent = () => {
                   </div>
 
                   <div className="min-w-0">
-                    <h3 className="font-semibold text-white truncate">{currentConversation.otherUser.name}</h3>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <h3 className="font-semibold text-white truncate">{currentConversation.otherUser.name}</h3>
+                      {isCurrentConversationLocked ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-100">
+                          <Lock className="h-3 w-3" />
+                          Locked
+                        </span>
+                      ) : null}
+                    </div>
                     <p className="text-xs text-gray-400">
                       {typingStatus[currentConversation.otherUser.id]
                         ? 'Typing...'
@@ -4214,6 +4264,23 @@ const MessagesContent = () => {
 
             {/* Message Input */}
             <div className="bg-gray-900/85 backdrop-blur-xl border-t border-gray-700/50 px-3 py-2.5 md:p-4 flex-shrink-0" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 10px)' }}>
+              {isCurrentConversationLocked && (
+                <div className="mb-2.5 rounded-xl border border-amber-300/30 bg-amber-500/10 px-3 py-3 text-amber-50">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-100">Chat Locked</p>
+                      <p className="mt-1 text-sm text-amber-50/90">{currentConversationLockMessage}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/premium')}
+                      className="inline-flex shrink-0 items-center justify-center rounded-full border border-amber-200/30 bg-white/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-white/15"
+                    >
+                      Upgrade
+                    </button>
+                  </div>
+                </div>
+              )}
               {replyingTo && (
                 <div className="mb-2.5 rounded-xl border border-pink-300/35 bg-pink-500/10 px-3 py-2 flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -4292,19 +4359,20 @@ const MessagesContent = () => {
                     <input
                       ref={composerInputRef}
                       type="text"
-                      placeholder="Message"
+                      placeholder={isCurrentConversationLocked ? 'This chat is locked on Free plan' : 'Message'}
                       value={newMessage}
                       onChange={(e) => handleTypingChange(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && !isRecordingVoice && handleSendMessage()}
-                      className="flex-1 h-full bg-transparent text-white placeholder-slate-300 focus:outline-none min-w-0"
+                      disabled={isCurrentConversationLocked}
+                      className="flex-1 h-full bg-transparent text-white placeholder-slate-300 focus:outline-none min-w-0 disabled:cursor-not-allowed disabled:text-slate-500"
                     />
 
                     <button
                       type="button"
                       onClick={handleAttachmentButtonClick}
-                      disabled={isUploadingAttachment || isRecordingVoice}
+                      disabled={isUploadingAttachment || isRecordingVoice || isCurrentConversationLocked}
                       className={`inline-flex items-center justify-center w-9 h-9 rounded-full transition-colors ${
-                        !isUploadingAttachment && !isRecordingVoice
+                        !isUploadingAttachment && !isRecordingVoice && !isCurrentConversationLocked
                           ? 'text-slate-300 hover:text-white hover:bg-white/10'
                           : 'text-gray-500 cursor-not-allowed'
                       }`}
@@ -4320,9 +4388,9 @@ const MessagesContent = () => {
                     <button
                       type="button"
                       onClick={handleStickerButtonClick}
-                      disabled={isUploadingAttachment || isRecordingVoice}
+                      disabled={isUploadingAttachment || isRecordingVoice || isCurrentConversationLocked}
                       className={`inline-flex items-center justify-center w-9 h-9 rounded-full transition-colors ${
-                        !isUploadingAttachment && !isRecordingVoice
+                        !isUploadingAttachment && !isRecordingVoice && !isCurrentConversationLocked
                           ? 'text-slate-300 hover:text-white hover:bg-white/10'
                           : 'text-gray-500 cursor-not-allowed'
                       }`}

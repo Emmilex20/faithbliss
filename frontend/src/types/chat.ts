@@ -57,7 +57,12 @@ export interface Message {
  */
 export interface ConversationMessagesResponse {
   messages: Message[];
-  match: { id: string } // Minimal match info needed for refetch logic
+  match: {
+    id: string;
+    chatLocked?: boolean;
+    chatAccessMessage?: string | null;
+    activeChatMatchId?: string | null;
+  } // Minimal match info needed for refetch logic
   // Add other properties from your API response if needed
 }
 
@@ -80,6 +85,9 @@ export interface ConversationSummary {
   } | null;
   unreadCount: number;
   updatedAt: string;
+  chatLocked?: boolean;
+  chatAccessMessage?: string | null;
+  activeChatMatchId?: string | null;
 }
 
 /**

@@ -6,6 +6,7 @@ import {
   Ban,
   Heart,
   Loader2,
+  Lock,
   MessageCircle,
   User,
   UserX,
@@ -19,9 +20,10 @@ import ProtectedRoute from "../components/auth/ProtectedRoute";
 import { useAuthContext } from "../contexts/AuthContext";
 import { TopBar } from "../components/dashboard/TopBar";
 import { SidePanel } from "../components/dashboard/SidePanel";
-import { useMatches, useMatching } from "../hooks/useAPI";
+import { useConversations, useMatches, useMatching } from "../hooks/useAPI";
 import { HeartBeatLoader } from "../components/HeartBeatLoader";
 import type { Match } from "../types/Match";
+import type { ConversationSummary } from "../types/chat";
 
 const MatchesPage = () => {
   const navigate = useNavigate();
@@ -39,7 +41,20 @@ const MatchesPage = () => {
   const userImage = user?.profilePhoto1 || undefined;
 
   const { mutual, sent, received, loading, error, refetch } = useMatches();
+  const { data: conversationsData } = useConversations() as {
+    data: ConversationSummary[] | null;
+  };
   const { likeUser, unmatchUser, unmatchAndBlockUser } = useMatching();
+  const chatLockByUserId = useMemo(() => {
+    const conversations = Array.isArray(conversationsData) ? conversationsData : [];
+    const map = new Map<string, ConversationSummary>();
+    conversations.forEach((conversation) => {
+      const otherUserId = conversation.otherUser?.id;
+      if (!otherUserId) return;
+      map.set(otherUserId, conversation);
+    });
+    return map;
+  }, [conversationsData]);
 
   const { mutualMatches, sentRequests, receivedRequests } = useMemo(() => {
     const normalize = (data: any): Match[] => {
@@ -89,11 +104,13 @@ const MatchesPage = () => {
   const MatchCard = ({
     match,
     canMessage,
+    chatLocked,
     showLikeBack,
     onLikeBack
   }: {
     match: Match;
     canMessage: boolean;
+    chatLocked?: boolean;
     showLikeBack: boolean;
     onLikeBack?: (userId: string) => void;
   }) => {
@@ -138,7 +155,7 @@ const MatchesPage = () => {
         </div>
 
         <div className="flex gap-3 mt-4">
-          {canMessage ? (
+          {canMessage && !chatLocked ? (
             <Link
               to={`/messages?profileId=${encodeURIComponent(profileId)}&profileName=${encodeURIComponent(user.name || "User")}`}
               className="flex-1"
@@ -148,6 +165,16 @@ const MatchesPage = () => {
                 Message
               </button>
             </Link>
+          ) : canMessage ? (
+            <button
+              type="button"
+              onClick={() => navigate("/premium")}
+              className="flex-1 w-full bg-amber-500/10 border border-amber-300/25 text-amber-100 py-3 rounded-2xl font-medium flex items-center justify-center gap-2 transition hover:bg-amber-500/15"
+              title="Upgrade to unlock another active chat"
+            >
+              <Lock className="w-4 h-4" />
+              Chat Locked
+            </button>
           ) : (
             <button
               disabled
@@ -175,6 +202,12 @@ const MatchesPage = () => {
             </Link>
           )}
         </div>
+
+        {canMessage && chatLocked ? (
+          <p className="mt-3 text-xs text-amber-100/85">
+            Free plan allows one active chat at a time. Upgrade to premium or unmatch your current chat to unlock this one.
+          </p>
+        ) : null}
 
         {canMessage && (
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -417,6 +450,7 @@ const MatchesPage = () => {
                     key={match.id}
                     match={match}
                     canMessage={activeTab === "mutual"}
+                    chatLocked={Boolean(chatLockByUserId.get(String(match.matchedUserId || match.id))?.chatLocked)}
                     showLikeBack={activeTab === "received"}
                     onLikeBack={async (userId: string) => {
                       await likeUser(userId);

@@ -4,6 +4,11 @@ import { Server, Socket } from 'socket.io';
 import { protectSocket } from '../middleware/authMiddleware';
 import { admin, db } from '../config/firebase-admin';
 import { createNotification } from '../services/notificationService';
+import {
+    FREE_CHAT_LIMIT_MESSAGE,
+    getChatAccessStateForUserId,
+    isChatLockedForMatch,
+} from '../utils/chatAccess';
 
 type MessageType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'SYSTEM';
 type CallType = 'audio' | 'video';
@@ -372,6 +377,11 @@ export const initializeSocketIO = (io: Server) => {
 
                 if (!matchData.users.includes(receiverId)) {
                     return socket.emit('error', 'Cannot send message: Receiver is not part of this match.');
+                }
+
+                const chatAccessState = await getChatAccessStateForUserId(userId);
+                if (isChatLockedForMatch(chatAccessState, matchId)) {
+                    return socket.emit('error', FREE_CHAT_LIMIT_MESSAGE);
                 }
 
                 const messageType: MessageType = attachment
