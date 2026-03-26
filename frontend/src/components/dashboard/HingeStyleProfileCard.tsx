@@ -15,7 +15,7 @@ interface HingeStyleProfileCardProps {
   onGoBack: () => void;
   onPass: () => void;
   onLike: () => void;
-  onOpenFilterSection?: (section: DashboardFilterFocusSection) => void;
+  onOpenFilterSection?: (section?: DashboardFilterFocusSection | null) => void;
 }
 
 const toRadians = (value: number) => (value * Math.PI) / 180;
@@ -631,9 +631,9 @@ export const HingeStyleProfileCard = ({
       <>
         <div className={mobileShellClass}>
           <div className={mobileFiltersBarClass}>
-            <button
-              type="button"
-              onClick={() => onOpenFilterSection?.('distance')}
+                    <button
+                      type="button"
+                      onClick={() => onOpenFilterSection?.()}
               className={`inline-flex shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-white to-slate-100 text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:text-slate-950 hover:shadow-[0_14px_28px_rgba(15,23,42,0.12)] ${
                 useDesktopMobileLayout ? 'h-11 w-11' : isCompactHeight ? 'h-9 w-9' : 'h-10 w-10'
               }`}

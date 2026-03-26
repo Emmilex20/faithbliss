@@ -9,8 +9,7 @@ interface InterestsSelectionSlideProps {
   isVisible: boolean;
 }
 
-const MAX_INTERESTS = 10;
-const MIN_INTERESTS = 7;
+const MIN_INTERESTS = 10;
 const INITIAL_VISIBLE_PER_CATEGORY = 8;
 
 const normalizeInterests = (values: string[] | undefined): string[] => {
@@ -18,8 +17,7 @@ const normalizeInterests = (values: string[] | undefined): string[] => {
   return values
     .filter((value) => typeof value === 'string')
     .map((value) => value.trim())
-    .filter(Boolean)
-    .slice(0, MAX_INTERESTS);
+    .filter(Boolean);
 };
 
 const InterestsSelectionSlide = ({ onboardingData, setOnboardingData, isVisible }: InterestsSelectionSlideProps) => {
@@ -42,10 +40,6 @@ const InterestsSelectionSlide = ({ onboardingData, setOnboardingData, isVisible 
         return { ...prev, interests: current.filter((item) => item !== interest) };
       }
 
-      if (current.length >= MAX_INTERESTS) {
-        return prev;
-      }
-
       return { ...prev, interests: [...current, interest] };
     });
   };
@@ -61,10 +55,10 @@ const InterestsSelectionSlide = ({ onboardingData, setOnboardingData, isVisible 
       <div>
         <h2 className="text-4xl font-bold leading-tight text-white">What are you into?</h2>
         <p className="mt-3 text-lg text-slate-300">
-          Pick at least {MIN_INTERESTS} interests, and add up to {MAX_INTERESTS}, to help us find people who share what you love.
+          Pick at least {MIN_INTERESTS} interests to help us find people who share what you love. There is no limit, so choose as many as feel true to you.
         </p>
         <div className="mt-4 inline-flex items-center rounded-full border border-pink-400/40 bg-pink-500/10 px-4 py-1.5 text-sm font-semibold text-pink-100">
-          Selected {selectedInterests.length}/{MAX_INTERESTS} • Min {MIN_INTERESTS}
+          Selected {selectedInterests.length} • Minimum {MIN_INTERESTS}
         </div>
       </div>
 
@@ -83,18 +77,16 @@ const InterestsSelectionSlide = ({ onboardingData, setOnboardingData, isVisible 
               <div className="flex flex-wrap gap-2">
                 {visibleOptions.map((option) => {
                   const active = selectedInterests.includes(option);
-                  const blocked = !active && selectedInterests.length >= MAX_INTERESTS;
                   return (
                     <button
                       key={`${category.title}-${option}`}
                       type="button"
                       onClick={() => toggleInterest(option)}
-                      disabled={blocked}
                       className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
                         active
                           ? 'border-pink-400 bg-pink-500/20 text-pink-100'
                           : 'border-white/20 bg-slate-800/30 text-slate-200 hover:border-pink-300/60 hover:text-white'
-                      } ${blocked ? 'cursor-not-allowed opacity-45' : ''}`}
+                      }`}
                     >
                       {option}
                     </button>

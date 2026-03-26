@@ -18,7 +18,7 @@ interface ProfileDisplayProps {
   onNoProfilesAction?: () => void;
   noProfilesSecondaryActionLabel?: string;
   onNoProfilesSecondaryAction?: () => void;
-  onOpenFilterSection?: (section: DashboardFilterFocusSection) => void;
+  onOpenFilterSection?: (section?: DashboardFilterFocusSection | null) => void;
 }
 
 export const ProfileDisplay = ({

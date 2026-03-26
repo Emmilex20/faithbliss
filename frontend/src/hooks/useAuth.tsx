@@ -252,15 +252,15 @@ const sanitizeText = (value: unknown, maxLen: number): string | undefined => {
     return cleaned.slice(0, maxLen);
 };
 
-const sanitizeArray = (value: unknown, maxItems = 20, maxLen = 60): string[] | undefined => {
+const sanitizeArray = (value: unknown, maxItems: number | null = 20, maxLen = 60): string[] | undefined => {
     if (!Array.isArray(value)) return undefined;
     const cleaned = value
         .filter((item) => typeof item === "string")
         .map((item) => (item as string).trim())
         .filter(Boolean)
-        .slice(0, maxItems)
         .map((item) => item.slice(0, maxLen));
-    return cleaned;
+
+    return maxItems === null ? cleaned : cleaned.slice(0, maxItems);
 };
 
 const sanitizeOnboardingPayload = (payload: OnboardingData): Record<string, any> => {
@@ -271,6 +271,7 @@ const sanitizeOnboardingPayload = (payload: OnboardingData): Record<string, any>
         ["bio", 500],
         ["location", 160],
         ["denomination", 80],
+        ["gender", 20],
         ["phoneNumber", 30],
         ["countryCode", 8],
         ["education", 120],
@@ -302,25 +303,25 @@ const sanitizeOnboardingPayload = (payload: OnboardingData): Record<string, any>
         if (value !== undefined) result[field] = value;
     });
 
-    const arrayFields: Array<keyof OnboardingData> = [
-        "relationshipGoals",
-        "lookingFor",
-        "hobbies",
-        "values",
-        "interests",
-        "profileFits",
-        "languageSpoken",
-        "communicationStyle",
-        "loveStyle",
-        "spiritualGifts",
-        "preferredFaithJourney",
-        "preferredChurchAttendance",
-        "preferredRelationshipGoals",
-        "personality",
+    const arrayFields: Array<[keyof OnboardingData, number | null]> = [
+        ["relationshipGoals", 20],
+        ["lookingFor", 20],
+        ["hobbies", 20],
+        ["values", 20],
+        ["interests", null],
+        ["profileFits", 20],
+        ["languageSpoken", 20],
+        ["communicationStyle", 20],
+        ["loveStyle", 20],
+        ["spiritualGifts", 20],
+        ["preferredFaithJourney", 20],
+        ["preferredChurchAttendance", 20],
+        ["preferredRelationshipGoals", 20],
+        ["personality", 20],
     ];
 
-    arrayFields.forEach((field) => {
-        const value = sanitizeArray(payload[field]);
+    arrayFields.forEach(([field, maxItems]) => {
+        const value = sanitizeArray(payload[field], maxItems);
         if (value !== undefined) result[field] = value;
     });
 

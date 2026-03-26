@@ -579,8 +579,8 @@ const handleApplyFilters = async (filters: DashboardFiltersPayload) => {
     setFilterFocusSection(null);
   };
 
-  const openFiltersToSection = (section: DashboardFilterFocusSection) => {
-    setFilterFocusSection(section);
+  const openFiltersToSection = (section?: DashboardFilterFocusSection | null) => {
+    setFilterFocusSection(section ?? null);
     setShowFilters(true);
   };
 
