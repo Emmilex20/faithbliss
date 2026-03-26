@@ -1737,32 +1737,30 @@ const AdminPage = () => {
                     </div>
                   ) : (
                     <>
-                      <div className="-mx-2 overflow-x-auto px-2 pb-1">
-                        <div className="grid min-w-max grid-flow-col gap-4 sm:min-w-0 sm:grid-flow-row sm:grid-cols-2 xl:grid-cols-4">
-                          <div className="w-[220px] rounded-3xl border border-white/10 bg-black/20 p-5 sm:w-auto">
+                      <div className="grid gap-4 min-[480px]:grid-cols-2 xl:grid-cols-4">
+                          <div className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-5">
                             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Active subscriptions</p>
                             <p className="mt-3 text-3xl font-semibold text-white">{paymentAnalytics.summary.activeSubscriptions}</p>
                           </div>
-                          <div className="w-[220px] rounded-3xl border border-white/10 bg-black/20 p-5 sm:w-auto">
+                          <div className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-5">
                             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Pending subscriptions</p>
                             <p className="mt-3 text-3xl font-semibold text-white">{paymentAnalytics.summary.pendingSubscriptions}</p>
                           </div>
-                          <div className="w-[220px] rounded-3xl border border-white/10 bg-black/20 p-5 sm:w-auto">
+                          <div className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-5">
                             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Active NGN volume</p>
-                            <p className="mt-3 text-3xl font-semibold text-white">
+                            <p className="mt-3 break-words text-3xl font-semibold text-white">
                               {formatMoney(paymentAnalytics.summary.activeChargeVolumeNgn, 'NGN')}
                             </p>
                           </div>
-                          <div className="w-[220px] rounded-3xl border border-white/10 bg-black/20 p-5 sm:w-auto">
+                          <div className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-5">
                             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Tracked NGN volume</p>
-                            <p className="mt-3 text-3xl font-semibold text-white">
+                            <p className="mt-3 break-words text-3xl font-semibold text-white">
                               {formatMoney(paymentAnalytics.summary.trackedChargeVolumeNgn, 'NGN')}
                             </p>
                           </div>
-                        </div>
                       </div>
 
-                      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+                      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                         <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
                           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Billing cycles</p>
                           <div className="mt-4 space-y-3">
@@ -1820,8 +1818,8 @@ const AdminPage = () => {
                           </div>
                         </div>
 
-                        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                          <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 sm:col-span-2 xl:col-span-2">
+                        <div className="mb-4 grid gap-3 min-[560px]:grid-cols-2 xl:grid-cols-5">
+                          <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 min-[560px]:col-span-2 xl:col-span-2">
                             <Search className="h-4 w-4 shrink-0 text-gray-400" />
                             <input
                               value={paymentSearch}
@@ -1875,7 +1873,7 @@ const AdminPage = () => {
                           <select
                             value={paymentSort}
                             onChange={(event) => setPaymentSort(event.target.value as typeof paymentSort)}
-                            className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none md:col-span-2 xl:col-span-1"
+                            className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white outline-none min-[560px]:col-span-2 xl:col-span-1"
                           >
                             <option value="latest">Sort: Latest</option>
                             <option value="oldest">Sort: Oldest</option>
@@ -1898,7 +1896,7 @@ const AdminPage = () => {
                             <div className="space-y-4 lg:hidden">
                               {filteredPaymentRecords.map((record) => (
                                 <div key={`${record.userId}-${record.reference || record.updatedAt || record.email}`} className="rounded-3xl border border-white/10 bg-white/5 p-4">
-                                  <div className="flex items-start justify-between gap-3">
+                                  <div className="flex flex-col gap-3 min-[420px]:flex-row min-[420px]:items-start min-[420px]:justify-between">
                                     <div className="min-w-0">
                                       <p className="truncate text-base font-semibold text-white">{record.name}</p>
                                       <p className="truncate text-xs text-gray-400">{record.email}</p>
@@ -1913,7 +1911,7 @@ const AdminPage = () => {
                                       {record.status}
                                     </span>
                                   </div>
-                                  <div className="mt-4 grid grid-cols-2 gap-3">
+                                  <div className="mt-4 grid gap-3 min-[420px]:grid-cols-2">
                                     <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-3">
                                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Plan</p>
                                       <p className="mt-1 text-sm text-white capitalize">{getPaymentProductLabel(record)} • {getPaymentCycleLabel(record)}</p>
@@ -1932,9 +1930,11 @@ const AdminPage = () => {
                                     </div>
                                   </div>
                                   <div className="mt-3 rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-3 text-xs text-gray-300">
-                                    <p className="truncate">Reference: {record.reference || 'N/A'}</p>
-                                    <p className="mt-1">Updated: {formatReportedAt(record.updatedAt)}</p>
-                                    <p className="mt-1">Next payment: {formatReportedAt(record.nextPaymentDate)}</p>
+                                    <div className="grid gap-2 min-[420px]:grid-cols-3">
+                                      <p className="break-all min-[420px]:col-span-3">Reference: {record.reference || 'N/A'}</p>
+                                      <p>Updated: {formatReportedAt(record.updatedAt)}</p>
+                                      <p className="min-[420px]:col-span-2">Next payment: {formatReportedAt(record.nextPaymentDate)}</p>
+                                    </div>
                                   </div>
                                   <button
                                     type="button"
