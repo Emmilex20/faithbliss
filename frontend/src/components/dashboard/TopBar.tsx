@@ -8,6 +8,8 @@ import { useNotificationUnreadCount } from '@/hooks/useAPI';
 import { useRequireAuth } from '@/hooks/useAuth';
 import ProfileBoosterIcon from '@/components/icons/ProfileBoosterIcon';
 
+const NOTIFICATION_PROMPT_STORAGE_KEY_PREFIX = 'faithbliss_notification_prompt_seen';
+
 interface TopBarProps {
   userName: string;
   userImage?: string;
@@ -49,9 +51,12 @@ export const TopBar = ({
   const profileBoosterActive = typeof user?.profileBoosterActiveUntil === 'string'
     && Date.parse(user.profileBoosterActiveUntil) > Date.now();
   const showMobileBoosterShortcut = Boolean(user) && location.pathname !== '/premium';
+  const notificationPromptUserKey =
+    user?.id || user?.firebaseUid || user?.email || userName.trim().toLowerCase() || null;
 
   const [notificationsAvailable, setNotificationsAvailable] = useState(false);
   const [notificationsPermission, setNotificationsPermission] = useState<'default' | 'granted' | 'denied'>('default');
+  const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
   const [showMobileProfileMenu, setShowMobileProfileMenu] = useState(false);
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstallPrompting, setIsInstallPrompting] = useState(false);
@@ -63,6 +68,19 @@ export const TopBar = ({
     setNotificationsAvailable(true);
     setNotificationsPermission(Notification.permission);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!notificationsAvailable || !notificationPromptUserKey) {
+      setShowNotificationPrompt(false);
+      return;
+    }
+
+    const storageKey = `${NOTIFICATION_PROMPT_STORAGE_KEY_PREFIX}:${String(notificationPromptUserKey)}`;
+    const hasSeenPrompt = localStorage.getItem(storageKey) === '1';
+    const shouldShowPrompt = Notification.permission === 'default' && !hasSeenPrompt;
+    setShowNotificationPrompt(shouldShowPrompt);
+  }, [notificationPromptUserKey, notificationsAvailable, notificationsPermission]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -104,20 +122,43 @@ export const TopBar = ({
 
   const handleEnableNotifications = async () => {
     if (!notificationsAvailable) return;
+    const storageKey = notificationPromptUserKey
+      ? `${NOTIFICATION_PROMPT_STORAGE_KEY_PREFIX}:${String(notificationPromptUserKey)}`
+      : null;
     if (Notification.permission === 'granted') {
       setNotificationsPermission('granted');
+      if (storageKey) {
+        localStorage.setItem(storageKey, '1');
+      }
+      setShowNotificationPrompt(false);
       return;
     }
     if (Notification.permission === 'denied') {
       setNotificationsPermission('denied');
+      if (storageKey) {
+        localStorage.setItem(storageKey, '1');
+      }
+      setShowNotificationPrompt(false);
       return;
     }
     try {
       const permission = await Notification.requestPermission();
       setNotificationsPermission(permission);
+      if (storageKey) {
+        localStorage.setItem(storageKey, '1');
+      }
+      setShowNotificationPrompt(false);
     } catch {
       // ignore
     }
+  };
+
+  const handleDismissNotificationPrompt = () => {
+    if (typeof window !== 'undefined' && notificationPromptUserKey) {
+      const storageKey = `${NOTIFICATION_PROMPT_STORAGE_KEY_PREFIX}:${String(notificationPromptUserKey)}`;
+      localStorage.setItem(storageKey, '1');
+    }
+    setShowNotificationPrompt(false);
   };
 
   const handleInstallApp = async () => {
@@ -346,6 +387,42 @@ export const TopBar = ({
             )}
           </div>
         </div>
+
+        {showNotificationPrompt && (
+          <div className="mt-3 rounded-[1.4rem] border border-white/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-3 shadow-[0_18px_36px_rgba(15,23,42,0.18)] backdrop-blur-xl sm:mt-4 sm:p-4">
+            <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <div className="inline-flex items-center gap-2 rounded-full border border-pink-300/20 bg-pink-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-pink-100">
+                  <Bell className="h-3.5 w-3.5" />
+                  Notifications
+                </div>
+                <p className="mt-2 text-sm font-semibold text-white sm:text-base">
+                  Stay informed about new matches, messages, and important updates.
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-300 sm:text-sm">
+                  Allow FaithBliss to send browser notifications so you never miss meaningful activity.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:shrink-0">
+                <button
+                  type="button"
+                  onClick={handleEnableNotifications}
+                  className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-pink-500 via-fuchsia-500 to-violet-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(217,70,239,0.22)] transition hover:-translate-y-0.5 hover:from-pink-400 hover:via-fuchsia-400 hover:to-violet-400"
+                >
+                  Allow notifications
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDismissNotificationPrompt}
+                  className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:-translate-y-0.5 hover:bg-white/10 hover:text-white"
+                >
+                  Not now
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

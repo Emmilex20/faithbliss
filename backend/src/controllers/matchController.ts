@@ -766,13 +766,19 @@ const likeUser = async (req: Request, res: Response) => {
           userId: currentUid,
           type: 'NEW_MATCH',
           message: `You matched with ${actionResult.targetUserName || 'a user'}`,
-          data: { otherUserId: targetUid },
+          data: {
+            otherUserId: targetUid,
+            otherUserName: actionResult.targetUserName || 'New Match',
+          },
         }),
         createNotification({
           userId: targetUid,
           type: 'NEW_MATCH',
           message: `You matched with ${currentUser.name || 'a user'}`,
-          data: { otherUserId: currentUid },
+          data: {
+            otherUserId: currentUid,
+            otherUserName: currentUser.name || 'New Match',
+          },
         }),
       ]);
     } else {
@@ -780,7 +786,10 @@ const likeUser = async (req: Request, res: Response) => {
         userId: targetUid,
         type: 'PROFILE_LIKED',
         message: `${currentUser.name || 'Someone'} liked your profile`,
-        data: { senderId: currentUid },
+        data: {
+          senderId: currentUid,
+          senderName: currentUser.name || 'Someone',
+        },
       });
     }
 

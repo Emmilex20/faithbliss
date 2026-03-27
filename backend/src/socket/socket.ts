@@ -54,6 +54,27 @@ const getMessageTypeFromMimeType = (mimeType: string): MessageType => {
     return 'FILE';
 };
 
+const getMessageNotificationPreview = (
+    content: string,
+    attachment: MessageAttachmentPayload | null,
+    senderName: string
+) => {
+    if (attachment) {
+        if (attachment.mimeType.startsWith('image/')) return `${senderName} sent you an image`;
+        if (attachment.mimeType.startsWith('video/')) return `${senderName} sent you a video`;
+        if (attachment.mimeType.startsWith('audio/')) return `${senderName} sent you an audio message`;
+        return `${senderName} sent you a file`;
+    }
+
+    const trimmed = content.trim();
+    if (!trimmed) {
+        return senderName ? `${senderName} sent you a message` : 'You have a new message';
+    }
+
+    const preview = trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed;
+    return senderName ? `${senderName}: ${preview}` : preview;
+};
+
 const sanitizeAttachment = (attachment: unknown): MessageAttachmentPayload | null => {
     if (!attachment || typeof attachment !== 'object') return null;
     const candidate = attachment as Record<string, unknown>;
@@ -379,6 +400,11 @@ export const initializeSocketIO = (io: Server) => {
                     return socket.emit('error', 'Cannot send message: Receiver is not part of this match.');
                 }
 
+                const senderDoc = await db.collection('users').doc(userId).get();
+                const senderName = senderDoc.exists
+                    ? String((senderDoc.data() as { name?: string } | undefined)?.name || 'Someone')
+                    : 'Someone';
+
                 const chatAccessState = await getChatAccessStateForUserId(userId);
                 if (isChatLockedForMatch(chatAccessState, matchId)) {
                     return socket.emit('error', FREE_CHAT_LIMIT_MESSAGE);
@@ -430,8 +456,8 @@ export const initializeSocketIO = (io: Server) => {
                     await createNotification({
                         userId: receiverId,
                         type: 'NEW_MESSAGE',
-                        message: 'You have a new message',
-                        data: { matchId, senderId: userId }
+                        message: getMessageNotificationPreview(normalizedContent, attachment, senderName),
+                        data: { matchId, senderId: userId, senderName }
                     });
                 }
             } catch (error) {
@@ -607,13 +633,18 @@ export const initializeSocketIO = (io: Server) => {
                 });
 
                 if (matchId && targetUserId !== userId) {
+                    const callerDoc = await db.collection('users').doc(userId).get();
+                    const callerName = callerDoc.exists
+                        ? String((callerDoc.data() as { name?: string } | undefined)?.name || 'Someone')
+                        : 'Someone';
                     void createNotification({
                         userId: targetUserId,
                         type: 'NEW_MESSAGE',
-                        message: `Missed ${callType} call`,
+                        message: `${callerName} tried to reach you by ${callType} call`,
                         data: {
                             matchId,
                             senderId: userId,
+                            senderName: callerName,
                             reason: 'offline-call',
                         },
                     });

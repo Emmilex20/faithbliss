@@ -141,7 +141,11 @@ const createStory = async (req: Request, res: Response) => {
               userId,
               type: 'STORY_POSTED',
               message: `${authorName} posted a new story`,
-              data: { authorId: currentUserId, storyId: storyRef.id },
+              data: {
+                authorId: currentUserId,
+                authorName,
+                storyId: storyRef.id,
+              },
             })
           )
         );
@@ -335,7 +339,11 @@ const toggleStoryLike = async (req: Request, res: Response) => {
         userId: story.authorId,
         type: 'PROFILE_LIKED',
         message: `${likerName} liked your story`,
-        data: { storyId },
+        data: {
+          storyId,
+          senderId: currentUserId,
+          senderName: likerName,
+        },
       });
     }
 
@@ -437,11 +445,19 @@ const replyToStory = async (req: Request, res: Response) => {
       createdAt: admin.firestore.Timestamp.now(),
     });
 
+    const senderDoc = await usersCollection.doc(currentUserId).get();
+    const senderName = (senderDoc.data() as { name?: string } | undefined)?.name || 'Someone';
+
     await createNotification({
       userId: story.authorId,
       type: 'NEW_MESSAGE',
-      message: 'You have a new story reply',
-      data: { matchId, senderId: currentUserId, storyId },
+      message: `${content.length > 100 ? `${content.slice(0, 97)}...` : content}`,
+      data: {
+        matchId,
+        senderId: currentUserId,
+        senderName,
+        storyId,
+      },
     });
 
     return res.status(201).json({

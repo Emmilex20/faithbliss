@@ -25,6 +25,7 @@ const DASHBOARD_PASSED_PROFILES_STORAGE_KEY_PREFIX = 'faithbliss_dashboard_passe
 const PASS_REVIEW_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 type PersistedPassedProfilesMap = Record<string, number>;
+type DashboardProfileWithLegacyId = User & { _id?: string };
 
 const normalizeBinaryGender = (value: unknown): 'MALE' | 'FEMALE' | null => {
   if (typeof value !== 'string') return null;
@@ -55,6 +56,49 @@ const normalizePassedProfilesMap = (raw: string | null): PersistedPassedProfiles
   }
 };
 
+const getDashboardProfileId = (profile: User | null | undefined): string | null => {
+  if (!profile) return null;
+  const candidate = profile as DashboardProfileWithLegacyId;
+  const id = candidate.id || candidate._id;
+  return id ? String(id) : null;
+};
+
+const hasDashboardDisplayName = (profile: User) =>
+  typeof profile.name === 'string' && profile.name.trim().length > 0;
+
+const getDefaultVisibleGender = (value: unknown): 'MALE' | 'FEMALE' | null => {
+  const currentUserGender = normalizeBinaryGender(value);
+  if (currentUserGender === 'MALE') return 'FEMALE';
+  if (currentUserGender === 'FEMALE') return 'MALE';
+  return null;
+};
+
+const getBaseDashboardProfiles = (sourceProfiles: User[], currentUserId: string | null) =>
+  sourceProfiles
+    .filter((profile) => Boolean(getDashboardProfileId(profile)))
+    .filter(hasDashboardDisplayName)
+    .filter((profile) => profile.onboardingCompleted === true)
+    .filter((profile) => !currentUserId || getDashboardProfileId(profile) !== currentUserId);
+
+const getDefaultDashboardFeedProfiles = (
+  sourceProfiles: User[],
+  currentUserId: string | null,
+  currentUserGender: unknown,
+  passedProfilesMap: PersistedPassedProfilesMap
+) => {
+  const defaultVisibleGender = getDefaultVisibleGender(currentUserGender);
+  const recentPassedIdSet = new Set(Object.keys(passedProfilesMap));
+  const baseProfiles = getBaseDashboardProfiles(sourceProfiles, currentUserId);
+  const genderScopedProfiles = defaultVisibleGender
+    ? baseProfiles.filter((profile) => normalizeBinaryGender(profile.gender) === defaultVisibleGender)
+    : baseProfiles;
+
+  return genderScopedProfiles.filter((profile) => {
+    const profileId = getDashboardProfileId(profile);
+    return !profileId || !recentPassedIdSet.has(profileId);
+  });
+};
+
 const pruneExpiredPassedProfiles = (
   passedProfiles: PersistedPassedProfilesMap,
   now = Date.now()
@@ -80,6 +124,7 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     const [isReviewingPassedProfiles, setIsReviewingPassedProfiles] = useState(false);
     const [passportModeEnabled, setPassportModeEnabled] = useState(false);
     const [activePassportCountry, setActivePassportCountry] = useState<string | null>(null);
+    const [isRefreshingDefaultFeed, setIsRefreshingDefaultFeed] = useState(false);
 
   // Fetch real potential matches from backend
   const { 
@@ -181,43 +226,22 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
     }, [passedProfilesStorageKey]);
 
     const activeProfiles = useMemo(() => {
-        const hasValidId = (p: User) => p && (p.id || (p as any)._id);
-        const hasDisplayName = (p: User) => typeof p.name === 'string' && p.name.trim().length > 0;
         const currentUserId = currentUserData?.id ? String(currentUserData.id) : null;
-        const currentUserGender = normalizeBinaryGender(currentUserData?.gender);
-        const defaultVisibleGender =
-            currentUserGender === 'MALE'
-                ? 'FEMALE'
-                : currentUserGender === 'FEMALE'
-                    ? 'MALE'
-                    : null;
-        const recentPassedIdSet = new Set(Object.keys(persistedPassedProfileMap));
-
         const sourceProfiles =
             filteredProfiles !== null
                 ? filteredProfiles
                 : (Array.isArray(profiles) ? profiles : []);
 
-        const baseProfiles = sourceProfiles
-            .filter(hasValidId)
-            .filter(hasDisplayName)
-            .filter((profile) => profile.onboardingCompleted === true)
-            .filter((profile) => !currentUserId || String(profile.id || (profile as any)._id) !== currentUserId);
-
-        const genderScopedProfiles =
-            filteredProfiles === null && !isReviewingPassedProfiles && defaultVisibleGender
-                ? baseProfiles.filter(
-                    (profile) => normalizeBinaryGender(profile.gender) === defaultVisibleGender
-                  )
-                : baseProfiles;
-
-        if (isReviewingPassedProfiles) {
-            return genderScopedProfiles;
+        if (filteredProfiles === null && !isReviewingPassedProfiles) {
+            return getDefaultDashboardFeedProfiles(
+              sourceProfiles,
+              currentUserId,
+              currentUserData?.gender,
+              persistedPassedProfileMap
+            );
         }
 
-        return genderScopedProfiles.filter(
-            (profile) => !recentPassedIdSet.has(String(profile.id || (profile as any)._id))
-        );
+        return getBaseDashboardProfiles(sourceProfiles, currentUserId);
     }, [profiles, filteredProfiles, currentUserData?.gender, currentUserData?.id, isReviewingPassedProfiles, persistedPassedProfileMap]);
 
     const {
@@ -258,6 +282,42 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
             document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
         };
     }, [currentProfile, filteredProfiles, matchesLoading, userLoading, refetch]);
+
+    useEffect(() => {
+        if (!isRefreshingDefaultFeed) return;
+        if (filteredProfiles !== null || isReviewingPassedProfiles) {
+            setIsRefreshingDefaultFeed(false);
+            return;
+        }
+        if (matchesLoading) return;
+
+        const nextDefaultFeed = getDefaultDashboardFeedProfiles(
+          Array.isArray(profiles) ? profiles : [],
+          currentUserData?.id ? String(currentUserData.id) : null,
+          currentUserData?.gender,
+          persistedPassedProfileMap
+        );
+
+        if (nextDefaultFeed.length > 0) {
+            reset();
+            setIsRefreshingDefaultFeed(false);
+            return;
+        }
+
+        setIsRefreshingDefaultFeed(false);
+        showInfo('No more new profiles right now. Check back later.');
+    }, [
+        currentUserData?.gender,
+        currentUserData?.id,
+        filteredProfiles,
+        isRefreshingDefaultFeed,
+        isReviewingPassedProfiles,
+        matchesLoading,
+        persistedPassedProfileMap,
+        profiles,
+        reset,
+        showInfo,
+    ]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -340,9 +400,18 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
   // Show loading state while fetching matches or refreshing the token.
     const isInitialHydration =
       !hasCompletedInitialLoadRef.current && (matchesLoading || userLoading || (profiles === null && !matchesError));
+    const isRefreshingEmptyDefaultFeed =
+      isRefreshingDefaultFeed &&
+      filteredProfiles === null &&
+      !isReviewingPassedProfiles &&
+      !currentProfile;
 
-    if (isInitialHydration) {
-        return <HeartBeatLoader message="Preparing your matches..." />;
+    if (isInitialHydration || isRefreshingEmptyDefaultFeed) {
+        return (
+          <HeartBeatLoader
+            message={isRefreshingEmptyDefaultFeed ? 'Finding more profiles...' : 'Preparing your matches...'}
+          />
+        );
     }
 
   // Handle error state for profiles
@@ -368,7 +437,15 @@ export const DashboardPage = ({ user: activeUser }: { user: User }) => {
       if (filteredProfiles !== null) {
         showInfo('End of filtered results.');
       } else {
-        showInfo('No more new profiles right now. Check back later.');
+        if (isRefreshingDefaultFeed) return;
+
+        setIsRefreshingDefaultFeed(true);
+        void refetch()
+          .catch((error) => {
+            console.error('Failed to refresh potential matches:', error);
+            setIsRefreshingDefaultFeed(false);
+            showInfo('Unable to refresh profiles right now. Please try again in a moment.');
+          });
       }
     };
     

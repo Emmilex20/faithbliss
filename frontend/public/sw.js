@@ -94,3 +94,53 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+self.addEventListener('message', (event) => {
+  const payload = event.data;
+  if (!payload || payload.type !== 'SHOW_NOTIFICATION') return;
+
+  const title = typeof payload.title === 'string' && payload.title.trim()
+    ? payload.title.trim()
+    : 'Notification';
+  const body = typeof payload.body === 'string' && payload.body.trim()
+    ? payload.body.trim()
+    : 'You have a new notification.';
+  const url = typeof payload.url === 'string' && payload.url.trim()
+    ? payload.url.trim()
+    : '/notifications';
+  const tag = typeof payload.tag === 'string' && payload.tag.trim()
+    ? payload.tag.trim()
+    : undefined;
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: '/favicon.svg',
+      badge: '/favicon.svg',
+      tag,
+      data: { url },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const rawUrl = event.notification?.data?.url;
+  const targetUrl = typeof rawUrl === 'string' && rawUrl.trim()
+    ? new URL(rawUrl, self.location.origin).toString()
+    : new URL('/notifications', self.location.origin).toString();
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        const clientUrl = typeof client.url === 'string' ? client.url : '';
+        if (clientUrl.startsWith(self.location.origin)) {
+          return client.navigate(targetUrl).then(() => client.focus());
+        }
+      }
+
+      return self.clients.openWindow(targetUrl);
+    })
+  );
+});

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { useNotifications, useClearApiCache, type NotificationItem } from '@/hooks/useAPI';
+import { dispatchNotificationsUpdated } from '@/lib/notificationCenter';
 import { API } from '@/services/api';
 import { HeartBeatLoader } from '@/components/HeartBeatLoader';
 import { useToast } from '@/contexts/ToastContext';
@@ -87,6 +88,7 @@ const NotificationsContent = () => {
       await API.Notification.markAllAsRead();
       setItems((prev) => prev.map((item) => ({ ...item, isRead: true })));
       clearCache();
+      dispatchNotificationsUpdated();
       showSuccess('All notifications marked as read');
     } catch (err: any) {
       showError(err?.message || 'Failed to mark notifications');
@@ -100,6 +102,7 @@ const NotificationsContent = () => {
         prev.map((item) => (item.id === id ? { ...item, isRead: true } : item))
       );
       clearCache();
+      dispatchNotificationsUpdated();
     } catch (err: any) {
       showError(err?.message || 'Failed to mark notification');
     }
@@ -184,7 +187,7 @@ const NotificationsContent = () => {
       } else {
         showError('Notifications not enabled.');
       }
-    } catch (error) {
+    } catch {
       showError('Unable to request notification permission.');
     }
   };

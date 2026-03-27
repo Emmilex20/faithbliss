@@ -10,6 +10,7 @@ import { useRequireAuth } from './useAuth';
 import { useLocation, useNavigate } from 'react-router-dom'; 
 import type { GetUsersResponse } from '@/services/api'; 
 import type { Match } from "../types/Match";
+import { NOTIFICATIONS_UPDATED_EVENT } from '@/lib/notificationCenter';
 
  // Ã¢Å“â€¦ Adjusted path
 
@@ -641,23 +642,24 @@ export function useNotifications() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const refetchNotifications = useCallback(async () => {
+    if (!isAuthenticated) return;
+
+    try {
+      setError(null);
+      const items = await apiClient.Notification.getNotifications();
+      setNotifications(Array.isArray(items) ? (items as NotificationItem[]) : []);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load notifications');
+    } finally {
+      setLoading(false);
+    }
+  }, [apiClient, isAuthenticated]);
+
   useEffect(() => {
     if (!isAuthenticated) return;
-    let mounted = true;
-    apiClient.Notification.getNotifications()
-      .then((items) => {
-        if (mounted) setNotifications(items as NotificationItem[]);
-      })
-      .catch((err) => {
-        if (mounted) setError(err?.message || 'Failed to load notifications');
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [apiClient, isAuthenticated]);
+    void refetchNotifications();
+  }, [isAuthenticated, refetchNotifications]);
 
   useEffect(() => {
     if (!isAuthenticated || !webSocketService) return;
@@ -694,6 +696,30 @@ export function useNotifications() {
     };
   }, [isAuthenticated, webSocketService]);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const handleNotificationsUpdated = () => {
+      void refetchNotifications();
+    };
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        void refetchNotifications();
+      }
+    };
+
+    window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, handleNotificationsUpdated);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    return () => {
+      window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, handleNotificationsUpdated);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
+  }, [isAuthenticated, refetchNotifications]);
+
   return {
     data: notifications,
     loading: loading || !isAuthenticated,
@@ -722,6 +748,30 @@ export function useNotificationUnreadCount() {
       webSocketService.off('notification', handleNotification);
     };
   }, [isAuthenticated, webSocketService, hook]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const handleNotificationsUpdated = () => {
+      void hook.refetch();
+    };
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        void hook.refetch();
+      }
+    };
+
+    window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, handleNotificationsUpdated);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    return () => {
+      window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, handleNotificationsUpdated);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
+  }, [hook, isAuthenticated]);
 
   return hook;
 }
