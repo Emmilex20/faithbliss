@@ -482,6 +482,7 @@ export interface FeatureSettingsResponse {
   passportModeEnabled: boolean;
   maintenanceModeEnabled: boolean;
   shutdownModeEnabled: boolean;
+  backendOnlyShutdownEnabled: boolean;
 }
 
 export interface AdminPlatformStatsResponse {
@@ -853,7 +854,7 @@ export const UserAPI = {
   },
 
   // Update user settings
-  updateSettings: async (settings: Record<string, any>): Promise<{ message: string }> => {
+  updateSettings: async (settings: Record<string, unknown>): Promise<{ message: string }> => {
     return apiRequest('/api/users/me/settings', {
       method: 'PATCH',
       body: JSON.stringify(settings),
@@ -1272,7 +1273,7 @@ export const SupportAPI = {
 
 // 🔔 Notifications API
 export const NotificationAPI = {
-  getNotifications: async (): Promise<any[]> => {
+  getNotifications: async (): Promise<unknown[]> => {
     return apiRequest('/api/notifications');
   },
   getUnreadCount: async (): Promise<{ count: number }> => {

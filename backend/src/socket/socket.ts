@@ -4,6 +4,7 @@ import { Server, Socket } from 'socket.io';
 import { protectSocket } from '../middleware/authMiddleware';
 import { admin, db } from '../config/firebase-admin';
 import { createNotification } from '../services/notificationService';
+import { getPassportFeatureSettings } from '../utils/passportMode';
 import {
     FREE_CHAT_LIMIT_MESSAGE,
     getChatAccessStateForUserId,
@@ -234,6 +235,14 @@ type CallAccessProfile = {
     subscriptionTier?: string;
 };
 
+type SocketFeatureGateUser = {
+    email?: string;
+    role?: string;
+    roles?: string[];
+};
+
+const PRIMARY_ADMIN_EMAIL = 'aginaemmanuel6@gmail.com';
+
 // Map to store connected users and their socket IDs (for direct messaging/notifications)
 // In a production environment, this should be a distributed cache like Redis
 const usersSocketMap = new Map<string, Set<string>>();
@@ -321,6 +330,27 @@ const getUserCallAccessProfile = async (userId: string): Promise<CallAccessProfi
     }
 };
 
+const isDeveloperSocketUser = async (userId: string): Promise<boolean> => {
+    try {
+        const snapshot = await db.collection('users').doc(userId).get();
+        if (!snapshot.exists) return false;
+
+        const data = snapshot.data() as SocketFeatureGateUser | undefined;
+        const email = typeof data?.email === 'string' ? data.email.trim().toLowerCase() : '';
+        const role = typeof data?.role === 'string' ? data.role.trim().toLowerCase() : '';
+        const roles = Array.isArray(data?.roles)
+            ? data.roles
+                .filter((value): value is string => typeof value === 'string')
+                .map((value) => value.trim().toLowerCase())
+            : [];
+
+        return email === PRIMARY_ADMIN_EMAIL || role === 'developer' || roles.includes('developer');
+    } catch (error) {
+        console.error(`Failed to resolve developer socket access for user ${userId}:`, error);
+        return false;
+    }
+};
+
 // This function is called from server.ts to start listening for connections
 export const initializeSocketIO = (io: Server) => {
     console.log('Socket.io server initialized and listening.');
@@ -328,6 +358,28 @@ export const initializeSocketIO = (io: Server) => {
 
     // 1. Apply Authentication Middleware
     io.use(protectSocket as any); // Type assertion needed because of the custom interface
+    io.use(async (socket: AuthenticatedSocket, next) => {
+        try {
+            const settings = await getPassportFeatureSettings();
+            if (!settings.backendOnlyShutdownEnabled) {
+                return next();
+            }
+
+            const userId = socket.user?.id;
+            if (!userId) {
+                return next(new Error('Authentication error: Missing user context.'));
+            }
+
+            const isDeveloperUser = await isDeveloperSocketUser(userId);
+            if (isDeveloperUser) {
+                return next();
+            }
+
+            return next(new Error('Backend services are temporarily disabled.'));
+        } catch (error) {
+            return next(error instanceof Error ? error : new Error('Failed to validate backend availability.'));
+        }
+    });
 
     io.on('connection', (socket: AuthenticatedSocket) => {
         const userId = socket.user!.id; 

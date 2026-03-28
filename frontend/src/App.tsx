@@ -32,6 +32,7 @@ type CachedFeatureSettings = {
   passportModeEnabled: boolean;
   maintenanceModeEnabled: boolean;
   shutdownModeEnabled: boolean;
+  backendOnlyShutdownEnabled: boolean;
 };
 
 const readCachedFeatureSettings = (): CachedFeatureSettings | null => {
@@ -45,6 +46,7 @@ const readCachedFeatureSettings = (): CachedFeatureSettings | null => {
       passportModeEnabled: Boolean(parsed.passportModeEnabled),
       maintenanceModeEnabled: Boolean(parsed.maintenanceModeEnabled),
       shutdownModeEnabled: Boolean(parsed.shutdownModeEnabled),
+      backendOnlyShutdownEnabled: Boolean(parsed.backendOnlyShutdownEnabled),
     };
   } catch {
     return null;
@@ -85,6 +87,7 @@ function App() {
               passportModeEnabled: Boolean(response.passportModeEnabled),
               maintenanceModeEnabled: Boolean(response.maintenanceModeEnabled),
               shutdownModeEnabled: Boolean(response.shutdownModeEnabled),
+              backendOnlyShutdownEnabled: Boolean(response.backendOnlyShutdownEnabled),
             })
           );
         }

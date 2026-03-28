@@ -893,6 +893,7 @@ export function useAllUsers(filters?: {
 export function useUnreadCount() {
   const { accessToken, isAuthenticated } = useRequireAuth();
   const apiClient = useMemo(() => getApiClient(accessToken ?? null), [accessToken]);
+  const webSocketService = useWebSocket();
 
   const apiCall = useCallback(() => {
     if (!accessToken) {
@@ -901,11 +902,47 @@ export function useUnreadCount() {
     return apiClient.Message.getUnreadCount();
   }, [apiClient, accessToken]);
 
-  return useApi<{ count: number }>(
+  const hook = useApi<{ count: number }>(
     isAuthenticated ? apiCall : null,
     [accessToken, isAuthenticated],
     { immediate: isAuthenticated }
   );
+
+  useEffect(() => {
+    if (!isAuthenticated || !webSocketService) return;
+
+    const syncUnreadCount = () => {
+      void hook.refetch();
+    };
+
+    webSocketService.onNewMessage(syncUnreadCount);
+    webSocketService.onUnreadCount(syncUnreadCount);
+
+    return () => {
+      webSocketService.off('newMessage', syncUnreadCount);
+      webSocketService.off('unreadCount', syncUnreadCount);
+    };
+  }, [hook, isAuthenticated, webSocketService]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        void hook.refetch();
+      }
+    };
+
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
+  }, [hook, isAuthenticated]);
+
+  return hook;
 }
 
 export function useClearApiCache() {

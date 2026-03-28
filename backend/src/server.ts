@@ -24,6 +24,7 @@ import supportRoutes from './routes/supportRoutes';
 import uploadRoutes from './routes/uploadRoutes';
 import userRoutes from './routes/userRoutes';
 import { protect } from './middleware/authMiddleware';
+import { backendAvailabilityGate } from './middleware/backendAvailabilityMiddleware';
 import { startStoryCleanupService } from './services/storyCleanupService';
 import { startSubscriptionRenewalService } from './services/subscriptionRenewalService';
 import { initializeSocketIO } from './socket/socket';
@@ -84,6 +85,8 @@ app.get('/api/health', (_req: Request, res: Response) => {
     service: 'Faithbliss Backend',
   });
 });
+
+app.use('/api', backendAvailabilityGate);
 
 app.use('/api/auth', authRoutes);
 app.get('/api/users/public-feature-settings', getPublicFeatureSettings);

@@ -4,6 +4,7 @@ type PassportFeatureSettings = {
   passportModeEnabled: boolean;
   maintenanceModeEnabled: boolean;
   shutdownModeEnabled: boolean;
+  backendOnlyShutdownEnabled: boolean;
 };
 
 type PassportUserLike = {
@@ -116,15 +117,29 @@ const COUNTRY_KEYWORDS: Array<{ code: string; keywords: string[] }> = [
 ];
 
 const featureSettingsRef = db.collection(FEATURES_COLLECTION).doc(FEATURES_DOC_ID);
+const FEATURE_SETTINGS_CACHE_TTL_MS = 5000;
+
+let cachedFeatureSettings: PassportFeatureSettings | null = null;
+let cachedFeatureSettingsAt = 0;
 
 export const getPassportFeatureSettings = async (): Promise<PassportFeatureSettings> => {
+  if (cachedFeatureSettings && Date.now() - cachedFeatureSettingsAt < FEATURE_SETTINGS_CACHE_TTL_MS) {
+    return cachedFeatureSettings;
+  }
+
   const doc = await featureSettingsRef.get();
   const data = doc.data() as Partial<PassportFeatureSettings> | undefined;
-  return {
+  const settings = {
     passportModeEnabled: Boolean(data?.passportModeEnabled),
     maintenanceModeEnabled: Boolean(data?.maintenanceModeEnabled),
     shutdownModeEnabled: Boolean(data?.shutdownModeEnabled),
+    backendOnlyShutdownEnabled: Boolean(data?.backendOnlyShutdownEnabled),
   };
+
+  cachedFeatureSettings = settings;
+  cachedFeatureSettingsAt = Date.now();
+
+  return settings;
 };
 
 export const setPassportFeatureSettings = async (
@@ -135,16 +150,23 @@ export const setPassportFeatureSettings = async (
       passportModeEnabled: Boolean(settings.passportModeEnabled),
       maintenanceModeEnabled: Boolean(settings.maintenanceModeEnabled),
       shutdownModeEnabled: Boolean(settings.shutdownModeEnabled),
+      backendOnlyShutdownEnabled: Boolean(settings.backendOnlyShutdownEnabled),
       updatedAt: new Date().toISOString(),
     },
     { merge: true }
   );
 
-  return {
+  const nextSettings = {
     passportModeEnabled: Boolean(settings.passportModeEnabled),
     maintenanceModeEnabled: Boolean(settings.maintenanceModeEnabled),
     shutdownModeEnabled: Boolean(settings.shutdownModeEnabled),
+    backendOnlyShutdownEnabled: Boolean(settings.backendOnlyShutdownEnabled),
   };
+
+  cachedFeatureSettings = nextSettings;
+  cachedFeatureSettingsAt = Date.now();
+
+  return nextSettings;
 };
 
 export const normalizeCountryCode = (value: unknown): string | null => {

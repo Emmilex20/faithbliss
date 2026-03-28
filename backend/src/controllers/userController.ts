@@ -964,6 +964,7 @@ const updateFeatureSettings = async (req: CustomRequest, res: Response) => {
           : currentSettings.passportModeEnabled,
       maintenanceModeEnabled: currentSettings.maintenanceModeEnabled,
       shutdownModeEnabled: currentSettings.shutdownModeEnabled,
+      backendOnlyShutdownEnabled: currentSettings.backendOnlyShutdownEnabled,
     });
 
     return res.status(200).json({
@@ -997,6 +998,10 @@ const updateDeveloperFeatureSettings = async (req: CustomRequest, res: Response)
         typeof req.body?.shutdownModeEnabled === 'boolean'
           ? req.body.shutdownModeEnabled
           : currentSettings.shutdownModeEnabled,
+      backendOnlyShutdownEnabled:
+        typeof req.body?.backendOnlyShutdownEnabled === 'boolean'
+          ? req.body.backendOnlyShutdownEnabled
+          : currentSettings.backendOnlyShutdownEnabled,
     });
 
     return res.status(200).json({

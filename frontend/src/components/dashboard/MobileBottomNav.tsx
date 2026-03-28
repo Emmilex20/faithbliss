@@ -1,5 +1,6 @@
 import { Compass, Heart, Home, MessageCircle, User } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { useUnreadCount } from '@/hooks/useAPI';
 
 interface MobileBottomNavProps {
   userImage?: string;
@@ -14,7 +15,9 @@ const navItems = [
 ];
 
 export const MobileBottomNav = ({ userImage, userName }: MobileBottomNavProps) => {
+  const { data: unreadMessagesData } = useUnreadCount();
   const initials = (userName || 'U').trim().charAt(0).toUpperCase();
+  const unreadMessageCount = unreadMessagesData?.count || 0;
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-slate-950/92 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl lg:hidden">
@@ -33,7 +36,14 @@ export const MobileBottomNav = ({ userImage, userName }: MobileBottomNavProps) =
             aria-label={label}
             title={label}
           >
-            <Icon className="h-6 w-6" />
+            <span className="relative inline-flex">
+              <Icon className="h-6 w-6" />
+              {label === 'Messages' && unreadMessageCount > 0 ? (
+                <span className="absolute -right-2.5 -top-2 flex min-h-5 min-w-5 items-center justify-center rounded-full border border-slate-950/80 bg-gradient-to-r from-pink-500 to-red-500 px-1 text-[10px] font-semibold leading-none text-white shadow-[0_8px_18px_rgba(244,63,94,0.35)]">
+                  {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
+                </span>
+              ) : null}
+            </span>
           </NavLink>
         ))}
 
@@ -65,4 +75,3 @@ export const MobileBottomNav = ({ userImage, userName }: MobileBottomNavProps) =
     </nav>
   );
 };
-

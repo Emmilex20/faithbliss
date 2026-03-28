@@ -1,89 +1,85 @@
-// src/middleware/authMiddleware.ts (FINAL, FIXED, AND ROBUST VERSION)
-
-import { Request, Response, NextFunction } from 'express';
-import { admin } from '../config/firebase-admin'; // ✅ Correct: This matches the named export 
+import { NextFunction, Request, Response } from 'express';
+import { DecodedIdToken } from 'firebase-admin/auth';
 import { Socket } from 'socket.io';
-import { DecodedIdToken } from 'firebase-admin/auth'; 
+import { admin, usersCollection } from '../config/firebase-admin';
+import { getPassportFeatureSettings } from '../utils/passportMode';
 
-
-// ----------------------------------------------------------------
-// 💡 GLOBAL TYPE AUGMENTATION: FIXES TS ERROR 2769
-// This tells TypeScript the final, combined shape of the Express Request object.
-// ----------------------------------------------------------------
 declare global {
-    namespace Express {
-        interface Request {
-            // Full decoded token for advanced checks
-            user?: DecodedIdToken; 
-            // Simple UID string for database lookups
-            userId?: string; 
-        }
-    }
+  namespace Express {
+    interface Request {
+      user?: DecodedIdToken;
+      userId?: string;
+    }
+  }
 }
 
-// Interface for the Socket.IO middleware (Separate, non-conflicting type)
 interface AuthenticatedSocket extends Socket {
-    user?: { id: string }; 
+  user?: { id: string };
 }
 
-// ----------------------------------------------------------------
-// 1. EXPRESS MIDDLEWARE (protect) - Validates Firebase ID Token (HTTP)
-// ----------------------------------------------------------------
-export const protect = async (req: Request, res: Response, next: NextFunction) => {
-    let token: string | undefined;
-    const authHeader = req.headers.authorization;
-    
-    console.log("🔥 SERVER RECEIVES Authorization Header:", authHeader ? authHeader.substring(0, 30) + "..." : "MISSING");
+const PRIMARY_ADMIN_EMAIL = 'aginaemmanuel6@gmail.com';
 
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-        token = authHeader.split(' ')[1];
-    } 
+const hasDeveloperAccess = async (userId: string): Promise<boolean> => {
+  const userDoc = await usersCollection.doc(userId).get();
+  if (!userDoc.exists) return false;
 
-    if (!token) {
-        console.log("❌ SERVER FAIL: Token not extracted from header.");
-        return res.status(401).json({ message: 'Not authorized, Firebase ID token missing' });
-    }
+  const userData = userDoc.data() as { email?: unknown; role?: unknown; roles?: unknown } | undefined;
+  const email = typeof userData?.email === 'string' ? userData.email.trim().toLowerCase() : '';
+  const role = typeof userData?.role === 'string' ? userData.role.trim().toLowerCase() : '';
+  const roles = Array.isArray(userData?.roles)
+    ? userData.roles
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.trim().toLowerCase())
+    : [];
 
-    try {
-        const decodedToken: DecodedIdToken = await admin.auth().verifyIdToken(token);
-
-        // Assign to the globally augmented properties (TS error fixed here)
-        req.user = decodedToken; 
-        req.userId = decodedToken.uid; 
-        
-        console.log(`✅ SERVER SUCCESS: Token verified for UID: ${req.userId}`);
-        
-        next();
-    } catch (error) {
-        console.error('❌ Firebase Auth Middleware Error:', (error as Error).message);
-        return res.status(401).json({ message: 'Not authorized, Firebase ID token invalid or expired' });
-    }
+  return email === PRIMARY_ADMIN_EMAIL || role === 'developer' || roles.includes('developer');
 };
 
-// ----------------------------------------------------------------
-// 2. SOCKET.IO MIDDLEWARE (protectSocket)
-// ----------------------------------------------------------------
+export const protect = async (req: Request, res: Response, next: NextFunction) => {
+  let token: string | undefined;
+  const authHeader = req.headers.authorization;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  }
+
+  if (!token) {
+    return res.status(401).json({ message: 'Not authorized, Firebase ID token missing' });
+  }
+
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    req.user = decodedToken;
+    req.userId = decodedToken.uid;
+    next();
+  } catch (error) {
+    console.error('Firebase auth middleware error:', (error as Error).message);
+    return res.status(401).json({ message: 'Not authorized, Firebase ID token invalid or expired' });
+  }
+};
+
 export const protectSocket = (socket: AuthenticatedSocket, next: (err?: Error) => void) => {
-    const token = socket.handshake.auth?.token;
+  const token = socket.handshake.auth?.token;
 
-    if (!token) {
-        console.log('❌ Socket Auth Failed: No token provided.');
-        return next(new Error('Authentication error: No token provided.'));
-    }
+  if (!token) {
+    return next(new Error('Authentication error: No token provided.'));
+  }
 
-    try {
-        admin.auth().verifyIdToken(token)
-            .then((decodedToken: DecodedIdToken) => {
-                socket.user = { id: decodedToken.uid };
-                console.log(`✅ Socket Auth Success: User ${decodedToken.uid}`);
-                next();
-            })
-            .catch((error: Error) => {
-                console.error('❌ Socket Auth Error:', error.message);
-                next(new Error('Authentication error: Invalid or expired token.'));
-            });
-    } catch (error) {
-        console.error('❌ Socket Auth Error (Setup):', (error as Error).message);
-        next(new Error('Authentication error: Server setup issue.'));
-    }
+  void admin.auth().verifyIdToken(token)
+    .then(async (decodedToken: DecodedIdToken) => {
+      const settings = await getPassportFeatureSettings();
+      if (settings.backendOnlyShutdownEnabled) {
+        const developerAccess = await hasDeveloperAccess(decodedToken.uid);
+        if (!developerAccess) {
+          return next(new Error('Backend services are temporarily disabled.'));
+        }
+      }
+
+      socket.user = { id: decodedToken.uid };
+      next();
+    })
+    .catch((error: Error) => {
+      console.error('Socket auth error:', error.message);
+      next(new Error('Authentication error: Invalid or expired token.'));
+    });
 };

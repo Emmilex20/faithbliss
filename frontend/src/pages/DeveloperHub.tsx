@@ -16,6 +16,7 @@ const DeveloperHub = () => {
   const [passportModeEnabled, setPassportModeEnabled] = useState(false);
   const [maintenanceModeEnabled, setMaintenanceModeEnabled] = useState(false);
   const [shutdownModeEnabled, setShutdownModeEnabled] = useState(false);
+  const [backendOnlyShutdownEnabled, setBackendOnlyShutdownEnabled] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -29,6 +30,7 @@ const DeveloperHub = () => {
           setPassportModeEnabled(Boolean(data.featureSettings.passportModeEnabled));
           setMaintenanceModeEnabled(Boolean(data.featureSettings.maintenanceModeEnabled));
           setShutdownModeEnabled(Boolean(data.featureSettings.shutdownModeEnabled));
+          setBackendOnlyShutdownEnabled(Boolean(data.featureSettings.backendOnlyShutdownEnabled));
         }
       } catch (error) {
         const message = error instanceof Error && error.message ? error.message : 'Failed to load developer overview.';
@@ -50,6 +52,7 @@ const DeveloperHub = () => {
     passportModeEnabled: boolean;
     maintenanceModeEnabled: boolean;
     shutdownModeEnabled: boolean;
+    backendOnlyShutdownEnabled: boolean;
   }) => {
     const marker = String(Date.now());
     window.localStorage.setItem(FEATURE_SETTINGS_CACHE_KEY, JSON.stringify(settings));
@@ -61,6 +64,7 @@ const DeveloperHub = () => {
     passportModeEnabled?: boolean;
     maintenanceModeEnabled?: boolean;
     shutdownModeEnabled?: boolean;
+    backendOnlyShutdownEnabled?: boolean;
   }) => {
     try {
       setFeatureSaving(true);
@@ -69,11 +73,13 @@ const DeveloperHub = () => {
         passportModeEnabled: Boolean(response.passportModeEnabled),
         maintenanceModeEnabled: Boolean(response.maintenanceModeEnabled),
         shutdownModeEnabled: Boolean(response.shutdownModeEnabled),
+        backendOnlyShutdownEnabled: Boolean(response.backendOnlyShutdownEnabled),
       };
 
       setPassportModeEnabled(nextSettings.passportModeEnabled);
       setMaintenanceModeEnabled(nextSettings.maintenanceModeEnabled);
       setShutdownModeEnabled(nextSettings.shutdownModeEnabled);
+      setBackendOnlyShutdownEnabled(nextSettings.backendOnlyShutdownEnabled);
       setOverview((current) =>
         current
           ? {
@@ -196,6 +202,9 @@ const DeveloperHub = () => {
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${overview.featureSettings.shutdownModeEnabled ? 'bg-amber-500/15 text-amber-200' : 'bg-white/10 text-gray-300'}`}>
                         Shutdown {overview.featureSettings.shutdownModeEnabled ? 'On' : 'Off'}
                       </span>
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${overview.featureSettings.backendOnlyShutdownEnabled ? 'bg-orange-500/15 text-orange-200' : 'bg-white/10 text-gray-300'}`}>
+                        Backend API {overview.featureSettings.backendOnlyShutdownEnabled ? 'Off' : 'Live'}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -244,7 +253,7 @@ const DeveloperHub = () => {
               <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-300">
                 This is the high-trust control layer for the platform. Developers can manage global access states, including a full shutdown that takes the entire app offline for everyone except the developer hub.
               </p>
-              <div className="mt-6 grid gap-4 xl:grid-cols-3">
+              <div className="mt-6 grid gap-4 xl:grid-cols-4">
                 <div className="rounded-3xl border border-cyan-400/15 bg-cyan-500/5 p-5">
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">Passport mode</p>
                   <p className="mt-3 text-2xl font-semibold text-white">{passportModeEnabled ? 'Enabled' : 'Disabled'}</p>
@@ -282,6 +291,49 @@ const DeveloperHub = () => {
                     } disabled:cursor-not-allowed disabled:opacity-60`}
                   >
                     {maintenanceModeEnabled ? 'Disable Maintenance' : 'Enable Maintenance'}
+                  </button>
+                </div>
+
+                <div className="rounded-3xl border border-orange-400/20 bg-orange-500/5 p-5 shadow-[0_18px_50px_rgba(249,115,22,0.08)]">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-orange-200">Backend only</p>
+                      <p className="mt-3 text-2xl font-semibold text-white">{backendOnlyShutdownEnabled ? 'Disabled' : 'Live'}</p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={backendOnlyShutdownEnabled}
+                      aria-label={backendOnlyShutdownEnabled ? 'Turn backend back on' : 'Turn backend off'}
+                      onClick={() => void applyFeatureSettings({ backendOnlyShutdownEnabled: !backendOnlyShutdownEnabled })}
+                      disabled={featureSaving}
+                      className={`relative inline-flex h-8 w-14 shrink-0 rounded-full border transition ${
+                        backendOnlyShutdownEnabled
+                          ? 'border-orange-300/30 bg-orange-500/25'
+                          : 'border-emerald-300/25 bg-emerald-500/20'
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
+                      <span
+                        className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-[0_4px_12px_rgba(15,23,42,0.22)] transition ${
+                          backendOnlyShutdownEnabled ? 'left-8' : 'left-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-gray-300">
+                    Turns off normal backend access while keeping the frontend online and preserving developer control routes so this switch can still be turned back on.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void applyFeatureSettings({ backendOnlyShutdownEnabled: !backendOnlyShutdownEnabled })}
+                    disabled={featureSaving}
+                    className={`mt-5 rounded-full px-5 py-3 text-sm font-semibold transition ${
+                      backendOnlyShutdownEnabled
+                        ? 'border border-orange-300/20 bg-orange-500/15 text-orange-100 hover:bg-orange-500/20'
+                        : 'bg-orange-500 text-slate-950 hover:bg-orange-400'
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                  >
+                    {backendOnlyShutdownEnabled ? 'Turn Backend Back On' : 'Turn Backend Off'}
                   </button>
                 </div>
 

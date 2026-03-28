@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { useNotificationUnreadCount } from '@/hooks/useAPI';
+import { useNotificationUnreadCount, useUnreadCount } from '@/hooks/useAPI';
 import { useSubscriptionDisplay } from '@/hooks/useSubscriptionDisplay';
 import ProfileBoosterIcon from '@/components/icons/ProfileBoosterIcon';
 
@@ -34,10 +34,12 @@ interface SidePanelProps {
 export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps) => {
   const { logout, isLoggingOut } = useAuthContext();
   const { data: unreadData } = useNotificationUnreadCount();
+  const { data: unreadMessagesData } = useUnreadCount();
   const extraRoles = Array.isArray(user?.roles)
     ? user.roles.map((role) => String(role).trim().toLowerCase()).filter(Boolean)
     : [];
   const unreadCount = unreadData?.count || 0;
+  const unreadMessageCount = unreadMessagesData?.count || 0;
   const displayImage = user?.profilePhoto1 || userImage || '/default-avatar.png';
   const faithJourney = user?.faithJourney || 'Passionate Believer';
   const subscriptionDisplay = useSubscriptionDisplay(user);
@@ -201,8 +203,13 @@ export const SidePanel = ({ userName, userImage, user, onClose }: SidePanelProps
 
           <Link to="/messages" onClick={onClose}>
             <div className="group flex cursor-pointer items-center space-x-4 rounded-2xl p-4 transition-colors hover:bg-gray-800/50">
-              <div className="rounded-xl bg-blue-500/20 p-2 transition-colors group-hover:bg-blue-500/30">
+              <div className="relative rounded-xl bg-blue-500/20 p-2 transition-colors group-hover:bg-blue-500/30">
                 <MessageCircle className="h-5 w-5 text-blue-400" />
+                {unreadMessageCount > 0 ? (
+                  <span className="absolute -right-2 -top-2 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-pink-500 to-red-500 px-1 text-[10px] font-semibold text-white">
+                    {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
+                  </span>
+                ) : null}
               </div>
               <div>
                 <h4 className="font-semibold text-white">Messages</h4>
