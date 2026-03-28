@@ -194,6 +194,29 @@ const removeUndefinedValues = <T extends Record<string, any>>(data: T): Partial<
   ) as Partial<T>;
 };
 
+const sanitizeStoredBoosterPurchase = (
+  purchase: StoredBoosterPurchase
+): StoredBoosterPurchase => {
+  return removeUndefinedValues({
+    productType: 'profile_booster',
+    status: purchase.status || 'paid',
+    tier: purchase.tier || 'booster',
+    billingCycle: 'one_time',
+    pricingRegion: purchase.pricingRegion || 'global',
+    displayCurrency: purchase.displayCurrency || 'USD',
+    displayAmountMajor:
+      typeof purchase.displayAmountMajor === 'number' ? purchase.displayAmountMajor : PROFILE_BOOSTER_PRICE_USD,
+    chargeCurrency: purchase.chargeCurrency || 'NGN',
+    chargeAmountMajor: typeof purchase.chargeAmountMajor === 'number' ? purchase.chargeAmountMajor : 0,
+    chargeAmountSubunits: typeof purchase.chargeAmountSubunits === 'number' ? purchase.chargeAmountSubunits : 0,
+    exchangeRate: typeof purchase.exchangeRate === 'number' ? purchase.exchangeRate : undefined,
+    reference: purchase.reference || '',
+    customerCode: purchase.customerCode || '',
+    authorizationCode: purchase.authorizationCode || '',
+    updatedAt: purchase.updatedAt || null,
+  }) as StoredBoosterPurchase;
+};
+
 const DIAL_CODE_COUNTRY_MAP: Record<string, string> = {
   '+20': 'EG',
   '+212': 'MA',
@@ -382,7 +405,7 @@ const getStoredBoosterPurchases = (userData: Record<string, any> | undefined): S
 
   return purchases
     .filter((purchase): purchase is Record<string, any> => Boolean(purchase) && typeof purchase === 'object')
-    .map((purchase) => ({
+    .map((purchase) => sanitizeStoredBoosterPurchase({
       productType: 'profile_booster',
       status: typeof purchase.status === 'string' ? purchase.status : 'paid',
       tier: typeof purchase.tier === 'string' ? purchase.tier : 'booster',
@@ -445,22 +468,9 @@ const upsertProfileBoosterPurchase = async (
   const existingPurchases = getStoredBoosterPurchases(userData);
   const reference = typeof purchase.reference === 'string' ? purchase.reference : '';
 
-  const normalizedPurchase: StoredBoosterPurchase = removeUndefinedValues({
-    productType: 'profile_booster',
-    status: purchase.status || 'paid',
-    tier: purchase.tier || 'booster',
-    billingCycle: 'one_time',
-    pricingRegion: purchase.pricingRegion || 'global',
-    displayCurrency: purchase.displayCurrency || 'USD',
-    displayAmountMajor:
-      typeof purchase.displayAmountMajor === 'number' ? purchase.displayAmountMajor : PROFILE_BOOSTER_PRICE_USD,
-    chargeCurrency: purchase.chargeCurrency || 'NGN',
-    chargeAmountMajor: typeof purchase.chargeAmountMajor === 'number' ? purchase.chargeAmountMajor : 0,
-    chargeAmountSubunits: typeof purchase.chargeAmountSubunits === 'number' ? purchase.chargeAmountSubunits : 0,
-    exchangeRate: purchase.exchangeRate,
+  const normalizedPurchase: StoredBoosterPurchase = sanitizeStoredBoosterPurchase({
+    ...purchase,
     reference,
-    customerCode: purchase.customerCode || '',
-    authorizationCode: purchase.authorizationCode || '',
     updatedAt: new Date().toISOString(),
   });
 
@@ -474,7 +484,7 @@ const upsertProfileBoosterPurchase = async (
 
   await userRef.set(
     {
-      profileBoosterPurchases: nextPurchases,
+      profileBoosterPurchases: nextPurchases.map((entry) => sanitizeStoredBoosterPurchase(entry)),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     },
     { merge: true }
