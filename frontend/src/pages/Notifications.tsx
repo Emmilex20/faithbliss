@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { useNotifications, useClearApiCache, type NotificationItem } from '@/hooks/useAPI';
-import { dispatchNotificationsUpdated } from '@/lib/notificationCenter';
+import { dispatchNotificationsUpdated, getNotificationDestination } from '@/lib/notificationCenter';
 import { API } from '@/services/api';
 import { HeartBeatLoader } from '@/components/HeartBeatLoader';
 import { useToast } from '@/contexts/ToastContext';
@@ -111,60 +111,9 @@ const NotificationsContent = () => {
   const handleOpenNotification = async (item: NotificationItem) => {
     if (!item) return;
     if (!item.isRead) {
-      handleMarkRead(item.id);
+      void handleMarkRead(item.id);
     }
-    const senderId = item.data?.senderId;
-    const otherUserId = item.data?.otherUserId;
-    const matchId = item.data?.matchId;
-
-    if (item.type === 'NEW_MESSAGE') {
-      if (senderId) {
-        navigate(`/messages?profileId=${encodeURIComponent(senderId)}`);
-        return;
-      }
-      if (matchId) {
-        navigate(`/messages?matchId=${encodeURIComponent(matchId)}`);
-        return;
-      }
-      navigate('/messages');
-      return;
-    }
-
-    if (item.type === 'NEW_MATCH') {
-      if (otherUserId) {
-        navigate(`/messages?profileId=${encodeURIComponent(otherUserId)}`);
-        return;
-      }
-      navigate('/matches');
-      return;
-    }
-
-    if (item.type === 'PROFILE_LIKED') {
-      if (senderId) {
-        navigate(`/profile/${encodeURIComponent(senderId)}`);
-        return;
-      }
-      navigate('/matches');
-      return;
-    }
-
-    if (item.type === 'STORY_POSTED') {
-      navigate('/dashboard');
-      return;
-    }
-
-    if (item.type === 'REPORT_SUBMITTED') {
-      navigate('/admin');
-      return;
-    }
-
-    if (item.type === 'SUPPORT_REPLY') {
-      const ticketType = typeof item.data?.ticketType === 'string' ? item.data.ticketType.toUpperCase() : '';
-      navigate(ticketType === 'REPORT' ? '/report' : '/help');
-      return;
-    }
-
-    navigate('/notifications');
+    navigate(getNotificationDestination(item));
   };
 
   const handleEnableNotifications = async () => {

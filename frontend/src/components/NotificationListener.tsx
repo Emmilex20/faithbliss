@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '@/contexts/ToastContext';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { MatchCelebrationOverlay } from '@/components/dashboard/MatchCelebrationOverlay';
 import {
   dispatchNotificationsUpdated,
+  getNotificationDestination,
   showSystemNotification,
 } from '@/lib/notificationCenter';
 import { API } from '@/services/api';
@@ -29,11 +30,13 @@ const MAX_STORED_NOTIFICATION_IDS = 250;
 
 export const NotificationListener = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated, user } = useAuthContext();
   const webSocketService = useWebSocket();
   const { showSuccess, showInfo } = useToast();
   const [celebrationQueue, setCelebrationQueue] = useState<MatchCelebration[]>([]);
   const seenNotificationIdsRef = useRef<Set<string>>(new Set());
+  const handledOpenedNotificationsRef = useRef<Set<string>>(new Set());
 
   const storageKey = useMemo(() => {
     const userId = user?.id ? String(user.id) : '';
@@ -183,6 +186,38 @@ export const NotificationListener = () => {
 
   useEffect(() => {
     if (!isAuthenticated) {
+      handledOpenedNotificationsRef.current.clear();
+      return;
+    }
+
+    const searchParams = new URLSearchParams(location.search);
+    const notificationId = searchParams.get('notificationId')?.trim() || '';
+    if (!notificationId || handledOpenedNotificationsRef.current.has(notificationId)) return;
+
+    handledOpenedNotificationsRef.current.add(notificationId);
+
+    const markOpenedNotificationRead = async () => {
+      try {
+        await API.Notification.markAsRead(notificationId);
+      } catch {
+        // Ignore read failures. The page can still load normally.
+      } finally {
+        dispatchNotificationsUpdated();
+
+        const cleanedParams = new URLSearchParams(location.search);
+        cleanedParams.delete('notificationId');
+        const cleanedSearch = cleanedParams.toString();
+        const cleanedDestination = `${location.pathname}${cleanedSearch ? `?${cleanedSearch}` : ''}${location.hash}`;
+
+        navigate(cleanedDestination, { replace: true });
+      }
+    };
+
+    void markOpenedNotificationRead();
+  }, [isAuthenticated, location.hash, location.pathname, location.search, navigate]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
       setCelebrationQueue([]);
       return;
     }
@@ -251,7 +286,12 @@ export const NotificationListener = () => {
     }
 
     navigate(
-      `/messages?profileId=${encodeURIComponent(current.matchedUserId)}&profileName=${encodeURIComponent(current.matchedUserName || '')}`
+      getNotificationDestination({
+        id: current.notificationId,
+        type: 'NEW_MATCH',
+        data: { otherUserId: current.matchedUserId },
+      }) +
+        `&profileName=${encodeURIComponent(current.matchedUserName || '')}`
     );
   };
 

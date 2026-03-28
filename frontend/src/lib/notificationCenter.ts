@@ -19,6 +19,14 @@ export const dispatchNotificationsUpdated = () => {
   window.dispatchEvent(new Event(NOTIFICATIONS_UPDATED_EVENT));
 };
 
+const withNotificationId = (destination: string, notificationId?: string) => {
+  const normalizedId = typeof notificationId === 'string' ? notificationId.trim() : '';
+  if (!normalizedId) return destination;
+
+  const separator = destination.includes('?') ? '&' : '?';
+  return `${destination}${separator}notificationId=${encodeURIComponent(normalizedId)}`;
+};
+
 export const getNotificationTitle = (type?: string) => {
   switch (type) {
     case 'NEW_MATCH':
@@ -43,34 +51,35 @@ export const getNotificationDestination = (notification: NotificationLike) => {
   const matchId = typeof data?.matchId === 'string' ? data.matchId.trim() : '';
   const senderId = typeof data?.senderId === 'string' ? data.senderId.trim() : '';
   const otherUserId = typeof data?.otherUserId === 'string' ? data.otherUserId.trim() : '';
+  const notificationId = typeof notification.id === 'string' ? notification.id.trim() : '';
 
   switch (notification.type) {
     case 'NEW_MESSAGE':
       if (senderId) {
-        return `/messages?profileId=${encodeURIComponent(senderId)}`;
+        return withNotificationId(`/messages?profileId=${encodeURIComponent(senderId)}`, notificationId);
       }
       if (matchId) {
-        return `/messages?matchId=${encodeURIComponent(matchId)}`;
+        return withNotificationId(`/messages?matchId=${encodeURIComponent(matchId)}`, notificationId);
       }
-      return '/messages';
+      return withNotificationId('/messages', notificationId);
     case 'NEW_MATCH':
       if (otherUserId) {
-        return `/messages?profileId=${encodeURIComponent(otherUserId)}`;
+        return withNotificationId(`/messages?profileId=${encodeURIComponent(otherUserId)}`, notificationId);
       }
-      return '/matches';
+      return withNotificationId('/matches', notificationId);
     case 'PROFILE_LIKED':
       if (senderId) {
-        return `/profile/${encodeURIComponent(senderId)}`;
+        return withNotificationId(`/profile/${encodeURIComponent(senderId)}`, notificationId);
       }
-      return '/matches';
+      return withNotificationId('/matches', notificationId);
     case 'STORY_POSTED':
-      return '/dashboard';
+      return withNotificationId('/dashboard', notificationId);
     case 'REPORT_SUBMITTED':
-      return '/admin';
+      return withNotificationId('/admin', notificationId);
     case 'SUPPORT_REPLY':
-      return getTicketRoute(data);
+      return withNotificationId(getTicketRoute(data), notificationId);
     default:
-      return '/notifications';
+      return withNotificationId('/notifications', notificationId);
   }
 };
 
